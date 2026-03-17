@@ -1,4 +1,5 @@
 .envrc
+.env
 clickup
 clickup.exe
 vendor/*
