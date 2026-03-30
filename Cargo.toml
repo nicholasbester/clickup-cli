@@ -22,7 +22,7 @@ chrono = { version = "0.4", features = ["serde"] }
 comfy-table = "=7.1.1"
 
 [dev-dependencies]
-wiremock = "0.6"
+wiremock = "=0.6.0"
 tempfile = "3"
 assert_cmd = "2"
 predicates = "3"

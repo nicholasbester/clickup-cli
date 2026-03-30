@@ -1,4 +1,5 @@
-use comfy_table::{Table, ContentArrangement};
+use chrono::DateTime;
+use comfy_table::{ContentArrangement, Table};
 
 pub struct OutputConfig {
     pub mode: String,
@@ -98,7 +99,17 @@ impl OutputConfig {
 pub fn flatten_value(value: Option<&serde_json::Value>) -> String {
     match value {
         None | Some(serde_json::Value::Null) => "-".to_string(),
-        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(serde_json::Value::String(s)) => {
+            // Try to parse as Unix millisecond timestamp
+            if let Ok(ms) = s.parse::<i64>() {
+                if ms > 1_000_000_000_000 && ms < 10_000_000_000_000 {
+                    if let Some(dt) = DateTime::from_timestamp_millis(ms) {
+                        return dt.format("%Y-%m-%d").to_string();
+                    }
+                }
+            }
+            s.clone()
+        }
         Some(serde_json::Value::Number(n)) => n.to_string(),
         Some(serde_json::Value::Bool(b)) => b.to_string(),
         Some(serde_json::Value::Array(arr)) => {
