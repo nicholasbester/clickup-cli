@@ -8,11 +8,11 @@ use crate::Cli;
 
 #[derive(Subcommand)]
 pub enum ViewCommands {
-    /// List views (use one scope flag: --workspace, --space, --folder, --list)
+    /// List views (use one scope flag: --workspace-level, --space, --folder, --list)
     List {
         /// List workspace-level views
-        #[arg(long, conflicts_with_all = &["space", "folder", "list"])]
-        workspace: bool,
+        #[arg(long = "workspace-level", conflicts_with_all = &["space", "folder", "list"])]
+        workspace_level: bool,
         /// Space ID
         #[arg(long, conflicts_with_all = &["workspace", "folder", "list"])]
         space: Option<String>,
@@ -28,7 +28,7 @@ pub enum ViewCommands {
         /// View ID
         id: String,
     },
-    /// Create a view (use one scope flag: --workspace, --space, --folder, --list)
+    /// Create a view (use one scope flag: --workspace-level, --space, --folder, --list)
     Create {
         /// View name
         #[arg(long)]
@@ -37,8 +37,8 @@ pub enum ViewCommands {
         #[arg(long, name = "type")]
         view_type: String,
         /// Create workspace-level view
-        #[arg(long, conflicts_with_all = &["space", "folder", "list"])]
-        workspace: bool,
+        #[arg(long = "workspace-level", conflicts_with_all = &["space", "folder", "list"])]
+        workspace_level: bool,
         /// Space ID
         #[arg(long, conflicts_with_all = &["workspace", "folder", "list"])]
         space: Option<String>,
@@ -81,7 +81,7 @@ pub async fn execute(command: ViewCommands, cli: &Cli) -> Result<(), CliError> {
 
     match command {
         ViewCommands::List {
-            workspace,
+            workspace_level: workspace,
             space,
             folder,
             list,
@@ -120,7 +120,7 @@ pub async fn execute(command: ViewCommands, cli: &Cli) -> Result<(), CliError> {
         ViewCommands::Create {
             name,
             view_type,
-            workspace,
+            workspace_level: workspace,
             space,
             folder,
             list,

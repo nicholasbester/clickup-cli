@@ -20,8 +20,8 @@ pub enum FieldCommands {
         #[arg(long)]
         space: Option<String>,
         /// Workspace-level fields
-        #[arg(long)]
-        workspace: bool,
+        #[arg(long = "workspace-level")]
+        workspace_level: bool,
     },
     /// Set a custom field value on a task
     Set {
@@ -54,7 +54,7 @@ pub async fn execute(command: FieldCommands, cli: &Cli) -> Result<(), CliError> 
             list,
             folder,
             space,
-            workspace,
+            workspace_level,
         } => {
             let path = if let Some(list_id) = list {
                 format!("/v2/list/{}/field", list_id)
@@ -62,12 +62,12 @@ pub async fn execute(command: FieldCommands, cli: &Cli) -> Result<(), CliError> 
                 format!("/v2/folder/{}/field", folder_id)
             } else if let Some(space_id) = space {
                 format!("/v2/space/{}/field", space_id)
-            } else if workspace {
+            } else if workspace_level {
                 let ws_id = resolve_workspace(cli)?;
                 format!("/v2/team/{}/field", ws_id)
             } else {
                 return Err(CliError::ClientError {
-                    message: "Specify --list, --folder, --space, or --workspace".into(),
+                    message: "Specify --list, --folder, --space, or --workspace-level".into(),
                     status: 0,
                 });
             };
