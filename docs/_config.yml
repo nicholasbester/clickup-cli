@@ -2,6 +2,16 @@ title: clickup-cli
 description: CLI for the ClickUp API, optimized for AI agents
 baseurl: /clickup-cli
 url: https://nicholasbester.github.io
-remote_theme: pages-themes/minimal@v0.2.0
+remote_theme: just-the-docs/just-the-docs@v0.10.1
 plugins:
   - jekyll-remote-theme
+
+color_scheme: nil
+
+aux_links:
+  GitHub: https://github.com/nicholasbester/clickup-cli
+
+nav_order_default: 0
+
+exclude:
+  - superpowers/

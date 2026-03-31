@@ -1,6 +1,7 @@
 ---
 layout: default
 title: Command Reference
+nav_order: 3
 ---
 
 # Command Reference

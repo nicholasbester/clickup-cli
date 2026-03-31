@@ -1,6 +1,7 @@
 ---
 layout: default
-title: clickup-cli
+title: Home
+nav_order: 1
 ---
 
 # clickup-cli
