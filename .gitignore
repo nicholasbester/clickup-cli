@@ -1,11 +1,10 @@
 .envrc
 .env
-clickup
-clickup.exe
-vendor/*
-runit.sh
 .DS_Store
+
+# Rust
+target/
 *.json
-new.md
+
+# Legacy
 builds/*
-ROADMAP.md
