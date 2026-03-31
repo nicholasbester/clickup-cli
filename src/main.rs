@@ -31,6 +31,11 @@ async fn run(mut cli: Cli) -> i32 {
         Commands::Field { command } => commands::field::execute(command, &cli).await,
         Commands::TaskType { command } => commands::task_type::execute(command, &cli).await,
         Commands::Attachment { command } => commands::attachment::execute(command, &cli).await,
+        Commands::Time { command } => commands::time::execute(command, &cli).await,
+        Commands::Goal { command } => commands::goal::execute(command, &cli).await,
+        Commands::View { command } => commands::view::execute(command, &cli).await,
+        Commands::Member { command } => commands::member::execute(command, &cli).await,
+        Commands::User { command } => commands::user::execute(command, &cli).await,
     };
     match result {
         Ok(()) => 0,

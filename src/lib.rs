@@ -119,4 +119,29 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::attachment::AttachmentCommands,
     },
+    /// Time tracking commands
+    Time {
+        #[command(subcommand)]
+        command: commands::time::TimeCommands,
+    },
+    /// Goal commands
+    Goal {
+        #[command(subcommand)]
+        command: commands::goal::GoalCommands,
+    },
+    /// View commands
+    View {
+        #[command(subcommand)]
+        command: commands::view::ViewCommands,
+    },
+    /// Member commands
+    Member {
+        #[command(subcommand)]
+        command: commands::member::MemberCommands,
+    },
+    /// User commands
+    User {
+        #[command(subcommand)]
+        command: commands::user::UserCommands,
+    },
 }
