@@ -505,6 +505,849 @@ fn tool_list() -> Value {
                 },
                 "required": []
             }
+        },
+        {
+            "name": "clickup_space_get",
+            "description": "Get details of a specific space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"}
+                },
+                "required": ["space_id"]
+            }
+        },
+        {
+            "name": "clickup_space_create",
+            "description": "Create a new space in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "name": {"type": "string", "description": "Space name"},
+                    "private": {"type": "boolean", "description": "Whether the space is private"}
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "clickup_space_update",
+            "description": "Update an existing space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"},
+                    "name": {"type": "string", "description": "New space name"},
+                    "private": {"type": "boolean", "description": "Whether the space is private"},
+                    "archived": {"type": "boolean", "description": "Archive/unarchive the space"}
+                },
+                "required": ["space_id"]
+            }
+        },
+        {
+            "name": "clickup_space_delete",
+            "description": "Delete a space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"}
+                },
+                "required": ["space_id"]
+            }
+        },
+        {
+            "name": "clickup_folder_get",
+            "description": "Get details of a specific folder",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "folder_id": {"type": "string", "description": "Folder ID"}
+                },
+                "required": ["folder_id"]
+            }
+        },
+        {
+            "name": "clickup_folder_create",
+            "description": "Create a new folder in a space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"},
+                    "name": {"type": "string", "description": "Folder name"}
+                },
+                "required": ["space_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_folder_update",
+            "description": "Update an existing folder",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "folder_id": {"type": "string", "description": "Folder ID"},
+                    "name": {"type": "string", "description": "New folder name"}
+                },
+                "required": ["folder_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_folder_delete",
+            "description": "Delete a folder",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "folder_id": {"type": "string", "description": "Folder ID"}
+                },
+                "required": ["folder_id"]
+            }
+        },
+        {
+            "name": "clickup_list_get",
+            "description": "Get details of a specific list",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list_id": {"type": "string", "description": "List ID"}
+                },
+                "required": ["list_id"]
+            }
+        },
+        {
+            "name": "clickup_list_create",
+            "description": "Create a new list in a folder or space (folderless)",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "folder_id": {"type": "string", "description": "Folder ID (mutually exclusive with space_id)"},
+                    "space_id": {"type": "string", "description": "Space ID for a folderless list (mutually exclusive with folder_id)"},
+                    "name": {"type": "string", "description": "List name"},
+                    "content": {"type": "string", "description": "List description"},
+                    "due_date": {"type": "integer", "description": "Due date as Unix timestamp (milliseconds)"},
+                    "status": {"type": "string", "description": "List status"}
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "clickup_list_update",
+            "description": "Update an existing list",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list_id": {"type": "string", "description": "List ID"},
+                    "name": {"type": "string", "description": "New list name"},
+                    "content": {"type": "string", "description": "New description"},
+                    "due_date": {"type": "integer", "description": "Due date as Unix timestamp (milliseconds)"},
+                    "status": {"type": "string", "description": "List status"}
+                },
+                "required": ["list_id"]
+            }
+        },
+        {
+            "name": "clickup_list_delete",
+            "description": "Delete a list",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list_id": {"type": "string", "description": "List ID"}
+                },
+                "required": ["list_id"]
+            }
+        },
+        {
+            "name": "clickup_list_add_task",
+            "description": "Add a task to an additional list",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list_id": {"type": "string", "description": "List ID"},
+                    "task_id": {"type": "string", "description": "Task ID"}
+                },
+                "required": ["list_id", "task_id"]
+            }
+        },
+        {
+            "name": "clickup_list_remove_task",
+            "description": "Remove a task from an additional list",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list_id": {"type": "string", "description": "List ID"},
+                    "task_id": {"type": "string", "description": "Task ID"}
+                },
+                "required": ["list_id", "task_id"]
+            }
+        },
+        {
+            "name": "clickup_comment_update",
+            "description": "Update a comment",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "comment_id": {"type": "string", "description": "Comment ID"},
+                    "text": {"type": "string", "description": "New comment text"},
+                    "assignee": {"type": "integer", "description": "Reassign comment to user ID"},
+                    "resolved": {"type": "boolean", "description": "Mark comment as resolved"}
+                },
+                "required": ["comment_id", "text"]
+            }
+        },
+        {
+            "name": "clickup_comment_delete",
+            "description": "Delete a comment",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "comment_id": {"type": "string", "description": "Comment ID"}
+                },
+                "required": ["comment_id"]
+            }
+        },
+        {
+            "name": "clickup_task_add_dep",
+            "description": "Add a dependency to a task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "depends_on": {"type": "string", "description": "Task ID that this task depends on"},
+                    "dependency_of": {"type": "string", "description": "Task ID that depends on this task"}
+                },
+                "required": ["task_id"]
+            }
+        },
+        {
+            "name": "clickup_task_remove_dep",
+            "description": "Remove a dependency from a task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "depends_on": {"type": "string", "description": "Task ID to remove as a depends_on dependency"},
+                    "dependency_of": {"type": "string", "description": "Task ID to remove as a dependency_of dependency"}
+                },
+                "required": ["task_id"]
+            }
+        },
+        {
+            "name": "clickup_task_link",
+            "description": "Link two tasks together",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "links_to": {"type": "string", "description": "Task ID to link to"}
+                },
+                "required": ["task_id", "links_to"]
+            }
+        },
+        {
+            "name": "clickup_task_unlink",
+            "description": "Remove a link between two tasks",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "links_to": {"type": "string", "description": "Task ID to unlink"}
+                },
+                "required": ["task_id", "links_to"]
+            }
+        },
+        {
+            "name": "clickup_goal_delete",
+            "description": "Delete a goal",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "goal_id": {"type": "string", "description": "Goal ID"}
+                },
+                "required": ["goal_id"]
+            }
+        },
+        {
+            "name": "clickup_goal_add_kr",
+            "description": "Add a key result to a goal",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "goal_id": {"type": "string", "description": "Goal ID"},
+                    "name": {"type": "string", "description": "Key result name"},
+                    "type": {"type": "string", "description": "Key result type (number, currency, boolean, percentage, automatic)"},
+                    "steps_start": {"type": "number", "description": "Starting value"},
+                    "steps_end": {"type": "number", "description": "Target value"},
+                    "unit": {"type": "string", "description": "Unit label"},
+                    "owner_ids": {"type": "array", "items": {"type": "integer"}, "description": "Owner user IDs"},
+                    "task_ids": {"type": "array", "items": {"type": "string"}, "description": "Task IDs to link (for automatic type)"},
+                    "list_ids": {"type": "array", "items": {"type": "string"}, "description": "List IDs to link (for automatic type)"}
+                },
+                "required": ["goal_id", "name", "type", "steps_start", "steps_end"]
+            }
+        },
+        {
+            "name": "clickup_goal_update_kr",
+            "description": "Update a key result",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "kr_id": {"type": "string", "description": "Key result ID"},
+                    "steps_current": {"type": "number", "description": "Current progress value"},
+                    "name": {"type": "string", "description": "New key result name"},
+                    "unit": {"type": "string", "description": "Unit label"}
+                },
+                "required": ["kr_id"]
+            }
+        },
+        {
+            "name": "clickup_goal_delete_kr",
+            "description": "Delete a key result",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "kr_id": {"type": "string", "description": "Key result ID"}
+                },
+                "required": ["kr_id"]
+            }
+        },
+        {
+            "name": "clickup_time_get",
+            "description": "Get a specific time tracking entry",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "timer_id": {"type": "string", "description": "Time entry ID"}
+                },
+                "required": ["timer_id"]
+            }
+        },
+        {
+            "name": "clickup_time_create",
+            "description": "Create a time tracking entry",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "task_id": {"type": "string", "description": "Task ID to log time against"},
+                    "start": {"type": "integer", "description": "Start time as Unix timestamp (milliseconds)"},
+                    "duration": {"type": "integer", "description": "Duration in milliseconds"},
+                    "description": {"type": "string", "description": "Time entry description"},
+                    "billable": {"type": "boolean", "description": "Whether this entry is billable"}
+                },
+                "required": ["start", "duration"]
+            }
+        },
+        {
+            "name": "clickup_time_update",
+            "description": "Update a time tracking entry",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "timer_id": {"type": "string", "description": "Time entry ID"},
+                    "start": {"type": "integer", "description": "New start time as Unix timestamp (milliseconds)"},
+                    "duration": {"type": "integer", "description": "New duration in milliseconds"},
+                    "description": {"type": "string", "description": "New description"},
+                    "billable": {"type": "boolean", "description": "Whether this entry is billable"}
+                },
+                "required": ["timer_id"]
+            }
+        },
+        {
+            "name": "clickup_time_delete",
+            "description": "Delete a time tracking entry",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "timer_id": {"type": "string", "description": "Time entry ID"}
+                },
+                "required": ["timer_id"]
+            }
+        },
+        {
+            "name": "clickup_view_get",
+            "description": "Get details of a specific view",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "view_id": {"type": "string", "description": "View ID"}
+                },
+                "required": ["view_id"]
+            }
+        },
+        {
+            "name": "clickup_view_create",
+            "description": "Create a view for a space, folder, list, or workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "scope": {"type": "string", "description": "Scope type: space, folder, list, or team"},
+                    "scope_id": {"type": "string", "description": "ID of the scope object"},
+                    "name": {"type": "string", "description": "View name"},
+                    "type": {"type": "string", "description": "View type (list, board, calendar, table, timeline, etc.)"}
+                },
+                "required": ["scope", "scope_id", "name", "type"]
+            }
+        },
+        {
+            "name": "clickup_view_update",
+            "description": "Update an existing view",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "view_id": {"type": "string", "description": "View ID"},
+                    "name": {"type": "string", "description": "New view name"},
+                    "type": {"type": "string", "description": "New view type"}
+                },
+                "required": ["view_id", "name", "type"]
+            }
+        },
+        {
+            "name": "clickup_view_delete",
+            "description": "Delete a view",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "view_id": {"type": "string", "description": "View ID"}
+                },
+                "required": ["view_id"]
+            }
+        },
+        {
+            "name": "clickup_doc_create",
+            "description": "Create a new doc in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "name": {"type": "string", "description": "Doc name"},
+                    "parent": {"type": "object", "description": "Parent object with id and type fields"}
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "clickup_doc_add_page",
+            "description": "Add a page to a doc",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "doc_id": {"type": "string", "description": "Doc ID"},
+                    "name": {"type": "string", "description": "Page name"},
+                    "content": {"type": "string", "description": "Page content (markdown)"},
+                    "sub_title": {"type": "string", "description": "Page subtitle"},
+                    "parent_page_id": {"type": "string", "description": "Parent page ID for nested pages"}
+                },
+                "required": ["doc_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_doc_edit_page",
+            "description": "Edit an existing page in a doc",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "doc_id": {"type": "string", "description": "Doc ID"},
+                    "page_id": {"type": "string", "description": "Page ID"},
+                    "name": {"type": "string", "description": "New page name"},
+                    "content": {"type": "string", "description": "New page content (markdown)"}
+                },
+                "required": ["doc_id", "page_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_channel_create",
+            "description": "Create a chat channel in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "name": {"type": "string", "description": "Channel name"},
+                    "description": {"type": "string", "description": "Channel description"},
+                    "visibility": {"type": "string", "description": "Channel visibility (public or private)"}
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "clickup_chat_channel_get",
+            "description": "Get a chat channel",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "channel_id": {"type": "string", "description": "Channel ID"}
+                },
+                "required": ["channel_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_channel_update",
+            "description": "Update a chat channel",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "channel_id": {"type": "string", "description": "Channel ID"},
+                    "name": {"type": "string", "description": "New channel name"},
+                    "description": {"type": "string", "description": "New channel description"}
+                },
+                "required": ["channel_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_channel_delete",
+            "description": "Delete a chat channel",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "channel_id": {"type": "string", "description": "Channel ID"}
+                },
+                "required": ["channel_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_message_list",
+            "description": "List messages in a chat channel",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "channel_id": {"type": "string", "description": "Channel ID"},
+                    "cursor": {"type": "string", "description": "Pagination cursor"}
+                },
+                "required": ["channel_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_message_send",
+            "description": "Send a message to a chat channel",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "channel_id": {"type": "string", "description": "Channel ID"},
+                    "content": {"type": "string", "description": "Message content"}
+                },
+                "required": ["channel_id", "content"]
+            }
+        },
+        {
+            "name": "clickup_chat_message_delete",
+            "description": "Delete a chat message",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "message_id": {"type": "string", "description": "Message ID"}
+                },
+                "required": ["message_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_dm",
+            "description": "Send a direct message to a user",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "user_id": {"type": "integer", "description": "User ID to DM"},
+                    "content": {"type": "string", "description": "Message content"}
+                },
+                "required": ["user_id", "content"]
+            }
+        },
+        {
+            "name": "clickup_webhook_create",
+            "description": "Create a webhook for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "endpoint": {"type": "string", "description": "Webhook URL endpoint"},
+                    "events": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of events to subscribe to (use ['*'] for all events)"
+                    },
+                    "space_id": {"type": "string", "description": "Filter events to a specific space"},
+                    "folder_id": {"type": "string", "description": "Filter events to a specific folder"},
+                    "list_id": {"type": "string", "description": "Filter events to a specific list"},
+                    "task_id": {"type": "string", "description": "Filter events to a specific task"}
+                },
+                "required": ["endpoint", "events"]
+            }
+        },
+        {
+            "name": "clickup_webhook_update",
+            "description": "Update a webhook",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "webhook_id": {"type": "string", "description": "Webhook ID"},
+                    "endpoint": {"type": "string", "description": "New webhook URL endpoint"},
+                    "events": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "New list of events to subscribe to"
+                    },
+                    "status": {"type": "string", "description": "Webhook status (active or suspended)"}
+                },
+                "required": ["webhook_id"]
+            }
+        },
+        {
+            "name": "clickup_webhook_delete",
+            "description": "Delete a webhook",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "webhook_id": {"type": "string", "description": "Webhook ID"}
+                },
+                "required": ["webhook_id"]
+            }
+        },
+        {
+            "name": "clickup_checklist_add_item",
+            "description": "Add an item to a checklist",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "checklist_id": {"type": "string", "description": "Checklist ID"},
+                    "name": {"type": "string", "description": "Item name"},
+                    "assignee": {"type": "integer", "description": "Assign item to user ID"}
+                },
+                "required": ["checklist_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_checklist_update_item",
+            "description": "Update a checklist item",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "checklist_id": {"type": "string", "description": "Checklist ID"},
+                    "item_id": {"type": "string", "description": "Checklist item ID"},
+                    "name": {"type": "string", "description": "New item name"},
+                    "resolved": {"type": "boolean", "description": "Mark item as resolved"},
+                    "assignee": {"type": "integer", "description": "Reassign item to user ID"}
+                },
+                "required": ["checklist_id", "item_id"]
+            }
+        },
+        {
+            "name": "clickup_checklist_delete_item",
+            "description": "Delete a checklist item",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "checklist_id": {"type": "string", "description": "Checklist ID"},
+                    "item_id": {"type": "string", "description": "Checklist item ID"}
+                },
+                "required": ["checklist_id", "item_id"]
+            }
+        },
+        {
+            "name": "clickup_user_get",
+            "description": "Get a user in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "user_id": {"type": "integer", "description": "User ID"}
+                },
+                "required": ["user_id"]
+            }
+        },
+        {
+            "name": "clickup_workspace_seats",
+            "description": "Get seat usage for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_workspace_plan",
+            "description": "Get the plan for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_tag_create",
+            "description": "Create a tag in a space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"},
+                    "name": {"type": "string", "description": "Tag name"},
+                    "tag_fg": {"type": "string", "description": "Foreground color (hex)"},
+                    "tag_bg": {"type": "string", "description": "Background color (hex)"}
+                },
+                "required": ["space_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_tag_update",
+            "description": "Update a tag in a space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"},
+                    "tag_name": {"type": "string", "description": "Current tag name"},
+                    "name": {"type": "string", "description": "New tag name"},
+                    "tag_fg": {"type": "string", "description": "New foreground color (hex)"},
+                    "tag_bg": {"type": "string", "description": "New background color (hex)"}
+                },
+                "required": ["space_id", "tag_name"]
+            }
+        },
+        {
+            "name": "clickup_tag_delete",
+            "description": "Delete a tag from a space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"},
+                    "tag_name": {"type": "string", "description": "Tag name"}
+                },
+                "required": ["space_id", "tag_name"]
+            }
+        },
+        {
+            "name": "clickup_field_unset",
+            "description": "Remove a custom field value from a task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "field_id": {"type": "string", "description": "Custom field ID"}
+                },
+                "required": ["task_id", "field_id"]
+            }
+        },
+        {
+            "name": "clickup_attachment_list",
+            "description": "List attachments on a task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "task_id": {"type": "string", "description": "Task ID"}
+                },
+                "required": ["task_id"]
+            }
+        },
+        {
+            "name": "clickup_shared_list",
+            "description": "Get shared hierarchy (tasks, lists, folders) for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_group_list",
+            "description": "List user groups (teams) in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "group_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Filter by specific group IDs"
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_group_create",
+            "description": "Create a user group in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "name": {"type": "string", "description": "Group name"},
+                    "member_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "User IDs to add as members"
+                    }
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "clickup_group_update",
+            "description": "Update a user group",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "group_id": {"type": "string", "description": "Group ID"},
+                    "name": {"type": "string", "description": "New group name"},
+                    "add_members": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "User IDs to add"
+                    },
+                    "rem_members": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "User IDs to remove"
+                    }
+                },
+                "required": ["group_id"]
+            }
+        },
+        {
+            "name": "clickup_group_delete",
+            "description": "Delete a user group",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "group_id": {"type": "string", "description": "Group ID"}
+                },
+                "required": ["group_id"]
+            }
+        },
+        {
+            "name": "clickup_role_list",
+            "description": "List custom roles in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_guest_get",
+            "description": "Get a guest in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"}
+                },
+                "required": ["guest_id"]
+            }
         }
     ])
 }
@@ -1087,6 +1930,661 @@ async fn dispatch_tool(
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let templates = resp.get("templates").and_then(|t| t.as_array()).cloned().unwrap_or_default();
             Ok(compact_items(&templates, &["id", "name"]))
+        }
+
+        "clickup_space_get" => {
+            let space_id = args.get("space_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            let resp = client.get(&format!("/v2/space/{}", space_id)).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "private", "archived"]))
+        }
+
+        "clickup_space_create" => {
+            let team_id = resolve_workspace(args)?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut body = json!({"name": name});
+            if let Some(private) = args.get("private").and_then(|v| v.as_bool()) {
+                body["private"] = json!(private);
+            }
+            let resp = client.post(&format!("/v2/team/{}/space", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "private"]))
+        }
+
+        "clickup_space_update" => {
+            let space_id = args.get("space_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            let mut body = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) { body["name"] = json!(name); }
+            if let Some(private) = args.get("private").and_then(|v| v.as_bool()) { body["private"] = json!(private); }
+            if let Some(archived) = args.get("archived").and_then(|v| v.as_bool()) { body["archived"] = json!(archived); }
+            let resp = client.put(&format!("/v2/space/{}", space_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "private", "archived"]))
+        }
+
+        "clickup_space_delete" => {
+            let space_id = args.get("space_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            client.delete(&format!("/v2/space/{}", space_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Space {} deleted", space_id)}))
+        }
+
+        "clickup_folder_get" => {
+            let folder_id = args.get("folder_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: folder_id")?;
+            let resp = client.get(&format!("/v2/folder/{}", folder_id)).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "task_count"]))
+        }
+
+        "clickup_folder_create" => {
+            let space_id = args.get("space_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let body = json!({"name": name});
+            let resp = client.post(&format!("/v2/space/{}/folder", space_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_folder_update" => {
+            let folder_id = args.get("folder_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: folder_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let body = json!({"name": name});
+            let resp = client.put(&format!("/v2/folder/{}", folder_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_folder_delete" => {
+            let folder_id = args.get("folder_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: folder_id")?;
+            client.delete(&format!("/v2/folder/{}", folder_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Folder {} deleted", folder_id)}))
+        }
+
+        "clickup_list_get" => {
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            let resp = client.get(&format!("/v2/list/{}", list_id)).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "task_count", "status", "due_date"]))
+        }
+
+        "clickup_list_create" => {
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut body = json!({"name": name});
+            if let Some(content) = args.get("content").and_then(|v| v.as_str()) { body["content"] = json!(content); }
+            if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) { body["due_date"] = json!(due_date); }
+            if let Some(status) = args.get("status").and_then(|v| v.as_str()) { body["status"] = json!(status); }
+            let path = if let Some(folder_id) = args.get("folder_id").and_then(|v| v.as_str()) {
+                format!("/v2/folder/{}/list", folder_id)
+            } else if let Some(space_id) = args.get("space_id").and_then(|v| v.as_str()) {
+                format!("/v2/space/{}/list", space_id)
+            } else {
+                return Err("Provide either folder_id or space_id".to_string());
+            };
+            let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_list_update" => {
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            let mut body = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) { body["name"] = json!(name); }
+            if let Some(content) = args.get("content").and_then(|v| v.as_str()) { body["content"] = json!(content); }
+            if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) { body["due_date"] = json!(due_date); }
+            if let Some(status) = args.get("status").and_then(|v| v.as_str()) { body["status"] = json!(status); }
+            let resp = client.put(&format!("/v2/list/{}", list_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "task_count", "status"]))
+        }
+
+        "clickup_list_delete" => {
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            client.delete(&format!("/v2/list/{}", list_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("List {} deleted", list_id)}))
+        }
+
+        "clickup_list_add_task" => {
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            client.post(&format!("/v2/list/{}/task/{}", list_id, task_id), &json!({})).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Task {} added to list {}", task_id, list_id)}))
+        }
+
+        "clickup_list_remove_task" => {
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            client.delete(&format!("/v2/list/{}/task/{}", list_id, task_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Task {} removed from list {}", task_id, list_id)}))
+        }
+
+        "clickup_comment_update" => {
+            let comment_id = args.get("comment_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: comment_id")?;
+            let text = args.get("text").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: text")?;
+            let mut body = json!({"comment_text": text});
+            if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) { body["assignee"] = json!(assignee); }
+            if let Some(resolved) = args.get("resolved").and_then(|v| v.as_bool()) { body["resolved"] = json!(resolved); }
+            client.put(&format!("/v2/comment/{}", comment_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Comment {} updated", comment_id)}))
+        }
+
+        "clickup_comment_delete" => {
+            let comment_id = args.get("comment_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: comment_id")?;
+            client.delete(&format!("/v2/comment/{}", comment_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Comment {} deleted", comment_id)}))
+        }
+
+        "clickup_task_add_dep" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let mut body = json!({});
+            if let Some(dep) = args.get("depends_on").and_then(|v| v.as_str()) { body["depends_on"] = json!(dep); }
+            if let Some(dep) = args.get("dependency_of").and_then(|v| v.as_str()) { body["dependency_of"] = json!(dep); }
+            client.post(&format!("/v2/task/{}/dependency", task_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Dependency added to task {}", task_id)}))
+        }
+
+        "clickup_task_remove_dep" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let mut body = json!({});
+            if let Some(dep) = args.get("depends_on").and_then(|v| v.as_str()) { body["depends_on"] = json!(dep); }
+            if let Some(dep) = args.get("dependency_of").and_then(|v| v.as_str()) { body["dependency_of"] = json!(dep); }
+            client.delete_with_body(&format!("/v2/task/{}/dependency", task_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Dependency removed from task {}", task_id)}))
+        }
+
+        "clickup_task_link" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let links_to = args.get("links_to").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: links_to")?;
+            let resp = client.post(&format!("/v2/task/{}/link/{}", task_id, links_to), &json!({})).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Task {} linked to {}", task_id, links_to), "data": resp}))
+        }
+
+        "clickup_task_unlink" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let links_to = args.get("links_to").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: links_to")?;
+            client.delete(&format!("/v2/task/{}/link/{}", task_id, links_to)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Task {} unlinked from {}", task_id, links_to)}))
+        }
+
+        "clickup_goal_delete" => {
+            let goal_id = args.get("goal_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: goal_id")?;
+            client.delete(&format!("/v2/goal/{}", goal_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Goal {} deleted", goal_id)}))
+        }
+
+        "clickup_goal_add_kr" => {
+            let goal_id = args.get("goal_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: goal_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let kr_type = args.get("type").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: type")?;
+            let steps_start = args.get("steps_start").and_then(|v| v.as_f64())
+                .ok_or("Missing required parameter: steps_start")?;
+            let steps_end = args.get("steps_end").and_then(|v| v.as_f64())
+                .ok_or("Missing required parameter: steps_end")?;
+            let mut body = json!({"name": name, "type": kr_type, "steps_start": steps_start, "steps_end": steps_end});
+            if let Some(unit) = args.get("unit").and_then(|v| v.as_str()) { body["unit"] = json!(unit); }
+            if let Some(owners) = args.get("owner_ids") { body["owners"] = owners.clone(); }
+            if let Some(task_ids) = args.get("task_ids") { body["task_ids"] = task_ids.clone(); }
+            if let Some(list_ids) = args.get("list_ids") { body["list_ids"] = list_ids.clone(); }
+            let resp = client.post(&format!("/v2/goal/{}/key_result", goal_id), &body).await.map_err(|e| e.to_string())?;
+            let kr = resp.get("key_result").cloned().unwrap_or(resp);
+            Ok(compact_items(&[kr], &["id", "name", "type", "steps_start", "steps_end", "steps_current"]))
+        }
+
+        "clickup_goal_update_kr" => {
+            let kr_id = args.get("kr_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: kr_id")?;
+            let mut body = json!({});
+            if let Some(v) = args.get("steps_current").and_then(|v| v.as_f64()) { body["steps_current"] = json!(v); }
+            if let Some(v) = args.get("name").and_then(|v| v.as_str()) { body["name"] = json!(v); }
+            if let Some(v) = args.get("unit").and_then(|v| v.as_str()) { body["unit"] = json!(v); }
+            let resp = client.put(&format!("/v2/key_result/{}", kr_id), &body).await.map_err(|e| e.to_string())?;
+            let kr = resp.get("key_result").cloned().unwrap_or(resp);
+            Ok(compact_items(&[kr], &["id", "name", "steps_current", "steps_end"]))
+        }
+
+        "clickup_goal_delete_kr" => {
+            let kr_id = args.get("kr_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: kr_id")?;
+            client.delete(&format!("/v2/key_result/{}", kr_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Key result {} deleted", kr_id)}))
+        }
+
+        "clickup_time_get" => {
+            let team_id = resolve_workspace(args)?;
+            let timer_id = args.get("timer_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: timer_id")?;
+            let resp = client.get(&format!("/v2/team/{}/time_entries/{}", team_id, timer_id)).await.map_err(|e| e.to_string())?;
+            let data = resp.get("data").cloned().unwrap_or(resp);
+            Ok(compact_items(&[data], &["id", "task", "duration", "start", "end", "billable"]))
+        }
+
+        "clickup_time_create" => {
+            let team_id = resolve_workspace(args)?;
+            let start = args.get("start").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: start")?;
+            let duration = args.get("duration").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: duration")?;
+            let mut body = json!({"start": start, "duration": duration});
+            if let Some(task_id) = args.get("task_id").and_then(|v| v.as_str()) { body["tid"] = json!(task_id); }
+            if let Some(desc) = args.get("description").and_then(|v| v.as_str()) { body["description"] = json!(desc); }
+            if let Some(billable) = args.get("billable").and_then(|v| v.as_bool()) { body["billable"] = json!(billable); }
+            let resp = client.post(&format!("/v2/team/{}/time_entries", team_id), &body).await.map_err(|e| e.to_string())?;
+            let data = resp.get("data").cloned().unwrap_or(resp);
+            Ok(compact_items(&[data], &["id", "task", "duration", "start", "billable"]))
+        }
+
+        "clickup_time_update" => {
+            let team_id = resolve_workspace(args)?;
+            let timer_id = args.get("timer_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: timer_id")?;
+            let mut body = json!({});
+            if let Some(start) = args.get("start").and_then(|v| v.as_i64()) { body["start"] = json!(start); }
+            if let Some(duration) = args.get("duration").and_then(|v| v.as_i64()) { body["duration"] = json!(duration); }
+            if let Some(desc) = args.get("description").and_then(|v| v.as_str()) { body["description"] = json!(desc); }
+            if let Some(billable) = args.get("billable").and_then(|v| v.as_bool()) { body["billable"] = json!(billable); }
+            let resp = client.put(&format!("/v2/team/{}/time_entries/{}", team_id, timer_id), &body).await.map_err(|e| e.to_string())?;
+            let data = resp.get("data").cloned().unwrap_or(resp);
+            Ok(compact_items(&[data], &["id", "task", "duration", "start", "billable"]))
+        }
+
+        "clickup_time_delete" => {
+            let team_id = resolve_workspace(args)?;
+            let timer_id = args.get("timer_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: timer_id")?;
+            client.delete(&format!("/v2/team/{}/time_entries/{}", team_id, timer_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Time entry {} deleted", timer_id)}))
+        }
+
+        "clickup_view_get" => {
+            let view_id = args.get("view_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: view_id")?;
+            let resp = client.get(&format!("/v2/view/{}", view_id)).await.map_err(|e| e.to_string())?;
+            let view = resp.get("view").cloned().unwrap_or(resp);
+            Ok(compact_items(&[view], &["id", "name", "type"]))
+        }
+
+        "clickup_view_create" => {
+            let scope = args.get("scope").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: scope")?;
+            let scope_id = args.get("scope_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: scope_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let view_type = args.get("type").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: type")?;
+            let body = json!({"name": name, "type": view_type});
+            let resp = client.post(&format!("/v2/{}/{}/view", scope, scope_id), &body).await.map_err(|e| e.to_string())?;
+            let view = resp.get("view").cloned().unwrap_or(resp);
+            Ok(compact_items(&[view], &["id", "name", "type"]))
+        }
+
+        "clickup_view_update" => {
+            let view_id = args.get("view_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: view_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let view_type = args.get("type").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: type")?;
+            let body = json!({"name": name, "type": view_type});
+            let resp = client.put(&format!("/v2/view/{}", view_id), &body).await.map_err(|e| e.to_string())?;
+            let view = resp.get("view").cloned().unwrap_or(resp);
+            Ok(compact_items(&[view], &["id", "name", "type"]))
+        }
+
+        "clickup_view_delete" => {
+            let view_id = args.get("view_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: view_id")?;
+            client.delete(&format!("/v2/view/{}", view_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("View {} deleted", view_id)}))
+        }
+
+        "clickup_doc_create" => {
+            let team_id = resolve_workspace(args)?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut body = json!({"name": name});
+            if let Some(parent) = args.get("parent") { body["parent"] = parent.clone(); }
+            let resp = client.post(&format!("/v3/workspaces/{}/docs", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_doc_add_page" => {
+            let team_id = resolve_workspace(args)?;
+            let doc_id = args.get("doc_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: doc_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut body = json!({"name": name});
+            if let Some(content) = args.get("content").and_then(|v| v.as_str()) { body["content"] = json!(content); }
+            if let Some(subtitle) = args.get("sub_title").and_then(|v| v.as_str()) { body["sub_title"] = json!(subtitle); }
+            if let Some(parent_page_id) = args.get("parent_page_id").and_then(|v| v.as_str()) { body["parent_page_id"] = json!(parent_page_id); }
+            let resp = client.post(&format!("/v3/workspaces/{}/docs/{}/pages", team_id, doc_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_doc_edit_page" => {
+            let team_id = resolve_workspace(args)?;
+            let doc_id = args.get("doc_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: doc_id")?;
+            let page_id = args.get("page_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: page_id")?;
+            let mut body = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) { body["name"] = json!(name); }
+            if let Some(content) = args.get("content").and_then(|v| v.as_str()) { body["content"] = json!(content); }
+            let resp = client.put(&format!("/v3/workspaces/{}/docs/{}/pages/{}", team_id, doc_id, page_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_chat_channel_create" => {
+            let team_id = resolve_workspace(args)?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut body = json!({"name": name});
+            if let Some(desc) = args.get("description").and_then(|v| v.as_str()) { body["description"] = json!(desc); }
+            if let Some(vis) = args.get("visibility").and_then(|v| v.as_str()) { body["visibility"] = json!(vis); }
+            let resp = client.post(&format!("/v3/workspaces/{}/chat/channels", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "visibility"]))
+        }
+
+        "clickup_chat_channel_get" => {
+            let team_id = resolve_workspace(args)?;
+            let channel_id = args.get("channel_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: channel_id")?;
+            let resp = client.get(&format!("/v3/workspaces/{}/chat/channels/{}", team_id, channel_id)).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "visibility"]))
+        }
+
+        "clickup_chat_channel_update" => {
+            let team_id = resolve_workspace(args)?;
+            let channel_id = args.get("channel_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: channel_id")?;
+            let mut body = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) { body["name"] = json!(name); }
+            if let Some(desc) = args.get("description").and_then(|v| v.as_str()) { body["description"] = json!(desc); }
+            let resp = client.patch(&format!("/v3/workspaces/{}/chat/channels/{}", team_id, channel_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_chat_channel_delete" => {
+            let team_id = resolve_workspace(args)?;
+            let channel_id = args.get("channel_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: channel_id")?;
+            client.delete(&format!("/v3/workspaces/{}/chat/channels/{}", team_id, channel_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Channel {} deleted", channel_id)}))
+        }
+
+        "clickup_chat_message_list" => {
+            let team_id = resolve_workspace(args)?;
+            let channel_id = args.get("channel_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: channel_id")?;
+            let mut path = format!("/v3/workspaces/{}/chat/channels/{}/messages", team_id, channel_id);
+            if let Some(cursor) = args.get("cursor").and_then(|v| v.as_str()) {
+                path.push_str(&format!("?cursor={}", cursor));
+            }
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let messages = resp.get("messages").and_then(|m| m.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&messages, &["id", "content", "date"]))
+        }
+
+        "clickup_chat_message_send" => {
+            let team_id = resolve_workspace(args)?;
+            let channel_id = args.get("channel_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: channel_id")?;
+            let content = args.get("content").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: content")?;
+            let body = json!({"content": content});
+            let resp = client.post(&format!("/v3/workspaces/{}/chat/channels/{}/messages", team_id, channel_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "Message sent", "id": resp.get("id")}))
+        }
+
+        "clickup_chat_message_delete" => {
+            let team_id = resolve_workspace(args)?;
+            let message_id = args.get("message_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: message_id")?;
+            client.delete(&format!("/v3/workspaces/{}/chat/messages/{}", team_id, message_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Message {} deleted", message_id)}))
+        }
+
+        "clickup_chat_dm" => {
+            let team_id = resolve_workspace(args)?;
+            let user_id = args.get("user_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: user_id")?;
+            let content = args.get("content").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: content")?;
+            let body = json!({"user_id": user_id, "content": content});
+            let resp = client.post(&format!("/v3/workspaces/{}/chat/channels/direct_message", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "DM sent", "id": resp.get("id")}))
+        }
+
+        "clickup_webhook_create" => {
+            let team_id = resolve_workspace(args)?;
+            let endpoint = args.get("endpoint").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: endpoint")?;
+            let events = args.get("events").ok_or("Missing required parameter: events")?;
+            let mut body = json!({"endpoint": endpoint, "events": events});
+            if let Some(space_id) = args.get("space_id").and_then(|v| v.as_str()) { body["space_id"] = json!(space_id); }
+            if let Some(folder_id) = args.get("folder_id").and_then(|v| v.as_str()) { body["folder_id"] = json!(folder_id); }
+            if let Some(list_id) = args.get("list_id").and_then(|v| v.as_str()) { body["list_id"] = json!(list_id); }
+            if let Some(task_id) = args.get("task_id").and_then(|v| v.as_str()) { body["task_id"] = json!(task_id); }
+            let resp = client.post(&format!("/v2/team/{}/webhook", team_id), &body).await.map_err(|e| e.to_string())?;
+            let webhook = resp.get("webhook").cloned().unwrap_or(resp);
+            Ok(compact_items(&[webhook], &["id", "endpoint", "events", "status"]))
+        }
+
+        "clickup_webhook_update" => {
+            let webhook_id = args.get("webhook_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: webhook_id")?;
+            let mut body = json!({});
+            if let Some(endpoint) = args.get("endpoint").and_then(|v| v.as_str()) { body["endpoint"] = json!(endpoint); }
+            if let Some(events) = args.get("events") { body["events"] = events.clone(); }
+            if let Some(status) = args.get("status").and_then(|v| v.as_str()) { body["status"] = json!(status); }
+            let resp = client.put(&format!("/v2/webhook/{}", webhook_id), &body).await.map_err(|e| e.to_string())?;
+            let webhook = resp.get("webhook").cloned().unwrap_or(resp);
+            Ok(compact_items(&[webhook], &["id", "endpoint", "events", "status"]))
+        }
+
+        "clickup_webhook_delete" => {
+            let webhook_id = args.get("webhook_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: webhook_id")?;
+            client.delete(&format!("/v2/webhook/{}", webhook_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Webhook {} deleted", webhook_id)}))
+        }
+
+        "clickup_checklist_add_item" => {
+            let checklist_id = args.get("checklist_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: checklist_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut body = json!({"name": name});
+            if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) { body["assignee"] = json!(assignee); }
+            let resp = client.post(&format!("/v2/checklist/{}/checklist_item", checklist_id), &body).await.map_err(|e| e.to_string())?;
+            let item = resp.get("checklist").cloned().unwrap_or(resp);
+            Ok(compact_items(&[item], &["id", "name"]))
+        }
+
+        "clickup_checklist_update_item" => {
+            let checklist_id = args.get("checklist_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: checklist_id")?;
+            let item_id = args.get("item_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: item_id")?;
+            let mut body = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) { body["name"] = json!(name); }
+            if let Some(resolved) = args.get("resolved").and_then(|v| v.as_bool()) { body["resolved"] = json!(resolved); }
+            if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) { body["assignee"] = json!(assignee); }
+            client.put(&format!("/v2/checklist/{}/checklist_item/{}", checklist_id, item_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Checklist item {} updated", item_id)}))
+        }
+
+        "clickup_checklist_delete_item" => {
+            let checklist_id = args.get("checklist_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: checklist_id")?;
+            let item_id = args.get("item_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: item_id")?;
+            client.delete(&format!("/v2/checklist/{}/checklist_item/{}", checklist_id, item_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Checklist item {} deleted", item_id)}))
+        }
+
+        "clickup_user_get" => {
+            let team_id = resolve_workspace(args)?;
+            let user_id = args.get("user_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: user_id")?;
+            let resp = client.get(&format!("/v2/team/{}/user/{}", team_id, user_id)).await.map_err(|e| e.to_string())?;
+            let member = resp.get("member").cloned().unwrap_or(resp);
+            Ok(compact_items(&[member], &["user", "role"]))
+        }
+
+        "clickup_workspace_seats" => {
+            let team_id = resolve_workspace(args)?;
+            let resp = client.get(&format!("/v2/team/{}/seats", team_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!(resp))
+        }
+
+        "clickup_workspace_plan" => {
+            let team_id = resolve_workspace(args)?;
+            let resp = client.get(&format!("/v2/team/{}/plan", team_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!(resp))
+        }
+
+        "clickup_tag_create" => {
+            let space_id = args.get("space_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut tag = json!({"name": name});
+            if let Some(fg) = args.get("tag_fg").and_then(|v| v.as_str()) { tag["tag_fg"] = json!(fg); }
+            if let Some(bg) = args.get("tag_bg").and_then(|v| v.as_str()) { tag["tag_bg"] = json!(bg); }
+            let body = json!({"tag": tag});
+            client.post(&format!("/v2/space/{}/tag", space_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Tag '{}' created in space {}", name, space_id)}))
+        }
+
+        "clickup_tag_update" => {
+            let space_id = args.get("space_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            let tag_name = args.get("tag_name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: tag_name")?;
+            let mut tag = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) { tag["name"] = json!(name); }
+            if let Some(fg) = args.get("tag_fg").and_then(|v| v.as_str()) { tag["tag_fg"] = json!(fg); }
+            if let Some(bg) = args.get("tag_bg").and_then(|v| v.as_str()) { tag["tag_bg"] = json!(bg); }
+            let body = json!({"tag": tag});
+            client.put(&format!("/v2/space/{}/tag/{}", space_id, tag_name), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Tag '{}' updated", tag_name)}))
+        }
+
+        "clickup_tag_delete" => {
+            let space_id = args.get("space_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            let tag_name = args.get("tag_name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: tag_name")?;
+            client.delete(&format!("/v2/space/{}/tag/{}", space_id, tag_name)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Tag '{}' deleted from space {}", tag_name, space_id)}))
+        }
+
+        "clickup_field_unset" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let field_id = args.get("field_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: field_id")?;
+            client.delete(&format!("/v2/task/{}/field/{}", task_id, field_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Field {} unset on task {}", field_id, task_id)}))
+        }
+
+        "clickup_attachment_list" => {
+            let team_id = resolve_workspace(args)?;
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let resp = client.get(&format!("/v3/workspaces/{}/task/{}/attachments", team_id, task_id)).await.map_err(|e| e.to_string())?;
+            let attachments = resp.get("attachments").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&attachments, &["id", "title", "url", "date"]))
+        }
+
+        "clickup_shared_list" => {
+            let team_id = resolve_workspace(args)?;
+            let resp = client.get(&format!("/v2/team/{}/shared", team_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!(resp))
+        }
+
+        "clickup_group_list" => {
+            let team_id = resolve_workspace(args)?;
+            let mut qs = format!("team_id={}", team_id);
+            if let Some(group_ids) = args.get("group_ids").and_then(|v| v.as_array()) {
+                for id in group_ids {
+                    if let Some(id) = id.as_str() {
+                        qs.push_str(&format!("&group_ids[]={}", id));
+                    }
+                }
+            }
+            let resp = client.get(&format!("/v2/group?{}", qs)).await.map_err(|e| e.to_string())?;
+            let groups = resp.get("groups").and_then(|g| g.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&groups, &["id", "name", "members"]))
+        }
+
+        "clickup_group_create" => {
+            let team_id = resolve_workspace(args)?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut body = json!({"name": name});
+            if let Some(members) = args.get("member_ids") { body["members"] = members.clone(); }
+            let resp = client.post(&format!("/v2/team/{}/group", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_group_update" => {
+            let group_id = args.get("group_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: group_id")?;
+            let mut body = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) { body["name"] = json!(name); }
+            if let Some(add) = args.get("add_members") {
+                body["members"] = json!({"add": add, "rem": args.get("rem_members").cloned().unwrap_or(json!([]))});
+            } else if let Some(rem) = args.get("rem_members") {
+                body["members"] = json!({"add": [], "rem": rem});
+            }
+            let resp = client.put(&format!("/v2/group/{}", group_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_group_delete" => {
+            let group_id = args.get("group_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: group_id")?;
+            client.delete(&format!("/v2/group/{}", group_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Group {} deleted", group_id)}))
+        }
+
+        "clickup_role_list" => {
+            let team_id = resolve_workspace(args)?;
+            let resp = client.get(&format!("/v2/team/{}/customroles", team_id)).await.map_err(|e| e.to_string())?;
+            let roles = resp.get("roles").and_then(|r| r.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&roles, &["id", "name"]))
+        }
+
+        "clickup_guest_get" => {
+            let team_id = resolve_workspace(args)?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            let resp = client.get(&format!("/v2/team/{}/guest/{}", team_id, guest_id)).await.map_err(|e| e.to_string())?;
+            let guest = resp.get("guest").cloned().unwrap_or(resp);
+            Ok(compact_items(&[guest], &["user", "role"]))
         }
 
         unknown => Err(format!("Unknown tool: {}", unknown)),
