@@ -46,6 +46,7 @@ async fn run(mut cli: Cli) -> i32 {
         Commands::Shared { command } => commands::shared::execute(command, &cli).await,
         Commands::AuditLog { command } => commands::audit_log::execute(command, &cli).await,
         Commands::Acl { command } => commands::acl::execute(command, &cli).await,
+        Commands::AgentConfig { command } => commands::agent_config::execute(command, &cli).await,
     };
     match result {
         Ok(()) => 0,

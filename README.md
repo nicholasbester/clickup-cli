@@ -4,9 +4,20 @@ A CLI for the [ClickUp API](https://clickup.com/api/), optimized for AI agents a
 
 ## Install
 
+**macOS (Homebrew):**
+```bash
+brew tap nicholasbester/clickup-cli
+brew install clickup-cli
+```
+
+**From source (any platform with Rust):**
 ```bash
 cargo install --path .
 ```
+
+**Pre-built binaries:**
+
+Download from [GitHub Releases](https://github.com/nicholasbester/clickup-cli/releases) for macOS (Apple Silicon, Intel), Linux (x86_64, ARM), and Windows.
 
 ## Quick Start
 
@@ -105,6 +116,25 @@ clickup task list --list 12345 --fields id,name,status  # Custom fields
 | `shared` | list |
 | `audit-log` | query |
 | `acl` | update |
+
+## AI Agent Integration
+
+The CLI is designed for AI agents (Claude Code, Cursor, etc.). The default table output is ~98% smaller than raw JSON, saving thousands of tokens per call.
+
+To make the CLI discoverable by AI agents in any project, inject a compressed command reference into the project's CLAUDE.md:
+
+```bash
+# Inject into current project's CLAUDE.md
+clickup agent-config inject
+
+# Inject into a specific file
+clickup agent-config inject path/to/AGENT.md
+
+# Preview the reference block
+clickup agent-config show
+```
+
+This adds a single-line `<!-- clickup-cli:begin -->...<!-- clickup-cli:end -->` block containing all commands. Re-running the command updates the block in place. The block is ~1,000 tokens and gives the agent full knowledge of every available command and flag.
 
 ## Output Modes
 

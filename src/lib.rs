@@ -195,4 +195,10 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::acl::AclCommands,
     },
+    /// Generate CLI reference for AI agent configs
+    #[command(name = "agent-config")]
+    AgentConfig {
+        #[command(subcommand)]
+        command: commands::agent_config::AgentConfigCommands,
+    },
 }
