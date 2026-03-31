@@ -1,5 +1,6 @@
 use crate::client::ClickUpClient;
 use crate::config::Config;
+use crate::output::compact_items;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -334,18 +335,31 @@ async fn dispatch_tool(
 
     match name {
         "clickup_whoami" => {
-            client.get("/v2/user").await.map_err(|e| e.to_string())
+            let resp = client.get("/v2/user").await.map_err(|e| e.to_string())?;
+            let user = resp.get("user").cloned().unwrap_or(resp);
+            Ok(compact_items(&[user], &["id", "username", "email"]))
         }
 
         "clickup_workspace_list" => {
-            client.get("/v2/team").await.map_err(|e| e.to_string())
+            let resp = client.get("/v2/team").await.map_err(|e| e.to_string())?;
+            let teams = resp.get("teams").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+            let items: Vec<Value> = teams.iter().map(|ws| {
+                json!({
+                    "id": ws.get("id"),
+                    "name": ws.get("name"),
+                    "members": ws.get("members").and_then(|m| m.as_array()).map(|a| a.len()).unwrap_or(0),
+                })
+            }).collect();
+            Ok(compact_items(&items, &["id", "name", "members"]))
         }
 
         "clickup_space_list" => {
             let team_id = resolve_workspace(args)?;
             let archived = args.get("archived").and_then(|v| v.as_bool()).unwrap_or(false);
             let path = format!("/v2/team/{}/space?archived={}", team_id, archived);
-            client.get(&path).await.map_err(|e| e.to_string())
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let spaces = resp.get("spaces").and_then(|s| s.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&spaces, &["id", "name", "private", "archived"]))
         }
 
         "clickup_folder_list" => {
@@ -355,20 +369,32 @@ async fn dispatch_tool(
                 .ok_or("Missing required parameter: space_id")?;
             let archived = args.get("archived").and_then(|v| v.as_bool()).unwrap_or(false);
             let path = format!("/v2/space/{}/folder?archived={}", space_id, archived);
-            client.get(&path).await.map_err(|e| e.to_string())
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let folders = resp.get("folders").and_then(|f| f.as_array()).cloned().unwrap_or_default();
+            let items: Vec<Value> = folders.iter().map(|f| {
+                let list_count = f.get("lists").and_then(|l| l.as_array()).map(|a| a.len()).unwrap_or(0);
+                json!({
+                    "id": f.get("id"),
+                    "name": f.get("name"),
+                    "task_count": f.get("task_count"),
+                    "list_count": list_count,
+                })
+            }).collect();
+            Ok(compact_items(&items, &["id", "name", "task_count", "list_count"]))
         }
 
         "clickup_list_list" => {
             let archived = args.get("archived").and_then(|v| v.as_bool()).unwrap_or(false);
-            if let Some(folder_id) = args.get("folder_id").and_then(|v| v.as_str()) {
-                let path = format!("/v2/folder/{}/list?archived={}", folder_id, archived);
-                client.get(&path).await.map_err(|e| e.to_string())
+            let path = if let Some(folder_id) = args.get("folder_id").and_then(|v| v.as_str()) {
+                format!("/v2/folder/{}/list?archived={}", folder_id, archived)
             } else if let Some(space_id) = args.get("space_id").and_then(|v| v.as_str()) {
-                let path = format!("/v2/space/{}/list?archived={}", space_id, archived);
-                client.get(&path).await.map_err(|e| e.to_string())
+                format!("/v2/space/{}/list?archived={}", space_id, archived)
             } else {
-                Err("Provide either folder_id or space_id".to_string())
-            }
+                return Err("Provide either folder_id or space_id".to_string());
+            };
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let lists = resp.get("lists").and_then(|l| l.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&lists, &["id", "name", "task_count", "status", "due_date"]))
         }
 
         "clickup_task_list" => {
@@ -395,7 +421,9 @@ async fn dispatch_tool(
                 }
             }
             let path = format!("/v2/list/{}/task?{}", list_id, qs.trim_start_matches('&'));
-            client.get(&path).await.map_err(|e| e.to_string())
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let tasks = resp.get("tasks").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&tasks, &["id", "name", "status", "priority", "assignees", "due_date"]))
         }
 
         "clickup_task_get" => {
@@ -411,7 +439,8 @@ async fn dispatch_tool(
                 "/v2/task/{}?include_subtasks={}",
                 task_id, include_subtasks
             );
-            client.get(&path).await.map_err(|e| e.to_string())
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "status", "priority", "assignees", "due_date", "description"]))
         }
 
         "clickup_task_create" => {
@@ -443,7 +472,8 @@ async fn dispatch_tool(
                 body["due_date"] = json!(due_date);
             }
             let path = format!("/v2/list/{}/task", list_id);
-            client.post(&path, &body).await.map_err(|e| e.to_string())
+            let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "status", "priority", "assignees", "due_date"]))
         }
 
         "clickup_task_update" => {
@@ -470,7 +500,8 @@ async fn dispatch_tool(
                 body["assignees"] = json!({"add": [], "rem": rem});
             }
             let path = format!("/v2/task/{}", task_id);
-            client.put(&path, &body).await.map_err(|e| e.to_string())
+            let resp = client.put(&path, &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "status", "priority", "assignees", "due_date"]))
         }
 
         "clickup_task_delete" => {
@@ -479,7 +510,8 @@ async fn dispatch_tool(
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
             let path = format!("/v2/task/{}", task_id);
-            client.delete(&path).await.map_err(|e| e.to_string())
+            client.delete(&path).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Task {} deleted", task_id)}))
         }
 
         "clickup_task_search" => {
@@ -518,7 +550,9 @@ async fn dispatch_tool(
                 team_id,
                 qs.trim_start_matches('&')
             );
-            client.get(&path).await.map_err(|e| e.to_string())
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let tasks = resp.get("tasks").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&tasks, &["id", "name", "status", "priority", "assignees", "due_date"]))
         }
 
         "clickup_comment_list" => {
@@ -527,7 +561,9 @@ async fn dispatch_tool(
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
             let path = format!("/v2/task/{}/comment", task_id);
-            client.get(&path).await.map_err(|e| e.to_string())
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let comments = resp.get("comments").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&comments, &["id", "user", "date", "comment_text"]))
         }
 
         "clickup_comment_create" => {
@@ -547,7 +583,8 @@ async fn dispatch_tool(
                 body["notify_all"] = json!(notify_all);
             }
             let path = format!("/v2/task/{}/comment", task_id);
-            client.post(&path, &body).await.map_err(|e| e.to_string())
+            let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "Comment created", "id": resp.get("id")}))
         }
 
         "clickup_field_list" => {
@@ -556,7 +593,9 @@ async fn dispatch_tool(
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: list_id")?;
             let path = format!("/v2/list/{}/field", list_id);
-            client.get(&path).await.map_err(|e| e.to_string())
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let fields = resp.get("fields").and_then(|f| f.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&fields, &["id", "name", "type", "required"]))
         }
 
         "clickup_field_set" => {
@@ -571,7 +610,8 @@ async fn dispatch_tool(
             let value = args.get("value").ok_or("Missing required parameter: value")?;
             let body = json!({"value": value});
             let path = format!("/v2/task/{}/field/{}", task_id, field_id);
-            client.post(&path, &body).await.map_err(|e| e.to_string())
+            client.post(&path, &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Field {} set on task {}", field_id, task_id)}))
         }
 
         "clickup_time_start" => {
@@ -587,13 +627,17 @@ async fn dispatch_tool(
                 body["billable"] = json!(billable);
             }
             let path = format!("/v2/team/{}/time_entries/start", team_id);
-            client.post(&path, &body).await.map_err(|e| e.to_string())
+            let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
+            let data = resp.get("data").cloned().unwrap_or(resp);
+            Ok(compact_items(&[data], &["id", "task", "duration", "start", "billable"]))
         }
 
         "clickup_time_stop" => {
             let team_id = resolve_workspace(args)?;
             let path = format!("/v2/team/{}/time_entries/stop", team_id);
-            client.post(&path, &json!({})).await.map_err(|e| e.to_string())
+            let resp = client.post(&path, &json!({})).await.map_err(|e| e.to_string())?;
+            let data = resp.get("data").cloned().unwrap_or(resp);
+            Ok(compact_items(&[data], &["id", "task", "duration", "start", "end", "billable"]))
         }
 
         "clickup_time_list" => {
@@ -613,7 +657,9 @@ async fn dispatch_tool(
                 team_id,
                 qs.trim_start_matches('&')
             );
-            client.get(&path).await.map_err(|e| e.to_string())
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let entries = resp.get("data").and_then(|d| d.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&entries, &["id", "task", "duration", "start", "billable"]))
         }
 
         unknown => Err(format!("Unknown tool: {}", unknown)),

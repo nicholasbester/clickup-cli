@@ -96,6 +96,23 @@ impl OutputConfig {
     }
 }
 
+/// Flatten a list of items to only include the specified fields with flattened values.
+/// Returns a JSON array. Used by MCP server for token-efficient responses.
+pub fn compact_items(items: &[serde_json::Value], fields: &[&str]) -> serde_json::Value {
+    let compacted: Vec<serde_json::Value> = items
+        .iter()
+        .map(|item| {
+            let mut obj = serde_json::Map::new();
+            for &field in fields {
+                let val = flatten_value(item.get(field));
+                obj.insert(field.to_string(), serde_json::Value::String(val));
+            }
+            serde_json::Value::Object(obj)
+        })
+        .collect();
+    serde_json::Value::Array(compacted)
+}
+
 pub fn flatten_value(value: Option<&serde_json::Value>) -> String {
     match value {
         None | Some(serde_json::Value::Null) => "-".to_string(),
