@@ -4,20 +4,60 @@ A CLI for the [ClickUp API](https://clickup.com/api/), optimized for AI agents a
 
 ## Install
 
-**macOS (Homebrew):**
+### macOS (Homebrew)
+
 ```bash
 brew tap nicholasbester/clickup-cli
 brew install clickup-cli
 ```
 
-**From source (any platform with Rust):**
+To upgrade to the latest version:
 ```bash
+brew upgrade clickup-cli
+```
+
+### macOS / Linux (pre-built binary)
+
+Download the latest release for your platform:
+
+```bash
+# macOS Apple Silicon (M1/M2/M3/M4)
+curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-macos-arm64.tar.gz | tar xz
+sudo mv clickup /usr/local/bin/
+
+# macOS Intel
+curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-macos-x86_64.tar.gz | tar xz
+sudo mv clickup /usr/local/bin/
+
+# Linux x86_64
+curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-linux-x86_64.tar.gz | tar xz
+sudo mv clickup /usr/local/bin/
+
+# Linux ARM64
+curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-linux-arm64.tar.gz | tar xz
+sudo mv clickup /usr/local/bin/
+```
+
+### Windows
+
+Download `clickup-windows-x86_64.zip` from the [latest release](https://github.com/nicholasbester/clickup-cli/releases/latest), extract it, and add `clickup.exe` to your PATH.
+
+### From source (any platform)
+
+Requires [Rust](https://rustup.rs/) 1.70+:
+
+```bash
+git clone https://github.com/nicholasbester/clickup-cli.git
+cd clickup-cli
 cargo install --path .
 ```
 
-**Pre-built binaries:**
+### Verify installation
 
-Download from [GitHub Releases](https://github.com/nicholasbester/clickup-cli/releases) for macOS (Apple Silicon, Intel), Linux (x86_64, ARM), and Windows.
+```bash
+clickup --version
+# clickup 0.5.2
+```
 
 ## Quick Start
 
