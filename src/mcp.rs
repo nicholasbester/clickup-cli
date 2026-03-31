@@ -295,6 +295,216 @@ fn tool_list() -> Value {
                 },
                 "required": []
             }
+        },
+        {
+            "name": "clickup_checklist_create",
+            "description": "Create a checklist on a ClickUp task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "name": {"type": "string", "description": "Checklist name"}
+                },
+                "required": ["task_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_checklist_delete",
+            "description": "Delete a checklist from a ClickUp task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "checklist_id": {"type": "string", "description": "Checklist ID"}
+                },
+                "required": ["checklist_id"]
+            }
+        },
+        {
+            "name": "clickup_goal_list",
+            "description": "List goals in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_goal_get",
+            "description": "Get details of a specific goal",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "goal_id": {"type": "string", "description": "Goal ID"}
+                },
+                "required": ["goal_id"]
+            }
+        },
+        {
+            "name": "clickup_goal_create",
+            "description": "Create a new goal in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "name": {"type": "string", "description": "Goal name"},
+                    "due_date": {"type": "integer", "description": "Due date as Unix timestamp (milliseconds)"},
+                    "description": {"type": "string", "description": "Goal description"},
+                    "owner_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "List of owner user IDs"
+                    }
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "clickup_goal_update",
+            "description": "Update an existing goal",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "goal_id": {"type": "string", "description": "Goal ID"},
+                    "name": {"type": "string", "description": "New goal name"},
+                    "due_date": {"type": "integer", "description": "New due date as Unix timestamp (milliseconds)"},
+                    "description": {"type": "string", "description": "New goal description"}
+                },
+                "required": ["goal_id"]
+            }
+        },
+        {
+            "name": "clickup_view_list",
+            "description": "List views for a space, folder, list, or workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID (mutually exclusive with other IDs)"},
+                    "folder_id": {"type": "string", "description": "Folder ID (mutually exclusive with other IDs)"},
+                    "list_id": {"type": "string", "description": "List ID (mutually exclusive with other IDs)"},
+                    "team_id": {"type": "string", "description": "Workspace (team) ID for workspace-level views. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_view_tasks",
+            "description": "Get tasks in a specific view",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "view_id": {"type": "string", "description": "View ID"},
+                    "page": {"type": "integer", "description": "Page number (0-indexed, default 0)"}
+                },
+                "required": ["view_id"]
+            }
+        },
+        {
+            "name": "clickup_doc_list",
+            "description": "List docs in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_doc_get",
+            "description": "Get a specific doc from a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "doc_id": {"type": "string", "description": "Doc ID"}
+                },
+                "required": ["doc_id"]
+            }
+        },
+        {
+            "name": "clickup_doc_pages",
+            "description": "List pages in a doc",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "doc_id": {"type": "string", "description": "Doc ID"},
+                    "content": {"type": "boolean", "description": "Include page content in the response"}
+                },
+                "required": ["doc_id"]
+            }
+        },
+        {
+            "name": "clickup_tag_list",
+            "description": "List tags for a space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"}
+                },
+                "required": ["space_id"]
+            }
+        },
+        {
+            "name": "clickup_task_add_tag",
+            "description": "Add a tag to a ClickUp task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "tag_name": {"type": "string", "description": "Tag name to add"}
+                },
+                "required": ["task_id", "tag_name"]
+            }
+        },
+        {
+            "name": "clickup_task_remove_tag",
+            "description": "Remove a tag from a ClickUp task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "tag_name": {"type": "string", "description": "Tag name to remove"}
+                },
+                "required": ["task_id", "tag_name"]
+            }
+        },
+        {
+            "name": "clickup_webhook_list",
+            "description": "List webhooks for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_member_list",
+            "description": "List members of a task or list",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID (mutually exclusive with list_id)"},
+                    "list_id": {"type": "string", "description": "List ID (mutually exclusive with task_id)"}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_template_list",
+            "description": "List task templates for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "page": {"type": "integer", "description": "Page number (0-indexed, default 0)"}
+                },
+                "required": []
+            }
         }
     ])
 }
@@ -660,6 +870,223 @@ async fn dispatch_tool(
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let entries = resp.get("data").and_then(|d| d.as_array()).cloned().unwrap_or_default();
             Ok(compact_items(&entries, &["id", "task", "duration", "start", "billable"]))
+        }
+
+        "clickup_checklist_create" => {
+            let task_id = args
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let name = args
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let path = format!("/v2/task/{}/checklist", task_id);
+            let body = json!({"name": name});
+            let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
+            let checklist = resp.get("checklist").cloned().unwrap_or(resp);
+            Ok(compact_items(&[checklist], &["id", "name"]))
+        }
+
+        "clickup_checklist_delete" => {
+            let checklist_id = args
+                .get("checklist_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: checklist_id")?;
+            let path = format!("/v2/checklist/{}", checklist_id);
+            client.delete(&path).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Checklist {} deleted", checklist_id)}))
+        }
+
+        "clickup_goal_list" => {
+            let team_id = resolve_workspace(args)?;
+            let path = format!("/v2/team/{}/goal", team_id);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let goals = resp.get("goals").and_then(|g| g.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&goals, &["id", "name", "percent_completed", "due_date"]))
+        }
+
+        "clickup_goal_get" => {
+            let goal_id = args
+                .get("goal_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: goal_id")?;
+            let path = format!("/v2/goal/{}", goal_id);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let goal = resp.get("goal").cloned().unwrap_or(resp);
+            Ok(compact_items(&[goal], &["id", "name", "percent_completed", "due_date", "description"]))
+        }
+
+        "clickup_goal_create" => {
+            let team_id = resolve_workspace(args)?;
+            let name = args
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let mut body = json!({"name": name});
+            if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) {
+                body["due_date"] = json!(due_date);
+            }
+            if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
+                body["description"] = json!(desc);
+            }
+            if let Some(owner_ids) = args.get("owner_ids") {
+                body["owners"] = owner_ids.clone();
+            }
+            let path = format!("/v2/team/{}/goal", team_id);
+            let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
+            let goal = resp.get("goal").cloned().unwrap_or(resp);
+            Ok(compact_items(&[goal], &["id", "name"]))
+        }
+
+        "clickup_goal_update" => {
+            let goal_id = args
+                .get("goal_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: goal_id")?;
+            let mut body = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) {
+                body["name"] = json!(name);
+            }
+            if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) {
+                body["due_date"] = json!(due_date);
+            }
+            if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
+                body["description"] = json!(desc);
+            }
+            let path = format!("/v2/goal/{}", goal_id);
+            let resp = client.put(&path, &body).await.map_err(|e| e.to_string())?;
+            let goal = resp.get("goal").cloned().unwrap_or(resp);
+            Ok(compact_items(&[goal], &["id", "name"]))
+        }
+
+        "clickup_view_list" => {
+            let path = if let Some(space_id) = args.get("space_id").and_then(|v| v.as_str()) {
+                format!("/v2/space/{}/view", space_id)
+            } else if let Some(folder_id) = args.get("folder_id").and_then(|v| v.as_str()) {
+                format!("/v2/folder/{}/view", folder_id)
+            } else if let Some(list_id) = args.get("list_id").and_then(|v| v.as_str()) {
+                format!("/v2/list/{}/view", list_id)
+            } else {
+                let team_id = resolve_workspace(args)?;
+                format!("/v2/team/{}/view", team_id)
+            };
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let views = resp.get("views").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&views, &["id", "name", "type"]))
+        }
+
+        "clickup_view_tasks" => {
+            let view_id = args
+                .get("view_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: view_id")?;
+            let page = args.get("page").and_then(|v| v.as_i64()).unwrap_or(0);
+            let path = format!("/v2/view/{}/task?page={}", view_id, page);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let tasks = resp.get("tasks").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&tasks, &["id", "name", "status", "priority", "assignees", "due_date"]))
+        }
+
+        "clickup_doc_list" => {
+            let team_id = resolve_workspace(args)?;
+            let path = format!("/v3/workspaces/{}/docs", team_id);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let docs = resp.get("docs").and_then(|d| d.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&docs, &["id", "name", "date_created"]))
+        }
+
+        "clickup_doc_get" => {
+            let team_id = resolve_workspace(args)?;
+            let doc_id = args
+                .get("doc_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: doc_id")?;
+            let path = format!("/v3/workspaces/{}/docs/{}", team_id, doc_id);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name", "date_created"]))
+        }
+
+        "clickup_doc_pages" => {
+            let team_id = resolve_workspace(args)?;
+            let doc_id = args
+                .get("doc_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: doc_id")?;
+            let content = args.get("content").and_then(|v| v.as_bool()).unwrap_or(false);
+            let path = format!("/v3/workspaces/{}/docs/{}/pages?content_format=text/md&max_page_depth=-1&include_content={}", team_id, doc_id, content);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let pages = resp.get("pages").and_then(|p| p.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&pages, &["id", "name"]))
+        }
+
+        "clickup_tag_list" => {
+            let space_id = args
+                .get("space_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            let path = format!("/v2/space/{}/tag", space_id);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let tags = resp.get("tags").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&tags, &["name", "tag_fg", "tag_bg"]))
+        }
+
+        "clickup_task_add_tag" => {
+            let task_id = args
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let tag_name = args
+                .get("tag_name")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: tag_name")?;
+            let path = format!("/v2/task/{}/tag/{}", task_id, tag_name);
+            client.post(&path, &json!({})).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Tag '{}' added to task {}", tag_name, task_id)}))
+        }
+
+        "clickup_task_remove_tag" => {
+            let task_id = args
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let tag_name = args
+                .get("tag_name")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: tag_name")?;
+            let path = format!("/v2/task/{}/tag/{}", task_id, tag_name);
+            client.delete(&path).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Tag '{}' removed from task {}", tag_name, task_id)}))
+        }
+
+        "clickup_webhook_list" => {
+            let team_id = resolve_workspace(args)?;
+            let path = format!("/v2/team/{}/webhook", team_id);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let webhooks = resp.get("webhooks").and_then(|w| w.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&webhooks, &["id", "endpoint", "events", "status"]))
+        }
+
+        "clickup_member_list" => {
+            let path = if let Some(task_id) = args.get("task_id").and_then(|v| v.as_str()) {
+                format!("/v2/task/{}/member", task_id)
+            } else if let Some(list_id) = args.get("list_id").and_then(|v| v.as_str()) {
+                format!("/v2/list/{}/member", list_id)
+            } else {
+                return Err("Provide either task_id or list_id".to_string());
+            };
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let members = resp.get("members").and_then(|m| m.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&members, &["id", "username", "email"]))
+        }
+
+        "clickup_template_list" => {
+            let team_id = resolve_workspace(args)?;
+            let page = args.get("page").and_then(|v| v.as_i64()).unwrap_or(0);
+            let path = format!("/v2/team/{}/taskTemplate?page={}", team_id, page);
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let templates = resp.get("templates").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&templates, &["id", "name"]))
         }
 
         unknown => Err(format!("Unknown tool: {}", unknown)),
