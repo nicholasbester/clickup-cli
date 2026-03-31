@@ -61,14 +61,12 @@ clickup task get abc123
 
 ## AI Agent Integration
 
-Two ways to connect AI agents to ClickUp:
-
-**CLI Mode** — inject a command reference into your project's CLAUDE.md:
+**Recommended: CLI Mode** — most token-efficient, LLM-agnostic. Inject a ~1,000 token command reference into your agent instructions file and the agent runs CLI commands directly. No tool schemas consuming context.
 ```bash
-clickup agent-config inject
+clickup agent-config inject   # Auto-detects: CLAUDE.md, agent.md, .cursorrules, etc.
 ```
 
-**MCP Mode** — run as a native tool server for Claude Desktop, Cursor, etc.:
+**Alternative: MCP Mode** — for tools that prefer native tool integration (Claude Desktop, Cursor). MCP tool schemas consume more tokens than the CLI reference.
 ```json
 {
   "mcpServers": {

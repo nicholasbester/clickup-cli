@@ -106,13 +106,19 @@ Add to your Claude Code MCP settings (`.claude/settings.json` or project setting
 
 ## CLI vs MCP
 
-| | CLI Mode | MCP Mode |
+| | CLI Mode (recommended) | MCP Mode |
 |---|---|---|
+| **Setup cost** | ~1,000 tokens (once) | Tool schemas in context per session |
 | **Setup** | `clickup agent-config inject` into CLAUDE.md | Add to MCP server config |
 | **Output** | Token-efficient tables (default) | Token-efficient compact JSON |
 | **Integration** | Shell commands via agent | Native tool calls |
-| **Best for** | Claude Code (CLI), shell-based agents | Claude Desktop, Cursor, VS Code, Claude Code (MCP) |
+| **Coverage** | All 130 endpoints | 18 core tools |
+| **Best for** | Claude Code, shell-based agents | Claude Desktop, Cursor, VS Code |
 
-Both modes deliver ~98% token reduction compared to raw API JSON. Both use the same authentication and config file. You can use both simultaneously.
+**The CLI approach is preferred for most use cases** — it costs ~1,000 tokens once for the full command reference, covers all 130 endpoints, and every response is already token-optimized. MCP tool schemas consume more tokens in the agent's context window and only expose 18 endpoints.
+
+Use MCP when your tool requires native tool integration (e.g., Claude Desktop doesn't run shell commands).
+
+Both modes deliver ~98% token reduction compared to raw API JSON. Both use the same authentication and config file.
 
 [← Command Reference](commands)  ·  [Home →](.)

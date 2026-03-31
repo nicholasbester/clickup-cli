@@ -29,7 +29,17 @@ impl Config {
         Ok(config_dir.join("clickup-cli").join("config.toml"))
     }
 
+    /// Load config: project-level .clickup.toml first, then global config
     pub fn load() -> Result<Self, CliError> {
+        // 1. Project-level config (.clickup.toml in current directory)
+        let project_path = PathBuf::from(".clickup.toml");
+        if project_path.exists() {
+            let project_config = Self::load_from(&project_path)?;
+            if !project_config.auth.token.is_empty() {
+                return Ok(project_config);
+            }
+        }
+        // 2. Global config
         let path = Self::config_path()?;
         Self::load_from(&path)
     }

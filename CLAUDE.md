@@ -87,7 +87,10 @@ clickup <resource> <action> [ID] [flags]
 
 ## Config
 
-Location: `~/.config/clickup-cli/config.toml`
+| Level | File |
+|-------|------|
+| Project | `.clickup.toml` (current directory) |
+| Global | `~/.config/clickup-cli/config.toml` |
 
 ```toml
 [auth]
@@ -97,12 +100,11 @@ token = "pk_..."
 workspace_id = "12345"
 ```
 
-Token resolution: `--token` flag > `CLICKUP_TOKEN` env var > config file
-Workspace resolution: `--workspace` flag > `CLICKUP_WORKSPACE` env var > config file
+Resolution: `--flag` > `CLICKUP_TOKEN`/`CLICKUP_WORKSPACE` env > `.clickup.toml` > global config
 
 ## MCP Server
 
-Start with `clickup mcp serve`. Returns token-efficient compact JSON (same flattening as CLI tables). Exposes 18 tools: clickup_whoami, clickup_workspace_list, clickup_space_list, clickup_folder_list, clickup_list_list, clickup_task_list, clickup_task_get, clickup_task_create, clickup_task_update, clickup_task_delete, clickup_task_search, clickup_comment_list, clickup_comment_create, clickup_field_list, clickup_field_set, clickup_time_start, clickup_time_stop, clickup_time_list.
+Start with `clickup mcp serve`. Returns token-efficient compact JSON (same flattening as CLI tables). Exposes 36 tools covering auth, hierarchy, tasks, comments, fields, time tracking, goals, views, docs, tags, webhooks, members, templates, and checklists.
 
 ## Exit Codes
 

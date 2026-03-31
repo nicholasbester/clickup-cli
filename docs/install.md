@@ -87,15 +87,52 @@ clickup completions fish > ~/.config/fish/completions/clickup.fish
 clickup completions powershell > clickup.ps1
 ```
 
+## Project-Level Config
+
+For per-project settings (different workspace, different token), create a `.clickup.toml` in the project root:
+
+```bash
+clickup agent-config init --token pk_xxx --workspace 12345
+```
+
+This creates:
+```toml
+[auth]
+token = "pk_xxx"
+
+[defaults]
+workspace_id = "12345"
+```
+
+Project config (`.clickup.toml`) takes priority over global config. Add it to `.gitignore` if it contains a token.
+
 ## Environment Variables
 
-For CI/CD and scripting, you can use environment variables instead of (or in addition to) the config file:
+For CI/CD and scripting:
 
 | Variable | Description |
 |----------|-------------|
-| `CLICKUP_TOKEN` | API token (overrides config file) |
-| `CLICKUP_WORKSPACE` | Default workspace ID (overrides config file) |
+| `CLICKUP_TOKEN` | API token |
+| `CLICKUP_WORKSPACE` | Default workspace ID |
 
-Resolution order (highest priority wins): `--flag` > environment variable > config file.
+## Resolution Order (highest priority wins)
+
+1. `--flag` CLI argument
+2. Environment variable (`CLICKUP_TOKEN`, `CLICKUP_WORKSPACE`)
+3. Project config (`.clickup.toml`)
+4. Global config (`~/.config/clickup-cli/config.toml`)
+
+## AI Agent Setup
+
+The CLI is LLM-agnostic. Inject the command reference into whichever agent instruction file your project uses:
+
+```bash
+clickup agent-config inject              # Auto-detects existing file
+clickup agent-config inject CLAUDE.md    # Claude Code
+clickup agent-config inject agent.md     # Generic
+clickup agent-config inject .cursorrules # Cursor
+```
+
+Auto-detection checks: `CLAUDE.md`, `agent.md`, `AGENT.md`, `.cursorrules`, `.github/copilot-instructions.md`
 
 [← Home](.)  ·  [Command Reference →](commands)  ·  [MCP Server →](mcp)

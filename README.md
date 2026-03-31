@@ -184,21 +184,23 @@ clickup task list --list 12345 --fields id,name,status  # Custom fields
 
 Two ways to connect AI agents to ClickUp:
 
-### Option 1: CLI Mode (shell commands)
+### Recommended: CLI Mode (shell commands)
 
-Inject a compressed command reference into your project's CLAUDE.md:
+The CLI approach is **the most token-efficient way** to give an agent ClickUp access. Injecting the command reference costs ~1,000 tokens once, and every command returns compact table output (~150 tokens for 5 tasks). There are no tool schemas consuming context. Works with any LLM/agent framework.
 
 ```bash
-clickup agent-config inject            # Into CLAUDE.md
-clickup agent-config inject AGENT.md   # Into specific file
+clickup agent-config inject            # Auto-detects: CLAUDE.md, agent.md, .cursorrules, etc.
+clickup agent-config inject AGENT.md   # Or specify any file explicitly
 clickup agent-config show              # Preview the block
 ```
 
-This adds a ~1,000 token block giving the agent full knowledge of every command. The agent then runs CLI commands directly.
+Auto-detection checks for existing files in order: `CLAUDE.md`, `agent.md`, `AGENT.md`, `.cursorrules`, `.github/copilot-instructions.md`. Falls back to creating `CLAUDE.md` if none exist.
 
-### Option 2: MCP Server (native tool calls)
+The agent then runs CLI commands directly — the full ClickUp API in ~1,000 tokens of instructions.
 
-For Claude Desktop, Cursor, and other MCP-capable tools, run clickup-cli as an MCP server:
+### Alternative: MCP Server (native tool calls)
+
+For Claude Desktop, Cursor, and other MCP-capable tools that prefer native tool integration. Note: MCP tool schemas consume more tokens in the agent's context than the CLI reference approach.
 
 ```json
 {
@@ -215,17 +217,33 @@ This exposes 18 tools (task CRUD, search, comments, time tracking, and more) as 
 
 ## Configuration
 
+### Config Files
+
+| Level | File | Use case |
+|-------|------|----------|
+| **Project** | `.clickup.toml` | Per-project token/workspace (team repos, CI) |
+| **Global** | `~/.config/clickup-cli/config.toml` | Personal default |
+
+Create a project-level config:
+```bash
+clickup agent-config init --token pk_xxx --workspace 12345
+```
+
+This creates `.clickup.toml` in the current directory. Add it to `.gitignore` if it contains a token. Project config takes priority over global config.
+
 ### Token Resolution (highest priority wins)
 
 1. `--token` CLI flag
 2. `CLICKUP_TOKEN` environment variable
-3. Config file (`~/.config/clickup-cli/config.toml`)
+3. `.clickup.toml` (project-level)
+4. `~/.config/clickup-cli/config.toml` (global)
 
 ### Workspace Resolution
 
 1. `--workspace` CLI flag
 2. `CLICKUP_WORKSPACE` environment variable
-3. Config file default
+3. `.clickup.toml` (project-level)
+4. `~/.config/clickup-cli/config.toml` (global)
 
 ### Check Current Config
 
