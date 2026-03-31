@@ -1,8 +1,20 @@
-# clickup-cli
+<p align="center">
+  <img src="docs/assets/clickup-icon.svg" alt="ClickUp" width="60" />
+</p>
 
-A CLI for the [ClickUp API](https://clickup.com/api/), optimized for AI agents and human users. Covers all ~130 endpoints across 28 resource groups and 4 utility commands.
+<h1 align="center">clickup-cli</h1>
 
-**[Documentation](https://nicholasbester.github.io/clickup-cli/)**
+<p align="center">
+  A CLI for the <a href="https://clickup.com/api/">ClickUp API</a>, optimized for AI agents and human users.<br/>
+  Covers all ~130 endpoints across 28 resource groups and 4 utility commands.
+</p>
+
+<p align="center">
+  <a href="https://crates.io/crates/clickup-cli"><img src="https://img.shields.io/crates/v/clickup-cli" alt="crates.io" /></a>
+  <a href="https://github.com/nicholasbester/clickup-cli/releases"><img src="https://img.shields.io/github/v/release/nicholasbester/clickup-cli" alt="GitHub release" /></a>
+  <a href="https://github.com/nicholasbester/clickup-cli/actions"><img src="https://img.shields.io/github/actions/workflow/status/nicholasbester/clickup-cli/ci.yml" alt="CI" /></a>
+  <a href="https://nicholasbester.github.io/clickup-cli/">Documentation</a>
+</p>
 
 ## Why?
 
