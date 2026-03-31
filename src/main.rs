@@ -40,6 +40,12 @@ async fn run(mut cli: Cli) -> i32 {
         Commands::Doc { command } => commands::doc::execute(command, &cli).await,
         Commands::Webhook { command } => commands::webhook::execute(command, &cli).await,
         Commands::Template { command } => commands::template::execute(command, &cli).await,
+        Commands::Guest { command } => commands::guest::execute(command, &cli).await,
+        Commands::Group { command } => commands::group::execute(command, &cli).await,
+        Commands::Role { command } => commands::role::execute(command, &cli).await,
+        Commands::Shared { command } => commands::shared::execute(command, &cli).await,
+        Commands::AuditLog { command } => commands::audit_log::execute(command, &cli).await,
+        Commands::Acl { command } => commands::acl::execute(command, &cli).await,
     };
     match result {
         Ok(()) => 0,

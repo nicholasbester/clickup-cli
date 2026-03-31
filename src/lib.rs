@@ -164,4 +164,35 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::template::TemplateCommands,
     },
+    /// Guest commands (Enterprise only)
+    Guest {
+        #[command(subcommand)]
+        command: commands::guest::GuestCommands,
+    },
+    /// Group commands
+    Group {
+        #[command(subcommand)]
+        command: commands::group::GroupCommands,
+    },
+    /// Role commands (Enterprise only)
+    Role {
+        #[command(subcommand)]
+        command: commands::role::RoleCommands,
+    },
+    /// Shared hierarchy commands
+    Shared {
+        #[command(subcommand)]
+        command: commands::shared::SharedCommands,
+    },
+    /// Audit log commands (Enterprise only, v3)
+    #[command(name = "audit-log")]
+    AuditLog {
+        #[command(subcommand)]
+        command: commands::audit_log::AuditLogCommands,
+    },
+    /// ACL commands (Enterprise only, v3)
+    Acl {
+        #[command(subcommand)]
+        command: commands::acl::AclCommands,
+    },
 }

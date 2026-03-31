@@ -1,6 +1,7 @@
 use clap::Subcommand;
 use crate::client::ClickUpClient;
 use crate::commands::auth::resolve_token;
+use crate::commands::workspace::resolve_workspace;
 use crate::error::CliError;
 use crate::output::OutputConfig;
 use crate::Cli;
@@ -14,6 +15,12 @@ pub enum AttachmentCommands {
         task: String,
         /// Path to the file to upload
         file: std::path::PathBuf,
+    },
+    /// List attachments for a task (v3)
+    List {
+        /// Task ID
+        #[arg(long)]
+        task: String,
     },
 }
 
@@ -30,6 +37,19 @@ pub async fn execute(command: AttachmentCommands, cli: &Cli) -> Result<(), CliEr
                 .upload_file(&format!("/v2/task/{}/attachment", task), &file)
                 .await?;
             output.print_single(&resp, ATTACHMENT_FIELDS, "id");
+            Ok(())
+        }
+        AttachmentCommands::List { task } => {
+            let team_id = resolve_workspace(cli)?;
+            let resp = client
+                .get(&format!("/v3/workspaces/{}/task/{}/attachments", team_id, task))
+                .await?;
+            let attachments = resp
+                .get("attachments")
+                .and_then(|a| a.as_array())
+                .cloned()
+                .unwrap_or_default();
+            output.print_items(&attachments, ATTACHMENT_FIELDS, "id");
             Ok(())
         }
     }
