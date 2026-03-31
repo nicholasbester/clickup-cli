@@ -25,6 +25,9 @@ async fn run(mut cli: Cli) -> i32 {
         Commands::Folder { command } => commands::folder::execute(command, &cli).await,
         Commands::List { command } => commands::list::execute(command, &cli).await,
         Commands::Task { command } => commands::task::execute(command, &cli).await,
+        Commands::Checklist { command } => commands::checklist::execute(command, &cli).await,
+        Commands::Comment { command } => commands::comment::execute(command, &cli).await,
+        Commands::Tag { command } => commands::tag::execute(command, &cli).await,
     };
     match result {
         Ok(()) => 0,

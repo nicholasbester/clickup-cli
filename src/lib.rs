@@ -88,4 +88,19 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::task::TaskCommands,
     },
+    /// Checklist commands
+    Checklist {
+        #[command(subcommand)]
+        command: commands::checklist::ChecklistCommands,
+    },
+    /// Comment commands
+    Comment {
+        #[command(subcommand)]
+        command: commands::comment::CommentCommands,
+    },
+    /// Tag commands
+    Tag {
+        #[command(subcommand)]
+        command: commands::tag::TagCommands,
+    },
 }

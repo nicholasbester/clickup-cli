@@ -127,6 +127,20 @@ pub enum TaskCommands {
         /// Task ID(s) — multiple IDs triggers bulk mode
         ids: Vec<String>,
     },
+    /// Add a tag to a task
+    AddTag {
+        /// Task ID
+        task_id: String,
+        /// Tag name
+        tag_name: String,
+    },
+    /// Remove a tag from a task
+    RemoveTag {
+        /// Task ID
+        task_id: String,
+        /// Tag name
+        tag_name: String,
+    },
 }
 
 const TASK_FIELDS: &[&str] = &["id", "name", "status", "priority", "assignees", "due_date"];
@@ -404,6 +418,23 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
         TaskCommands::Delete { id } => {
             client.delete(&format!("/v2/task/{}", id)).await?;
             output.print_message(&format!("Task {} deleted", id));
+            Ok(())
+        }
+        TaskCommands::AddTag { task_id, tag_name } => {
+            client
+                .post(
+                    &format!("/v2/task/{}/tag/{}", task_id, tag_name),
+                    &serde_json::json!({}),
+                )
+                .await?;
+            output.print_message(&format!("Tag '{}' added to task {}", tag_name, task_id));
+            Ok(())
+        }
+        TaskCommands::RemoveTag { task_id, tag_name } => {
+            client
+                .delete(&format!("/v2/task/{}/tag/{}", task_id, tag_name))
+                .await?;
+            output.print_message(&format!("Tag '{}' removed from task {}", tag_name, task_id));
             Ok(())
         }
         TaskCommands::TimeInStatus { ids } => {
