@@ -179,6 +179,38 @@ pub enum TaskCommands {
         /// Target task ID to unlink from
         target_id: String,
     },
+    /// Move a task to a different list (v3)
+    Move {
+        /// Task ID
+        id: String,
+        /// Destination list ID
+        #[arg(long)]
+        list: String,
+    },
+    /// Set per-user time estimate on a task (v3)
+    #[command(name = "set-estimate")]
+    SetEstimate {
+        /// Task ID
+        id: String,
+        /// Assignee user ID
+        #[arg(long)]
+        assignee: String,
+        /// Time estimate in milliseconds
+        #[arg(long)]
+        time: u64,
+    },
+    /// Replace all per-user time estimates on a task (v3)
+    #[command(name = "replace-estimates")]
+    ReplaceEstimates {
+        /// Task ID
+        id: String,
+        /// Assignee user ID
+        #[arg(long)]
+        assignee: String,
+        /// Time estimate in milliseconds
+        #[arg(long)]
+        time: u64,
+    },
 }
 
 const TASK_FIELDS: &[&str] = &["id", "name", "status", "priority", "assignees", "due_date"];
@@ -532,6 +564,45 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 .delete(&format!("/v2/task/{}/link/{}", id, target_id))
                 .await?;
             output.print_message(&format!("Task {} unlinked from {}", id, target_id));
+            Ok(())
+        }
+        TaskCommands::Move { id, list } => {
+            let ws_id = crate::commands::workspace::resolve_workspace(cli)?;
+            client
+                .put(
+                    &format!("/v3/workspaces/{}/tasks/{}/home_list/{}", ws_id, id, list),
+                    &serde_json::json!({}),
+                )
+                .await?;
+            output.print_message(&format!("Task {} moved to list {}", id, list));
+            Ok(())
+        }
+        TaskCommands::SetEstimate { id, assignee, time } => {
+            let ws_id = crate::commands::workspace::resolve_workspace(cli)?;
+            let body = serde_json::json!({
+                "time_estimates": [{"user_id": assignee, "time_estimate": time}]
+            });
+            let resp = client
+                .patch(
+                    &format!("/v3/workspaces/{}/tasks/{}/time_estimates_by_user", ws_id, id),
+                    &body,
+                )
+                .await?;
+            output.print_single(&resp, TASK_FIELDS, "id");
+            Ok(())
+        }
+        TaskCommands::ReplaceEstimates { id, assignee, time } => {
+            let ws_id = crate::commands::workspace::resolve_workspace(cli)?;
+            let body = serde_json::json!({
+                "time_estimates": [{"user_id": assignee, "time_estimate": time}]
+            });
+            let resp = client
+                .put(
+                    &format!("/v3/workspaces/{}/tasks/{}/time_estimates_by_user", ws_id, id),
+                    &body,
+                )
+                .await?;
+            output.print_single(&resp, TASK_FIELDS, "id");
             Ok(())
         }
         TaskCommands::TimeInStatus { ids } => {

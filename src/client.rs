@@ -153,6 +153,14 @@ impl ClickUpClient {
         self.request(reqwest::Method::DELETE, path, None).await
     }
 
+    pub async fn patch(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, CliError> {
+        self.request(reqwest::Method::PATCH, path, Some(body)).await
+    }
+
     pub async fn delete_with_body(
         &self,
         path: &str,

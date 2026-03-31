@@ -144,4 +144,24 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::user::UserCommands,
     },
+    /// Chat commands (v3)
+    Chat {
+        #[command(subcommand)]
+        command: commands::chat::ChatCommands,
+    },
+    /// Doc commands (v3)
+    Doc {
+        #[command(subcommand)]
+        command: commands::doc::DocCommands,
+    },
+    /// Webhook commands
+    Webhook {
+        #[command(subcommand)]
+        command: commands::webhook::WebhookCommands,
+    },
+    /// Template commands
+    Template {
+        #[command(subcommand)]
+        command: commands::template::TemplateCommands,
+    },
 }

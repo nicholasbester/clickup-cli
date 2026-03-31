@@ -36,6 +36,10 @@ async fn run(mut cli: Cli) -> i32 {
         Commands::View { command } => commands::view::execute(command, &cli).await,
         Commands::Member { command } => commands::member::execute(command, &cli).await,
         Commands::User { command } => commands::user::execute(command, &cli).await,
+        Commands::Chat { command } => commands::chat::execute(command, &cli).await,
+        Commands::Doc { command } => commands::doc::execute(command, &cli).await,
+        Commands::Webhook { command } => commands::webhook::execute(command, &cli).await,
+        Commands::Template { command } => commands::template::execute(command, &cli).await,
     };
     match result {
         Ok(()) => 0,
