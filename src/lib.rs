@@ -103,4 +103,20 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::tag::TagCommands,
     },
+    /// Custom field commands
+    Field {
+        #[command(subcommand)]
+        command: commands::field::FieldCommands,
+    },
+    /// Custom task type commands
+    #[command(name = "task-type")]
+    TaskType {
+        #[command(subcommand)]
+        command: commands::task_type::TaskTypeCommands,
+    },
+    /// Attachment commands
+    Attachment {
+        #[command(subcommand)]
+        command: commands::attachment::AttachmentCommands,
+    },
 }

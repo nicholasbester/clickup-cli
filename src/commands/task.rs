@@ -141,6 +141,44 @@ pub enum TaskCommands {
         /// Tag name
         tag_name: String,
     },
+    /// Add a dependency to a task
+    #[command(name = "add-dep")]
+    AddDep {
+        /// Task ID
+        id: String,
+        /// This task depends on another task (task is a blocker)
+        #[arg(long, conflicts_with = "dependency_of")]
+        depends_on: Option<String>,
+        /// This task is a dependency of another task (task is blocked by)
+        #[arg(long)]
+        dependency_of: Option<String>,
+    },
+    /// Remove a dependency from a task
+    #[command(name = "remove-dep")]
+    RemoveDep {
+        /// Task ID
+        id: String,
+        /// Remove depends-on relationship with this task ID
+        #[arg(long, conflicts_with = "dependency_of")]
+        depends_on: Option<String>,
+        /// Remove dependency-of relationship with this task ID
+        #[arg(long)]
+        dependency_of: Option<String>,
+    },
+    /// Link two tasks together
+    Link {
+        /// Task ID
+        id: String,
+        /// Target task ID to link to
+        target_id: String,
+    },
+    /// Unlink two tasks
+    Unlink {
+        /// Task ID
+        id: String,
+        /// Target task ID to unlink from
+        target_id: String,
+    },
 }
 
 const TASK_FIELDS: &[&str] = &["id", "name", "status", "priority", "assignees", "due_date"];
@@ -435,6 +473,65 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 .delete(&format!("/v2/task/{}/tag/{}", task_id, tag_name))
                 .await?;
             output.print_message(&format!("Tag '{}' removed from task {}", tag_name, task_id));
+            Ok(())
+        }
+        TaskCommands::AddDep {
+            id,
+            depends_on,
+            dependency_of,
+        } => {
+            let body = if let Some(other) = depends_on {
+                serde_json::json!({ "depends_on": other })
+            } else if let Some(other) = dependency_of {
+                serde_json::json!({ "dependency_of": other })
+            } else {
+                return Err(CliError::ClientError {
+                    message: "Specify --depends-on or --dependency-of".into(),
+                    status: 0,
+                });
+            };
+            client
+                .post(&format!("/v2/task/{}/dependency", id), &body)
+                .await?;
+            output.print_message(&format!("Dependency added to task {}", id));
+            Ok(())
+        }
+        TaskCommands::RemoveDep {
+            id,
+            depends_on,
+            dependency_of,
+        } => {
+            let body = if let Some(other) = depends_on {
+                serde_json::json!({ "depends_on": other })
+            } else if let Some(other) = dependency_of {
+                serde_json::json!({ "dependency_of": other })
+            } else {
+                return Err(CliError::ClientError {
+                    message: "Specify --depends-on or --dependency-of".into(),
+                    status: 0,
+                });
+            };
+            client
+                .delete_with_body(&format!("/v2/task/{}/dependency", id), &body)
+                .await?;
+            output.print_message(&format!("Dependency removed from task {}", id));
+            Ok(())
+        }
+        TaskCommands::Link { id, target_id } => {
+            client
+                .post(
+                    &format!("/v2/task/{}/link/{}", id, target_id),
+                    &serde_json::json!({}),
+                )
+                .await?;
+            output.print_message(&format!("Task {} linked to {}", id, target_id));
+            Ok(())
+        }
+        TaskCommands::Unlink { id, target_id } => {
+            client
+                .delete(&format!("/v2/task/{}/link/{}", id, target_id))
+                .await?;
+            output.print_message(&format!("Task {} unlinked from {}", id, target_id));
             Ok(())
         }
         TaskCommands::TimeInStatus { ids } => {

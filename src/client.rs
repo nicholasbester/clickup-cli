@@ -153,6 +153,78 @@ impl ClickUpClient {
         self.request(reqwest::Method::DELETE, path, None).await
     }
 
+    pub async fn delete_with_body(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, CliError> {
+        self.request(reqwest::Method::DELETE, path, Some(body)).await
+    }
+
+    pub async fn upload_file(
+        &self,
+        path: &str,
+        file_path: &std::path::Path,
+    ) -> Result<serde_json::Value, CliError> {
+        let url = format!("{}{}", self.base_url, path);
+        let file_name = file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("file")
+            .to_string();
+        let file_bytes = tokio::fs::read(file_path)
+            .await
+            .map_err(CliError::IoError)?;
+        let part = reqwest::multipart::Part::bytes(file_bytes).file_name(file_name);
+        let form = reqwest::multipart::Form::new().part("attachment", part);
+
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", &self.token)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| CliError::ClientError {
+                message: format!("Upload failed: {}", e),
+                status: 0,
+            })?;
+
+        let status = resp.status().as_u16();
+        self.update_rate_limits(resp.headers());
+
+        if (200..300).contains(&status) {
+            if status == 204 {
+                return Ok(serde_json::json!({}));
+            }
+            let json: serde_json::Value = resp.json().await.map_err(|e| CliError::ClientError {
+                message: format!("Failed to parse response: {}", e),
+                status,
+            })?;
+            return Ok(json);
+        }
+
+        let body_text = resp.text().await.unwrap_or_default();
+        let message = serde_json::from_str::<serde_json::Value>(&body_text)
+            .ok()
+            .and_then(|v| v.get("err").and_then(|e| e.as_str()).map(String::from))
+            .unwrap_or_else(|| format!("HTTP {}", status));
+
+        Err(match status {
+            401 => CliError::AuthError { message },
+            404 => CliError::NotFound {
+                message,
+                resource_id: String::new(),
+            },
+            429 => CliError::RateLimited {
+                message,
+                retry_after: None,
+            },
+            500..=599 => CliError::ServerError { message },
+            _ => CliError::ClientError { message, status },
+        })
+    }
+
     /// Override the base URL. Used in tests to point at a mock server.
     pub fn with_base_url(mut self, base_url: &str) -> Self {
         self.base_url = base_url.to_string();
