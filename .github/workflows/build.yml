@@ -90,3 +90,62 @@ jobs:
             clickup-linux-x86_64.tar.gz
             clickup-linux-arm64.tar.gz
             clickup-windows-x86_64.zip
+
+      - name: Update Homebrew formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA_ARM64=$(sha256sum clickup-macos-arm64.tar.gz | cut -d' ' -f1)
+          SHA_X86_64=$(sha256sum clickup-macos-x86_64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_X86_64=$(sha256sum clickup-linux-x86_64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_ARM64=$(sha256sum clickup-linux-arm64.tar.gz | cut -d' ' -f1)
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/nicholasbester/homebrew-clickup-cli.git" tap
+          cd tap
+
+          cat > Formula/clickup-cli.rb << FORMULA
+          class ClickupCli < Formula
+            desc "CLI for the ClickUp API, optimized for AI agents"
+            homepage "https://github.com/nicholasbester/clickup-cli"
+            version "${VERSION}"
+            license "Apache-2.0"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/nicholasbester/clickup-cli/releases/download/v${VERSION}/clickup-macos-arm64.tar.gz"
+                sha256 "${SHA_ARM64}"
+              else
+                url "https://github.com/nicholasbester/clickup-cli/releases/download/v${VERSION}/clickup-macos-x86_64.tar.gz"
+                sha256 "${SHA_X86_64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/nicholasbester/clickup-cli/releases/download/v${VERSION}/clickup-linux-arm64.tar.gz"
+                sha256 "${SHA_LINUX_ARM64}"
+              else
+                url "https://github.com/nicholasbester/clickup-cli/releases/download/v${VERSION}/clickup-linux-x86_64.tar.gz"
+                sha256 "${SHA_LINUX_X86_64}"
+              end
+            end
+
+            def install
+              bin.install "clickup"
+            end
+
+            test do
+              assert_match "clickup #{version}", shell_output("#{bin}/clickup --version")
+            end
+          end
+          FORMULA
+
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' Formula/clickup-cli.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/clickup-cli.rb
+          git commit -m "Update clickup-cli to ${VERSION}"
+          git push
