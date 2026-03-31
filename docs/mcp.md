@@ -80,10 +80,28 @@ The MCP server exposes 18 tools:
 
 ## How It Works
 
-The MCP server uses JSON-RPC 2.0 over stdio. It reads requests from stdin and writes responses to stdout. The server uses the same HTTP client and authentication as the CLI commands, but returns full JSON responses for maximum flexibility.
+The MCP server uses JSON-RPC 2.0 over stdio. It reads requests from stdin and writes responses to stdout. The server uses the same HTTP client and authentication as the CLI commands, and returns **token-efficient compact responses** — the same field flattening as the CLI's table output, but as JSON. Status objects, priority objects, assignee arrays, and timestamps are all flattened to simple values.
 
 ```
 LLM ↔ JSON-RPC (stdio) ↔ clickup mcp serve ↔ ClickUp API
+                                  ↓
+                          Compact JSON response
+                     (flattened, essential fields only)
+```
+
+## Claude Code Setup
+
+Add to your Claude Code MCP settings (`.claude/settings.json` or project settings):
+
+```json
+{
+  "mcpServers": {
+    "clickup": {
+      "command": "clickup",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
 ```
 
 ## CLI vs MCP
@@ -91,10 +109,10 @@ LLM ↔ JSON-RPC (stdio) ↔ clickup mcp serve ↔ ClickUp API
 | | CLI Mode | MCP Mode |
 |---|---|---|
 | **Setup** | `clickup agent-config inject` into CLAUDE.md | Add to MCP server config |
-| **Output** | Token-efficient tables (default) or JSON | Full JSON (structured) |
+| **Output** | Token-efficient tables (default) | Token-efficient compact JSON |
 | **Integration** | Shell commands via agent | Native tool calls |
-| **Best for** | Claude Code, shell-based agents | Claude Desktop, Cursor, VS Code |
+| **Best for** | Claude Code (CLI), shell-based agents | Claude Desktop, Cursor, VS Code, Claude Code (MCP) |
 
-Both modes use the same authentication and config file. You can use both simultaneously.
+Both modes deliver ~98% token reduction compared to raw API JSON. Both use the same authentication and config file. You can use both simultaneously.
 
 [← Command Reference](commands)  ·  [Home →](.)

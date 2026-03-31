@@ -32,7 +32,7 @@ When you need the full response, `--output json` is always available.
 
 ## Coverage
 
-**130 endpoints** across **28 resource groups**, covering the entire ClickUp v2 and v3 API:
+**130 endpoints** across **28 resource groups and 4 utility commands**, covering the entire ClickUp v2 and v3 API:
 
 | Category | Resources |
 |----------|-----------|
@@ -41,6 +41,7 @@ When you need the full response, `--output json` is always available.
 | **Tracking** | time, goal, view, member, user |
 | **Communication** | chat (v3), doc (v3), webhook, template |
 | **Admin** | guest, group, role, shared, audit-log, acl |
+| **Utilities** | setup, auth, status, completions, agent-config, mcp |
 
 ## Quick Start
 

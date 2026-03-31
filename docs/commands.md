@@ -548,15 +548,58 @@ def456
 
 ---
 
+## status
+
+Show current configuration.
+
+```bash
+clickup status
+```
+
+```
+clickup-cli v0.5.2
+
+Config:    ~/.config/clickup-cli/config.toml
+Token:     pk_441...RB4Y
+Workspace: 2648001
+```
+
+---
+
+## completions
+
+Generate shell completions.
+
+```bash
+clickup completions bash       # Bash
+clickup completions zsh        # Zsh
+clickup completions fish       # Fish
+clickup completions powershell # PowerShell
+```
+
+See [Installation](install) for setup instructions.
+
+---
+
+## mcp
+
+Start the MCP server for native LLM tool integration. See [MCP Server](mcp) for full documentation.
+
+```bash
+clickup mcp serve
+```
+
+---
+
 ## Exit Codes
 
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
 | 1 | Client error (bad input, 400) |
-| 2 | Auth error (401, no token) |
+| 2 | Auth/permission error (401, 403) |
 | 3 | Not found (404) |
 | 4 | Rate limited (429) |
 | 5 | Server error (5xx) |
 
-[← Home](.)  ·  [Installation →](install)
+[← Home](.)  ·  [Installation →](install)  ·  [MCP Server →](mcp)

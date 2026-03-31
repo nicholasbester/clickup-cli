@@ -1,6 +1,6 @@
 # clickup-cli
 
-A CLI for the [ClickUp API](https://clickup.com/api/), optimized for AI agents and human users. Covers all ~130 endpoints across 28 resource groups.
+A CLI for the [ClickUp API](https://clickup.com/api/), optimized for AI agents and human users. Covers all ~130 endpoints across 28 resource groups and 4 utility commands.
 
 **[Documentation](https://nicholasbester.github.io/clickup-cli/)**
 
@@ -174,6 +174,11 @@ clickup task list --list 12345 --fields id,name,status  # Custom fields
 | `shared` | list |
 | `audit-log` | query |
 | `acl` | update |
+| **Utilities** | |
+| `status` | Show current config, token (masked), workspace |
+| `completions` | Generate shell completions (bash, zsh, fish, powershell) |
+| `agent-config` | show, inject — CLI reference for AI agent configs |
+| `mcp` | serve — MCP server for native LLM tool integration |
 
 ## AI Agent Integration
 

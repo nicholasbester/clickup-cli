@@ -1,6 +1,6 @@
 # clickup-cli
 
-Rust CLI for the ClickUp API, optimized for AI agent consumption. Covers all ~130 endpoints across 28 resource groups.
+Rust CLI for the ClickUp API, optimized for AI agent consumption. Covers all ~130 endpoints across 28 resource groups and 4 utility commands.
 
 ## Build & Test
 
@@ -102,7 +102,7 @@ Workspace resolution: `--workspace` flag > `CLICKUP_WORKSPACE` env var > config 
 
 ## MCP Server
 
-Start with `clickup mcp serve`. Exposes 18 tools: whoami, workspace_list, space_list, folder_list, list_list, task_list, task_get, task_create, task_update, task_delete, task_search, comment_list, comment_create, field_list, field_set, time_start, time_stop, time_list.
+Start with `clickup mcp serve`. Returns token-efficient compact JSON (same flattening as CLI tables). Exposes 18 tools: clickup_whoami, clickup_workspace_list, clickup_space_list, clickup_folder_list, clickup_list_list, clickup_task_list, clickup_task_get, clickup_task_create, clickup_task_update, clickup_task_delete, clickup_task_search, clickup_comment_list, clickup_comment_create, clickup_field_list, clickup_field_set, clickup_time_start, clickup_time_stop, clickup_time_list.
 
 ## Exit Codes
 
