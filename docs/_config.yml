@@ -8,6 +8,8 @@ plugins:
 
 color_scheme: dark
 
+enable_copy_code_button: true
+
 aux_links:
   GitHub:
     - https://github.com/nicholasbester/clickup-cli
