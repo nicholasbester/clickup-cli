@@ -2,6 +2,24 @@
 
 A CLI for the [ClickUp API](https://clickup.com/api/), optimized for AI agents and human users. Covers all ~130 endpoints across 28 resource groups.
 
+**[Documentation](https://nicholasbester.github.io/clickup-cli/)**
+
+## Why?
+
+ClickUp's API responses are massive. A single task list query returns deeply nested JSON — statuses, assignees, priorities, custom fields, checklists, dependencies — easily **12,000+ tokens** for just 5 tasks. For AI agents (Claude Code, Cursor, Copilot, etc.) operating within context windows, this is a serious problem: a few API calls can consume most of an agent's available context.
+
+clickup-cli solves this with **token-efficient output by default**:
+
+```
+Full API JSON for 5 tasks:  ~12,000 tokens (450 lines)
+clickup-cli table output:      ~150 tokens (7 lines)
+Reduction:                          ~98%
+```
+
+The CLI flattens nested objects, selects only essential fields, and renders compact tables. Agents get the information they need without drowning in JSON. When you need the full response, `--output json` is always available.
+
+Beyond token efficiency, clickup-cli gives AI agents a simple, predictable interface to ClickUp: `clickup <resource> <action> [ID] [flags]`. No SDK, no auth boilerplate, no JSON parsing — just shell commands with structured output.
+
 ## Install
 
 ### macOS (Homebrew)
