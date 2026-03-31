@@ -68,6 +68,34 @@ Config is saved to `~/.config/clickup-cli/config.toml`.
 ```bash
 clickup --version
 clickup auth whoami
+clickup status          # Show config, token (masked), workspace
 ```
 
-[← Home](.)  ·  [Command Reference →](commands)
+## Shell Completions
+
+```bash
+# Bash
+clickup completions bash > ~/.bash_completion.d/clickup
+
+# Zsh (add ~/.zfunc to fpath in .zshrc first)
+clickup completions zsh > ~/.zfunc/_clickup
+
+# Fish
+clickup completions fish > ~/.config/fish/completions/clickup.fish
+
+# PowerShell
+clickup completions powershell > clickup.ps1
+```
+
+## Environment Variables
+
+For CI/CD and scripting, you can use environment variables instead of (or in addition to) the config file:
+
+| Variable | Description |
+|----------|-------------|
+| `CLICKUP_TOKEN` | API token (overrides config file) |
+| `CLICKUP_WORKSPACE` | Default workspace ID (overrides config file) |
+
+Resolution order (highest priority wins): `--flag` > environment variable > config file.
+
+[← Home](.)  ·  [Command Reference →](commands)  ·  [MCP Server →](mcp)

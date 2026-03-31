@@ -60,12 +60,27 @@ clickup task get abc123
 
 ## AI Agent Integration
 
-Inject a compressed command reference into any project's CLAUDE.md:
+Two ways to connect AI agents to ClickUp:
 
+**CLI Mode** — inject a command reference into your project's CLAUDE.md:
 ```bash
 clickup agent-config inject
 ```
 
-This adds a single-line block (~1,000 tokens) that gives an AI agent full knowledge of every available command.
+**MCP Mode** — run as a native tool server for Claude Desktop, Cursor, etc.:
+```json
+{
+  "mcpServers": {
+    "clickup": { "command": "clickup", "args": ["mcp", "serve"] }
+  }
+}
+```
 
-[Command Reference →](commands)  ·  [Installation →](install)  ·  [GitHub →](https://github.com/nicholasbester/clickup-cli)
+## Features
+
+- **Shell completions** for bash, zsh, fish, powershell
+- **Environment variables** — `CLICKUP_TOKEN`, `CLICKUP_WORKSPACE` for CI/CD
+- **Smart error handling** — exit codes, hints, plan upgrade suggestions for 403s
+- **`clickup status`** — check current config at a glance
+
+[Command Reference →](commands)  ·  [Installation →](install)  ·  [MCP Server →](mcp)  ·  [GitHub →](https://github.com/nicholasbester/clickup-cli)

@@ -66,6 +66,12 @@ clickup <resource> <action> [ID] [flags]
 - `audit-log` — query (Enterprise)
 - `acl` — update (Enterprise)
 
+### Utilities
+- `status` — show current config, token (masked), workspace
+- `completions` — generate shell completions (bash, zsh, fish, powershell)
+- `agent-config` — show or inject compressed CLI reference into CLAUDE.md
+- `mcp serve` — start MCP server (JSON-RPC over stdio, 18 tools)
+
 ## Global Flags
 
 - `--token TOKEN` — override config file token
@@ -91,11 +97,18 @@ token = "pk_..."
 workspace_id = "12345"
 ```
 
+Token resolution: `--token` flag > `CLICKUP_TOKEN` env var > config file
+Workspace resolution: `--workspace` flag > `CLICKUP_WORKSPACE` env var > config file
+
+## MCP Server
+
+Start with `clickup mcp serve`. Exposes 18 tools: whoami, workspace_list, space_list, folder_list, list_list, task_list, task_get, task_create, task_update, task_delete, task_search, comment_list, comment_create, field_list, field_set, time_start, time_stop, time_list.
+
 ## Exit Codes
 
 - 0: success
 - 1: client error (400, bad input)
-- 2: auth error (401, no token)
+- 2: auth/permission error (401, 403)
 - 3: not found (404)
 - 4: rate limited (429)
 - 5: server error (5xx)

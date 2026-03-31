@@ -177,22 +177,80 @@ clickup task list --list 12345 --fields id,name,status  # Custom fields
 
 ## AI Agent Integration
 
-The CLI is designed for AI agents (Claude Code, Cursor, etc.). The default table output is ~98% smaller than raw JSON, saving thousands of tokens per call.
+Two ways to connect AI agents to ClickUp:
 
-To make the CLI discoverable by AI agents in any project, inject a compressed command reference into the project's CLAUDE.md:
+### Option 1: CLI Mode (shell commands)
+
+Inject a compressed command reference into your project's CLAUDE.md:
 
 ```bash
-# Inject into current project's CLAUDE.md
-clickup agent-config inject
-
-# Inject into a specific file
-clickup agent-config inject path/to/AGENT.md
-
-# Preview the reference block
-clickup agent-config show
+clickup agent-config inject            # Into CLAUDE.md
+clickup agent-config inject AGENT.md   # Into specific file
+clickup agent-config show              # Preview the block
 ```
 
-This adds a single-line `<!-- clickup-cli:begin -->...<!-- clickup-cli:end -->` block containing all commands. Re-running the command updates the block in place. The block is ~1,000 tokens and gives the agent full knowledge of every available command and flag.
+This adds a ~1,000 token block giving the agent full knowledge of every command. The agent then runs CLI commands directly.
+
+### Option 2: MCP Server (native tool calls)
+
+For Claude Desktop, Cursor, and other MCP-capable tools, run clickup-cli as an MCP server:
+
+```json
+{
+  "mcpServers": {
+    "clickup": {
+      "command": "clickup",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+This exposes 18 tools (task CRUD, search, comments, time tracking, and more) as native tool calls — no shell commands needed. See the [MCP documentation](https://nicholasbester.github.io/clickup-cli/mcp) for full setup.
+
+## Configuration
+
+### Token Resolution (highest priority wins)
+
+1. `--token` CLI flag
+2. `CLICKUP_TOKEN` environment variable
+3. Config file (`~/.config/clickup-cli/config.toml`)
+
+### Workspace Resolution
+
+1. `--workspace` CLI flag
+2. `CLICKUP_WORKSPACE` environment variable
+3. Config file default
+
+### Check Current Config
+
+```bash
+clickup status
+```
+
+```
+clickup-cli v0.5.2
+
+Config:    ~/.config/clickup-cli/config.toml
+Token:     pk_441...RB4Y
+Workspace: 2648001
+```
+
+## Shell Completions
+
+```bash
+# Bash
+clickup completions bash > ~/.bash_completion.d/clickup
+
+# Zsh
+clickup completions zsh > ~/.zfunc/_clickup
+
+# Fish
+clickup completions fish > ~/.config/fish/completions/clickup.fish
+
+# PowerShell
+clickup completions powershell > clickup.ps1
+```
 
 ## Output Modes
 
@@ -203,6 +261,17 @@ This adds a single-line `<!-- clickup-cli:begin -->...<!-- clickup-cli:end -->` 
 | `--output json-compact` | Default fields as JSON |
 | `--output csv` | CSV format |
 | `-q` / `--quiet` | IDs only, one per line |
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Client error (bad input) |
+| 2 | Auth/permission error (401, 403) |
+| 3 | Not found (404) |
+| 4 | Rate limited (429) |
+| 5 | Server error (5xx) |
 
 ## License
 
