@@ -72,9 +72,15 @@ sudo mv clickup /usr/local/bin/
 
 Download `clickup-windows-x86_64.zip` from the [latest release](https://github.com/nicholasbester/clickup-cli/releases/latest), extract it, and add `clickup.exe` to your PATH.
 
-### From source (any platform)
+### From crates.io (any platform)
 
 Requires [Rust](https://rustup.rs/) 1.70+:
+
+```bash
+cargo install clickup-cli
+```
+
+### From source
 
 ```bash
 git clone https://github.com/nicholasbester/clickup-cli.git
@@ -86,7 +92,7 @@ cargo install --path .
 
 ```bash
 clickup --version
-# clickup 0.5.2
+# clickup 0.6.1
 ```
 
 ## Quick Start
@@ -225,7 +231,7 @@ For Claude Desktop, Cursor, and other MCP-capable tools that prefer native tool 
 }
 ```
 
-This exposes 18 tools (task CRUD, search, comments, time tracking, and more) as native tool calls — no shell commands needed. See the [MCP documentation](https://nicholasbester.github.io/clickup-cli/mcp) for full setup.
+This exposes 143 tools covering 100% of the ClickUp API as native tool calls — no shell commands needed. See the [MCP documentation](https://nicholasbester.github.io/clickup-cli/mcp) for full setup.
 
 ## Configuration
 
@@ -264,7 +270,7 @@ clickup status
 ```
 
 ```
-clickup-cli v0.5.2
+clickup-cli v0.6.1
 
 Config:    ~/.config/clickup-cli/config.toml
 Token:     pk_441...RB4Y

@@ -69,8 +69,8 @@ clickup <resource> <action> [ID] [flags]
 ### Utilities
 - `status` — show current config, token (masked), workspace
 - `completions` — generate shell completions (bash, zsh, fish, powershell)
-- `agent-config` — show or inject compressed CLI reference into CLAUDE.md
-- `mcp serve` — start MCP server (JSON-RPC over stdio, 18 tools)
+- `agent-config` — show or inject CLI reference (auto-detects CLAUDE.md, agent.md, .cursorrules, etc.)
+- `mcp serve` — start MCP server (JSON-RPC over stdio, 143 tools, 100% API coverage)
 
 ## Global Flags
 
@@ -104,7 +104,7 @@ Resolution: `--flag` > `CLICKUP_TOKEN`/`CLICKUP_WORKSPACE` env > `.clickup.toml`
 
 ## MCP Server
 
-Start with `clickup mcp serve`. Returns token-efficient compact JSON (same flattening as CLI tables). Exposes 36 tools covering auth, hierarchy, tasks, comments, fields, time tracking, goals, views, docs, tags, webhooks, members, templates, and checklists.
+Start with `clickup mcp serve`. Returns token-efficient compact JSON (same flattening as CLI tables). Exposes 143 tools with 100% ClickUp API coverage — every endpoint available via CLI is also available as an MCP tool.
 
 ## Exit Codes
 

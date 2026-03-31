@@ -39,9 +39,15 @@ sudo mv clickup /usr/local/bin/
 
 Download `clickup-windows-x86_64.zip` from the [latest release](https://github.com/nicholasbester/clickup-cli/releases/latest), extract, and add `clickup.exe` to your PATH.
 
-## From source
+## From crates.io
 
 Requires [Rust](https://rustup.rs/) 1.70+:
+
+```bash
+cargo install clickup-cli
+```
+
+## From source
 
 ```bash
 git clone https://github.com/nicholasbester/clickup-cli.git
@@ -66,7 +72,7 @@ Config is saved to `~/.config/clickup-cli/config.toml`.
 ## Verify
 
 ```bash
-clickup --version       # Should show: clickup 0.5.2
+clickup --version       # Should show: clickup 0.6.1
 clickup auth whoami
 clickup status          # Show config, token (masked), workspace
 ```
