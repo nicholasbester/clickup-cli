@@ -35,9 +35,17 @@ pub async fn execute(command: AuthCommands, cli: &Cli) -> Result<(), CliError> {
 }
 
 pub fn resolve_token(cli: &Cli) -> Result<String, CliError> {
+    // 1. --token flag (highest priority)
     if let Some(token) = &cli.token {
         return Ok(token.clone());
     }
+    // 2. CLICKUP_TOKEN env var
+    if let Ok(token) = std::env::var("CLICKUP_TOKEN") {
+        if !token.is_empty() {
+            return Ok(token);
+        }
+    }
+    // 3. Config file
     let config = Config::load()?;
     if config.auth.token.is_empty() {
         return Err(CliError::ConfigError("Not configured".into()));

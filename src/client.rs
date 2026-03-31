@@ -111,6 +111,7 @@ impl ClickUpClient {
 
             return match status {
                 401 => Err(CliError::AuthError { message }),
+                403 => Err(CliError::Forbidden { message }),
                 404 => Err(CliError::NotFound {
                     message,
                     resource_id: String::new(),

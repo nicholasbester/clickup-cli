@@ -7,6 +7,8 @@ pub enum CliError {
     #[error("{message}")]
     AuthError { message: String },
     #[error("{message}")]
+    Forbidden { message: String },
+    #[error("{message}")]
     NotFound { message: String, resource_id: String },
     #[error("{message}")]
     RateLimited { message: String, retry_after: Option<u64> },
@@ -23,6 +25,7 @@ impl CliError {
         match self {
             CliError::ClientError { .. } => 1,
             CliError::AuthError { .. } => 2,
+            CliError::Forbidden { .. } => 2,
             CliError::NotFound { .. } => 3,
             CliError::RateLimited { .. } => 4,
             CliError::ServerError { .. } => 5,
@@ -55,6 +58,7 @@ impl CliError {
         match self {
             CliError::ClientError { status, .. } => Some(*status),
             CliError::AuthError { .. } => Some(401),
+            CliError::Forbidden { .. } => Some(403),
             CliError::NotFound { .. } => Some(404),
             CliError::RateLimited { .. } => Some(429),
             CliError::ServerError { .. } => Some(500),
@@ -66,6 +70,9 @@ impl CliError {
         match self {
             CliError::AuthError { .. } => {
                 Some("Check your API token, or run 'clickup setup' to reconfigure".into())
+            }
+            CliError::Forbidden { .. } => {
+                Some("This feature may require a higher ClickUp plan (Business+, Enterprise)".into())
             }
             CliError::NotFound { resource_id, .. } => {
                 Some(format!("Check the ID '{}', or use --custom-task-id if using a custom task ID", resource_id))

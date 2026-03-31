@@ -207,4 +207,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: commands::mcp_cmd::McpCommands,
     },
+    /// Show current configuration and status
+    Status,
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        shell: clap_complete::Shell,
+    },
 }

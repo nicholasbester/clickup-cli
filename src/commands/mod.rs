@@ -1,4 +1,5 @@
 pub mod acl;
+pub mod completions;
 pub mod mcp_cmd;
 pub mod agent_config;
 pub mod attachment;
@@ -19,6 +20,7 @@ pub mod role;
 pub mod setup;
 pub mod shared;
 pub mod space;
+pub mod status;
 pub mod tag;
 pub mod task;
 pub mod task_type;

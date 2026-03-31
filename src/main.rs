@@ -48,6 +48,8 @@ async fn run(mut cli: Cli) -> i32 {
         Commands::Acl { command } => commands::acl::execute(command, &cli).await,
         Commands::AgentConfig { command } => commands::agent_config::execute(command, &cli).await,
         Commands::Mcp { command } => commands::mcp_cmd::execute(command).await,
+        Commands::Status => commands::status::execute(&cli).await,
+        Commands::Completions { shell } => commands::completions::execute(shell),
     };
     match result {
         Ok(()) => 0,

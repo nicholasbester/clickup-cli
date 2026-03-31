@@ -17,14 +17,22 @@ pub enum WorkspaceCommands {
 }
 
 pub fn resolve_workspace(cli: &Cli) -> Result<String, CliError> {
+    // 1. --workspace flag
     if let Some(ws) = &cli.workspace {
         return Ok(ws.clone());
     }
+    // 2. CLICKUP_WORKSPACE env var
+    if let Ok(ws) = std::env::var("CLICKUP_WORKSPACE") {
+        if !ws.is_empty() {
+            return Ok(ws);
+        }
+    }
+    // 3. Config file
     let config = Config::load()?;
     config
         .defaults
         .workspace_id
-        .ok_or_else(|| CliError::ConfigError("No default workspace. Use --workspace or run 'clickup setup'".into()))
+        .ok_or_else(|| CliError::ConfigError("No default workspace. Use --workspace, CLICKUP_WORKSPACE, or run 'clickup setup'".into()))
 }
 
 pub async fn execute(command: WorkspaceCommands, cli: &Cli) -> Result<(), CliError> {
