@@ -70,7 +70,10 @@ impl ClickUpClient {
             let status = resp.status().as_u16();
             self.update_rate_limits(resp.headers());
 
-            if status == 200 {
+            if (200..300).contains(&status) {
+                if status == 204 {
+                    return Ok(serde_json::json!({}));
+                }
                 let json: serde_json::Value = resp.json().await.map_err(|e| CliError::ClientError {
                     message: format!("Failed to parse response: {}", e),
                     status,
