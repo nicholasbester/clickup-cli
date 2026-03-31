@@ -1348,6 +1348,578 @@ fn tool_list() -> Value {
                 },
                 "required": ["guest_id"]
             }
+        },
+        {
+            "name": "clickup_task_time_in_status",
+            "description": "Get time a task has spent in each status",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"}
+                },
+                "required": ["task_id"]
+            }
+        },
+        {
+            "name": "clickup_task_move",
+            "description": "Move a task to a different list (change home list)",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "list_id": {"type": "string", "description": "Destination list ID"},
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": ["task_id", "list_id"]
+            }
+        },
+        {
+            "name": "clickup_task_set_estimate",
+            "description": "Set a time estimate for a specific user on a task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "user_id": {"type": "integer", "description": "User ID to set estimate for"},
+                    "time_estimate": {"type": "integer", "description": "Time estimate in milliseconds"}
+                },
+                "required": ["task_id", "user_id", "time_estimate"]
+            }
+        },
+        {
+            "name": "clickup_task_replace_estimates",
+            "description": "Replace all time estimates for a task (PUT replaces all user estimates)",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "user_id": {"type": "integer", "description": "User ID"},
+                    "time_estimate": {"type": "integer", "description": "Time estimate in milliseconds"}
+                },
+                "required": ["task_id", "user_id", "time_estimate"]
+            }
+        },
+        {
+            "name": "clickup_auth_check",
+            "description": "Check if the current API token is valid",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_checklist_update",
+            "description": "Update a checklist (rename or reorder)",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "checklist_id": {"type": "string", "description": "Checklist ID"},
+                    "name": {"type": "string", "description": "New checklist name"},
+                    "position": {"type": "integer", "description": "New position index"}
+                },
+                "required": ["checklist_id"]
+            }
+        },
+        {
+            "name": "clickup_comment_replies",
+            "description": "Get replies to a comment",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "comment_id": {"type": "string", "description": "Comment ID"}
+                },
+                "required": ["comment_id"]
+            }
+        },
+        {
+            "name": "clickup_comment_reply",
+            "description": "Post a reply to a comment",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "comment_id": {"type": "string", "description": "Comment ID"},
+                    "text": {"type": "string", "description": "Reply text"},
+                    "assignee": {"type": "integer", "description": "Assign the reply to a user ID"}
+                },
+                "required": ["comment_id", "text"]
+            }
+        },
+        {
+            "name": "clickup_chat_channel_list",
+            "description": "List chat channels in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "include_closed": {"type": "boolean", "description": "Include closed channels"}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_chat_channel_followers",
+            "description": "Get followers of a chat channel",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "channel_id": {"type": "string", "description": "Channel ID"}
+                },
+                "required": ["channel_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_channel_members",
+            "description": "Get members of a chat channel",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "channel_id": {"type": "string", "description": "Channel ID"}
+                },
+                "required": ["channel_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_message_update",
+            "description": "Update (edit) a chat message",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "message_id": {"type": "string", "description": "Message ID"},
+                    "text": {"type": "string", "description": "New message content"}
+                },
+                "required": ["message_id", "text"]
+            }
+        },
+        {
+            "name": "clickup_chat_reaction_list",
+            "description": "List reactions on a chat message",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "message_id": {"type": "string", "description": "Message ID"}
+                },
+                "required": ["message_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_reaction_add",
+            "description": "Add a reaction to a chat message",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "message_id": {"type": "string", "description": "Message ID"},
+                    "emoji": {"type": "string", "description": "Emoji reaction (e.g. '👍')"}
+                },
+                "required": ["message_id", "emoji"]
+            }
+        },
+        {
+            "name": "clickup_chat_reaction_remove",
+            "description": "Remove a reaction from a chat message",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "message_id": {"type": "string", "description": "Message ID"},
+                    "emoji": {"type": "string", "description": "Emoji to remove"}
+                },
+                "required": ["message_id", "emoji"]
+            }
+        },
+        {
+            "name": "clickup_chat_reply_list",
+            "description": "List replies to a chat message",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "message_id": {"type": "string", "description": "Message ID"}
+                },
+                "required": ["message_id"]
+            }
+        },
+        {
+            "name": "clickup_chat_reply_send",
+            "description": "Send a reply to a chat message",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "message_id": {"type": "string", "description": "Message ID"},
+                    "text": {"type": "string", "description": "Reply content"}
+                },
+                "required": ["message_id", "text"]
+            }
+        },
+        {
+            "name": "clickup_chat_tagged_users",
+            "description": "Get users tagged in a chat message",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "message_id": {"type": "string", "description": "Message ID"}
+                },
+                "required": ["message_id"]
+            }
+        },
+        {
+            "name": "clickup_time_current",
+            "description": "Get the currently running time tracking entry",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_time_tags",
+            "description": "List all time entry tags for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_time_add_tags",
+            "description": "Add tags to time entries",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "entry_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Time entry IDs to tag"
+                    },
+                    "tag_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tag names to add"
+                    }
+                },
+                "required": ["entry_ids", "tag_names"]
+            }
+        },
+        {
+            "name": "clickup_time_remove_tags",
+            "description": "Remove tags from time entries",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "entry_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Time entry IDs to untag"
+                    },
+                    "tag_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tag names to remove"
+                    }
+                },
+                "required": ["entry_ids", "tag_names"]
+            }
+        },
+        {
+            "name": "clickup_time_rename_tag",
+            "description": "Rename a time entry tag",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "name": {"type": "string", "description": "Current tag name"},
+                    "new_name": {"type": "string", "description": "New tag name"}
+                },
+                "required": ["name", "new_name"]
+            }
+        },
+        {
+            "name": "clickup_time_history",
+            "description": "Get the history of changes for a time entry",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "timer_id": {"type": "string", "description": "Time entry ID"}
+                },
+                "required": ["timer_id"]
+            }
+        },
+        {
+            "name": "clickup_guest_invite",
+            "description": "Invite a guest to a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "email": {"type": "string", "description": "Guest email address"},
+                    "can_edit_tags": {"type": "boolean", "description": "Allow guest to edit tags"},
+                    "can_see_time_spent": {"type": "boolean", "description": "Allow guest to see time spent"},
+                    "can_create_views": {"type": "boolean", "description": "Allow guest to create views"}
+                },
+                "required": ["email"]
+            }
+        },
+        {
+            "name": "clickup_guest_update",
+            "description": "Update a guest's permissions in a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"},
+                    "can_edit_tags": {"type": "boolean", "description": "Allow guest to edit tags"},
+                    "can_see_time_spent": {"type": "boolean", "description": "Allow guest to see time spent"},
+                    "can_create_views": {"type": "boolean", "description": "Allow guest to create views"}
+                },
+                "required": ["guest_id"]
+            }
+        },
+        {
+            "name": "clickup_guest_remove",
+            "description": "Remove a guest from a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"}
+                },
+                "required": ["guest_id"]
+            }
+        },
+        {
+            "name": "clickup_guest_share_task",
+            "description": "Share a task with a guest",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"},
+                    "permission": {"type": "string", "description": "Permission level (read, comment, create, edit)"}
+                },
+                "required": ["task_id", "guest_id", "permission"]
+            }
+        },
+        {
+            "name": "clickup_guest_unshare_task",
+            "description": "Revoke a guest's access to a task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"}
+                },
+                "required": ["task_id", "guest_id"]
+            }
+        },
+        {
+            "name": "clickup_guest_share_list",
+            "description": "Share a list with a guest",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list_id": {"type": "string", "description": "List ID"},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"},
+                    "permission": {"type": "string", "description": "Permission level (read, comment, create, edit)"}
+                },
+                "required": ["list_id", "guest_id", "permission"]
+            }
+        },
+        {
+            "name": "clickup_guest_unshare_list",
+            "description": "Revoke a guest's access to a list",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list_id": {"type": "string", "description": "List ID"},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"}
+                },
+                "required": ["list_id", "guest_id"]
+            }
+        },
+        {
+            "name": "clickup_guest_share_folder",
+            "description": "Share a folder with a guest",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "folder_id": {"type": "string", "description": "Folder ID"},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"},
+                    "permission": {"type": "string", "description": "Permission level (read, comment, create, edit)"}
+                },
+                "required": ["folder_id", "guest_id", "permission"]
+            }
+        },
+        {
+            "name": "clickup_guest_unshare_folder",
+            "description": "Revoke a guest's access to a folder",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "folder_id": {"type": "string", "description": "Folder ID"},
+                    "guest_id": {"type": "integer", "description": "Guest user ID"}
+                },
+                "required": ["folder_id", "guest_id"]
+            }
+        },
+        {
+            "name": "clickup_user_invite",
+            "description": "Invite a user to a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "email": {"type": "string", "description": "User email address"},
+                    "admin": {"type": "boolean", "description": "Grant admin role"}
+                },
+                "required": ["email"]
+            }
+        },
+        {
+            "name": "clickup_user_update",
+            "description": "Update a workspace member's role or username",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "user_id": {"type": "integer", "description": "User ID"},
+                    "username": {"type": "string", "description": "New username"},
+                    "admin": {"type": "boolean", "description": "Grant or revoke admin role"}
+                },
+                "required": ["user_id"]
+            }
+        },
+        {
+            "name": "clickup_user_remove",
+            "description": "Remove a user from a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "user_id": {"type": "integer", "description": "User ID"}
+                },
+                "required": ["user_id"]
+            }
+        },
+        {
+            "name": "clickup_template_apply_task",
+            "description": "Create a task from a task template",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "list_id": {"type": "string", "description": "List ID to create the task in"},
+                    "template_id": {"type": "string", "description": "Template ID"},
+                    "name": {"type": "string", "description": "Task name"}
+                },
+                "required": ["list_id", "template_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_template_apply_list",
+            "description": "Create a list from a list template in a folder or space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "template_id": {"type": "string", "description": "Template ID"},
+                    "name": {"type": "string", "description": "New list name"},
+                    "folder_id": {"type": "string", "description": "Folder ID (mutually exclusive with space_id)"},
+                    "space_id": {"type": "string", "description": "Space ID (mutually exclusive with folder_id)"}
+                },
+                "required": ["template_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_template_apply_folder",
+            "description": "Create a folder from a folder template in a space",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "space_id": {"type": "string", "description": "Space ID"},
+                    "template_id": {"type": "string", "description": "Template ID"},
+                    "name": {"type": "string", "description": "New folder name"}
+                },
+                "required": ["space_id", "template_id", "name"]
+            }
+        },
+        {
+            "name": "clickup_attachment_upload",
+            "description": "Upload a file as an attachment to a task",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID"},
+                    "file_path": {"type": "string", "description": "Absolute path to the file to upload"}
+                },
+                "required": ["task_id", "file_path"]
+            }
+        },
+        {
+            "name": "clickup_task_type_list",
+            "description": "List custom task types (custom items) for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."}
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "clickup_doc_get_page",
+            "description": "Get a specific page from a doc",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "doc_id": {"type": "string", "description": "Doc ID"},
+                    "page_id": {"type": "string", "description": "Page ID"}
+                },
+                "required": ["doc_id", "page_id"]
+            }
+        },
+        {
+            "name": "clickup_audit_log_query",
+            "description": "Query the audit log for a workspace",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "type": {"type": "string", "description": "Audit log event type"},
+                    "user_id": {"type": "integer", "description": "Filter by user ID"},
+                    "start_date": {"type": "integer", "description": "Start date as Unix timestamp (milliseconds)"},
+                    "end_date": {"type": "integer", "description": "End date as Unix timestamp (milliseconds)"}
+                },
+                "required": ["type"]
+            }
+        },
+        {
+            "name": "clickup_acl_update",
+            "description": "Update access control (privacy) for a workspace object",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "object_type": {"type": "string", "description": "Object type (e.g. space, folder, list)"},
+                    "object_id": {"type": "string", "description": "Object ID"},
+                    "private": {"type": "boolean", "description": "Set to true to make private, false to make public"}
+                },
+                "required": ["object_type", "object_id"]
+            }
         }
     ])
 }
@@ -2585,6 +3157,470 @@ async fn dispatch_tool(
             let resp = client.get(&format!("/v2/team/{}/guest/{}", team_id, guest_id)).await.map_err(|e| e.to_string())?;
             let guest = resp.get("guest").cloned().unwrap_or(resp);
             Ok(compact_items(&[guest], &["user", "role"]))
+        }
+
+        "clickup_task_time_in_status" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let resp = client.get(&format!("/v2/task/{}/time_in_status", task_id)).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_task_move" => {
+            let team_id = resolve_workspace(args)?;
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            client.put(&format!("/v3/workspaces/{}/tasks/{}/home_list/{}", team_id, task_id, list_id), &json!({})).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Task {} moved to list {}", task_id, list_id)}))
+        }
+
+        "clickup_task_set_estimate" => {
+            let team_id = resolve_workspace(args)?;
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let user_id = args.get("user_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: user_id")?;
+            let time_estimate = args.get("time_estimate").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: time_estimate")?;
+            let body = json!({"time_estimates": [{"user_id": user_id, "time_estimate": time_estimate}]});
+            client.patch(&format!("/v3/workspaces/{}/tasks/{}/time_estimates_by_user", team_id, task_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Time estimate set for task {}", task_id)}))
+        }
+
+        "clickup_task_replace_estimates" => {
+            let team_id = resolve_workspace(args)?;
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let user_id = args.get("user_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: user_id")?;
+            let time_estimate = args.get("time_estimate").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: time_estimate")?;
+            let body = json!({"time_estimates": [{"user_id": user_id, "time_estimate": time_estimate}]});
+            client.put(&format!("/v3/workspaces/{}/tasks/{}/time_estimates_by_user", team_id, task_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Time estimates replaced for task {}", task_id)}))
+        }
+
+        "clickup_auth_check" => {
+            client.get("/v2/user").await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "Token valid"}))
+        }
+
+        "clickup_checklist_update" => {
+            let checklist_id = args.get("checklist_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: checklist_id")?;
+            let mut body = json!({});
+            if let Some(name) = args.get("name").and_then(|v| v.as_str()) { body["name"] = json!(name); }
+            if let Some(position) = args.get("position").and_then(|v| v.as_i64()) { body["position"] = json!(position); }
+            let resp = client.put(&format!("/v2/checklist/{}", checklist_id), &body).await.map_err(|e| e.to_string())?;
+            let checklist = resp.get("checklist").cloned().unwrap_or(resp);
+            Ok(compact_items(&[checklist], &["id", "name"]))
+        }
+
+        "clickup_comment_replies" => {
+            let comment_id = args.get("comment_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: comment_id")?;
+            let resp = client.get(&format!("/v2/comment/{}/reply", comment_id)).await.map_err(|e| e.to_string())?;
+            let comments = resp.get("comments")
+                .or_else(|| resp.get("replies"))
+                .and_then(|c| c.as_array())
+                .cloned()
+                .unwrap_or_default();
+            Ok(compact_items(&comments, &["id", "user", "date", "comment_text"]))
+        }
+
+        "clickup_comment_reply" => {
+            let comment_id = args.get("comment_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: comment_id")?;
+            let text = args.get("text").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: text")?;
+            let mut body = json!({"comment_text": text});
+            if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) { body["assignee"] = json!(assignee); }
+            let resp = client.post(&format!("/v2/comment/{}/reply", comment_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "Reply posted", "id": resp.get("id")}))
+        }
+
+        "clickup_chat_channel_list" => {
+            let team_id = resolve_workspace(args)?;
+            let mut path = format!("/v3/workspaces/{}/chat/channels", team_id);
+            if let Some(include_closed) = args.get("include_closed").and_then(|v| v.as_bool()) {
+                path.push_str(&format!("?include_closed={}", include_closed));
+            }
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            let channels = resp.get("channels").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&channels, &["id", "name", "type"]))
+        }
+
+        "clickup_chat_channel_followers" => {
+            let team_id = resolve_workspace(args)?;
+            let channel_id = args.get("channel_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: channel_id")?;
+            let resp = client.get(&format!("/v3/workspaces/{}/chat/channels/{}/followers", team_id, channel_id)).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_chat_channel_members" => {
+            let team_id = resolve_workspace(args)?;
+            let channel_id = args.get("channel_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: channel_id")?;
+            let resp = client.get(&format!("/v3/workspaces/{}/chat/channels/{}/members", team_id, channel_id)).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_chat_message_update" => {
+            let team_id = resolve_workspace(args)?;
+            let message_id = args.get("message_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: message_id")?;
+            let text = args.get("text").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: text")?;
+            let body = json!({"content": text});
+            client.patch(&format!("/v3/workspaces/{}/chat/messages/{}", team_id, message_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Message {} updated", message_id)}))
+        }
+
+        "clickup_chat_reaction_list" => {
+            let team_id = resolve_workspace(args)?;
+            let message_id = args.get("message_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: message_id")?;
+            let resp = client.get(&format!("/v3/workspaces/{}/chat/messages/{}/reactions", team_id, message_id)).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_chat_reaction_add" => {
+            let team_id = resolve_workspace(args)?;
+            let message_id = args.get("message_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: message_id")?;
+            let emoji = args.get("emoji").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: emoji")?;
+            let body = json!({"emoji": emoji});
+            client.post(&format!("/v3/workspaces/{}/chat/messages/{}/reactions", team_id, message_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Reaction '{}' added to message {}", emoji, message_id)}))
+        }
+
+        "clickup_chat_reaction_remove" => {
+            let team_id = resolve_workspace(args)?;
+            let message_id = args.get("message_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: message_id")?;
+            let emoji = args.get("emoji").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: emoji")?;
+            client.delete(&format!("/v3/workspaces/{}/chat/messages/{}/reactions/{}", team_id, message_id, emoji)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Reaction '{}' removed from message {}", emoji, message_id)}))
+        }
+
+        "clickup_chat_reply_list" => {
+            let team_id = resolve_workspace(args)?;
+            let message_id = args.get("message_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: message_id")?;
+            let resp = client.get(&format!("/v3/workspaces/{}/chat/messages/{}/replies", team_id, message_id)).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_chat_reply_send" => {
+            let team_id = resolve_workspace(args)?;
+            let message_id = args.get("message_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: message_id")?;
+            let text = args.get("text").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: text")?;
+            let body = json!({"content": text});
+            let resp = client.post(&format!("/v3/workspaces/{}/chat/messages/{}/replies", team_id, message_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "Reply sent", "id": resp.get("id")}))
+        }
+
+        "clickup_chat_tagged_users" => {
+            let team_id = resolve_workspace(args)?;
+            let message_id = args.get("message_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: message_id")?;
+            let resp = client.get(&format!("/v3/workspaces/{}/chat/messages/{}/tagged_users", team_id, message_id)).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_time_current" => {
+            let team_id = resolve_workspace(args)?;
+            let resp = client.get(&format!("/v2/team/{}/time_entries/current", team_id)).await.map_err(|e| e.to_string())?;
+            let data = resp.get("data").cloned().unwrap_or(resp);
+            Ok(compact_items(&[data], &["id", "task", "duration", "start", "billable"]))
+        }
+
+        "clickup_time_tags" => {
+            let team_id = resolve_workspace(args)?;
+            let resp = client.get(&format!("/v2/team/{}/time_entries/tags", team_id)).await.map_err(|e| e.to_string())?;
+            let tags = resp.get("data").and_then(|d| d.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&tags, &["name"]))
+        }
+
+        "clickup_time_add_tags" => {
+            let team_id = resolve_workspace(args)?;
+            let entry_ids = args.get("entry_ids").and_then(|v| v.as_array())
+                .ok_or("Missing required parameter: entry_ids")?;
+            let tag_names = args.get("tag_names").and_then(|v| v.as_array())
+                .ok_or("Missing required parameter: tag_names")?;
+            let tags: Vec<Value> = tag_names.iter()
+                .filter_map(|n| n.as_str())
+                .map(|n| json!({"name": n}))
+                .collect();
+            let body = json!({"time_entry_ids": entry_ids, "tags": tags});
+            client.post(&format!("/v2/team/{}/time_entries/tags", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "Tags added to time entries"}))
+        }
+
+        "clickup_time_remove_tags" => {
+            let team_id = resolve_workspace(args)?;
+            let entry_ids = args.get("entry_ids").and_then(|v| v.as_array())
+                .ok_or("Missing required parameter: entry_ids")?;
+            let tag_names = args.get("tag_names").and_then(|v| v.as_array())
+                .ok_or("Missing required parameter: tag_names")?;
+            let tags: Vec<Value> = tag_names.iter()
+                .filter_map(|n| n.as_str())
+                .map(|n| json!({"name": n}))
+                .collect();
+            let body = json!({"time_entry_ids": entry_ids, "tags": tags});
+            client.delete_with_body(&format!("/v2/team/{}/time_entries/tags", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "Tags removed from time entries"}))
+        }
+
+        "clickup_time_rename_tag" => {
+            let team_id = resolve_workspace(args)?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let new_name = args.get("new_name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: new_name")?;
+            let body = json!({"name": name, "new_name": new_name});
+            client.put(&format!("/v2/team/{}/time_entries/tags", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Tag '{}' renamed to '{}'", name, new_name)}))
+        }
+
+        "clickup_time_history" => {
+            let team_id = resolve_workspace(args)?;
+            let timer_id = args.get("timer_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: timer_id")?;
+            let resp = client.get(&format!("/v2/team/{}/time_entries/{}/history", team_id, timer_id)).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_guest_invite" => {
+            let team_id = resolve_workspace(args)?;
+            let email = args.get("email").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: email")?;
+            let mut body = json!({"email": email});
+            if let Some(v) = args.get("can_edit_tags").and_then(|v| v.as_bool()) { body["can_edit_tags"] = json!(v); }
+            if let Some(v) = args.get("can_see_time_spent").and_then(|v| v.as_bool()) { body["can_see_time_spent"] = json!(v); }
+            if let Some(v) = args.get("can_create_views").and_then(|v| v.as_bool()) { body["can_create_views"] = json!(v); }
+            let resp = client.post(&format!("/v2/team/{}/guest", team_id), &body).await.map_err(|e| e.to_string())?;
+            let guest = resp.get("guest").cloned().unwrap_or(resp);
+            let user = guest.get("user").cloned().unwrap_or(guest);
+            Ok(compact_items(&[user], &["id", "email"]))
+        }
+
+        "clickup_guest_update" => {
+            let team_id = resolve_workspace(args)?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            let mut body = json!({});
+            if let Some(v) = args.get("can_edit_tags").and_then(|v| v.as_bool()) { body["can_edit_tags"] = json!(v); }
+            if let Some(v) = args.get("can_see_time_spent").and_then(|v| v.as_bool()) { body["can_see_time_spent"] = json!(v); }
+            if let Some(v) = args.get("can_create_views").and_then(|v| v.as_bool()) { body["can_create_views"] = json!(v); }
+            client.put(&format!("/v2/team/{}/guest/{}", team_id, guest_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Guest {} updated", guest_id)}))
+        }
+
+        "clickup_guest_remove" => {
+            let team_id = resolve_workspace(args)?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            client.delete(&format!("/v2/team/{}/guest/{}", team_id, guest_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Guest {} removed", guest_id)}))
+        }
+
+        "clickup_guest_share_task" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            let permission = args.get("permission").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: permission")?;
+            let body = json!({"permission_level": permission});
+            client.post(&format!("/v2/task/{}/guest/{}", task_id, guest_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Task {} shared with guest {}", task_id, guest_id)}))
+        }
+
+        "clickup_guest_unshare_task" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            client.delete(&format!("/v2/task/{}/guest/{}", task_id, guest_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Guest {} unshared from task {}", guest_id, task_id)}))
+        }
+
+        "clickup_guest_share_list" => {
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            let permission = args.get("permission").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: permission")?;
+            let body = json!({"permission_level": permission});
+            client.post(&format!("/v2/list/{}/guest/{}", list_id, guest_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("List {} shared with guest {}", list_id, guest_id)}))
+        }
+
+        "clickup_guest_unshare_list" => {
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            client.delete(&format!("/v2/list/{}/guest/{}", list_id, guest_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Guest {} unshared from list {}", guest_id, list_id)}))
+        }
+
+        "clickup_guest_share_folder" => {
+            let folder_id = args.get("folder_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: folder_id")?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            let permission = args.get("permission").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: permission")?;
+            let body = json!({"permission_level": permission});
+            client.post(&format!("/v2/folder/{}/guest/{}", folder_id, guest_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Folder {} shared with guest {}", folder_id, guest_id)}))
+        }
+
+        "clickup_guest_unshare_folder" => {
+            let folder_id = args.get("folder_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: folder_id")?;
+            let guest_id = args.get("guest_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: guest_id")?;
+            client.delete(&format!("/v2/folder/{}/guest/{}", folder_id, guest_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Guest {} unshared from folder {}", guest_id, folder_id)}))
+        }
+
+        "clickup_user_invite" => {
+            let team_id = resolve_workspace(args)?;
+            let email = args.get("email").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: email")?;
+            let mut body = json!({"email": email});
+            if let Some(admin) = args.get("admin").and_then(|v| v.as_bool()) { body["admin"] = json!(admin); }
+            let resp = client.post(&format!("/v2/team/{}/user", team_id), &body).await.map_err(|e| e.to_string())?;
+            let member = resp.get("member").cloned().unwrap_or(resp);
+            let user = member.get("user").cloned().unwrap_or(member);
+            Ok(compact_items(&[user], &["id", "username", "email"]))
+        }
+
+        "clickup_user_update" => {
+            let team_id = resolve_workspace(args)?;
+            let user_id = args.get("user_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: user_id")?;
+            let mut body = json!({});
+            if let Some(username) = args.get("username").and_then(|v| v.as_str()) { body["username"] = json!(username); }
+            if let Some(admin) = args.get("admin").and_then(|v| v.as_bool()) { body["admin"] = json!(admin); }
+            client.put(&format!("/v2/team/{}/user/{}", team_id, user_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("User {} updated", user_id)}))
+        }
+
+        "clickup_user_remove" => {
+            let team_id = resolve_workspace(args)?;
+            let user_id = args.get("user_id").and_then(|v| v.as_i64())
+                .ok_or("Missing required parameter: user_id")?;
+            client.delete(&format!("/v2/team/{}/user/{}", team_id, user_id)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("User {} removed from workspace", user_id)}))
+        }
+
+        "clickup_template_apply_task" => {
+            let list_id = args.get("list_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: list_id")?;
+            let template_id = args.get("template_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: template_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let body = json!({"name": name});
+            let resp = client.post(&format!("/v2/list/{}/taskTemplate/{}", list_id, template_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_template_apply_list" => {
+            let template_id = args.get("template_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: template_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let body = json!({"name": name});
+            let path = if let Some(folder_id) = args.get("folder_id").and_then(|v| v.as_str()) {
+                format!("/v2/folder/{}/list_template/{}", folder_id, template_id)
+            } else if let Some(space_id) = args.get("space_id").and_then(|v| v.as_str()) {
+                format!("/v2/space/{}/list_template/{}", space_id, template_id)
+            } else {
+                return Err("Provide either folder_id or space_id".to_string());
+            };
+            client.post(&path, &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("List '{}' created from template {}", name, template_id)}))
+        }
+
+        "clickup_template_apply_folder" => {
+            let space_id = args.get("space_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: space_id")?;
+            let template_id = args.get("template_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: template_id")?;
+            let name = args.get("name").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: name")?;
+            let body = json!({"name": name});
+            client.post(&format!("/v2/space/{}/folder_template/{}", space_id, template_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("Folder '{}' created from template {}", name, template_id)}))
+        }
+
+        "clickup_attachment_upload" => {
+            let task_id = args.get("task_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: task_id")?;
+            let file_path = args.get("file_path").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: file_path")?;
+            let path = format!("/v2/task/{}/attachment", task_id);
+            let resp = client.upload_file(&path, std::path::Path::new(file_path)).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": "File uploaded", "id": resp.get("id"), "url": resp.get("url")}))
+        }
+
+        "clickup_task_type_list" => {
+            let team_id = resolve_workspace(args)?;
+            let resp = client.get(&format!("/v2/team/{}/custom_item", team_id)).await.map_err(|e| e.to_string())?;
+            let items = resp.get("custom_items").and_then(|i| i.as_array()).cloned().unwrap_or_default();
+            Ok(compact_items(&items, &["id", "name", "name_plural"]))
+        }
+
+        "clickup_doc_get_page" => {
+            let team_id = resolve_workspace(args)?;
+            let doc_id = args.get("doc_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: doc_id")?;
+            let page_id = args.get("page_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: page_id")?;
+            let resp = client.get(&format!("/v3/workspaces/{}/docs/{}/pages/{}", team_id, doc_id, page_id)).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_audit_log_query" => {
+            let team_id = resolve_workspace(args)?;
+            let event_type = args.get("type").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: type")?;
+            let mut body = json!({"type": event_type});
+            if let Some(user_id) = args.get("user_id").and_then(|v| v.as_i64()) {
+                body["user_id"] = json!(user_id);
+            }
+            if let Some(start_date) = args.get("start_date").and_then(|v| v.as_i64()) {
+                body["date_filter"] = json!({"start_date": start_date, "end_date": args.get("end_date").and_then(|v| v.as_i64()).unwrap_or(i64::MAX)});
+            } else if let Some(end_date) = args.get("end_date").and_then(|v| v.as_i64()) {
+                body["date_filter"] = json!({"end_date": end_date});
+            }
+            let resp = client.post(&format!("/v3/workspaces/{}/auditlogs", team_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(resp)
+        }
+
+        "clickup_acl_update" => {
+            let team_id = resolve_workspace(args)?;
+            let object_type = args.get("object_type").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: object_type")?;
+            let object_id = args.get("object_id").and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: object_id")?;
+            let mut body = json!({});
+            if let Some(private) = args.get("private").and_then(|v| v.as_bool()) { body["private"] = json!(private); }
+            client.patch(&format!("/v3/workspaces/{}/{}/{}/acls", team_id, object_type, object_id), &body).await.map_err(|e| e.to_string())?;
+            Ok(json!({"message": format!("ACL updated for {} {}", object_type, object_id)}))
         }
 
         unknown => Err(format!("Unknown tool: {}", unknown)),
