@@ -2,6 +2,7 @@ pub mod client;
 pub mod commands;
 pub mod config;
 pub mod error;
+pub mod mcp;
 pub mod models;
 pub mod output;
 
@@ -200,5 +201,10 @@ pub enum Commands {
     AgentConfig {
         #[command(subcommand)]
         command: commands::agent_config::AgentConfigCommands,
+    },
+    /// Start MCP server (Model Context Protocol over stdio)
+    Mcp {
+        #[command(subcommand)]
+        command: commands::mcp_cmd::McpCommands,
     },
 }
