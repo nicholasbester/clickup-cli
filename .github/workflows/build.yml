@@ -95,6 +95,14 @@ jobs:
             artifacts/clickup-linux-arm64.tar.gz
             artifacts/clickup-windows-x86_64.zip
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish || echo "crates.io publish skipped (version may already exist)"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
