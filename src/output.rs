@@ -38,18 +38,7 @@ impl OutputConfig {
                 println!("{}", serde_json::to_string_pretty(items).unwrap());
             }
             "json-compact" => {
-                let filtered: Vec<serde_json::Value> = items
-                    .iter()
-                    .map(|item| {
-                        let mut obj = serde_json::Map::new();
-                        for &field in &fields {
-                            if let Some(val) = item.get(field) {
-                                obj.insert(field.to_string(), val.clone());
-                            }
-                        }
-                        serde_json::Value::Object(obj)
-                    })
-                    .collect();
+                let filtered = compact_items(items, &fields);
                 println!("{}", serde_json::to_string_pretty(&filtered).unwrap());
             }
             "csv" => {
