@@ -23,7 +23,7 @@ pub enum AgentConfigCommands {
         /// Target file (omit to auto-detect: CLAUDE.md, agent.md, .cursorrules, etc.)
         file: Option<PathBuf>,
     },
-    /// Initialize project-level ClickUp config (.clickup.toml in current directory)
+    /// Initialize project-level ClickUp config (.clickup.toml and/or .mcp.json)
     Init {
         /// API token
         #[arg(long)]
@@ -31,6 +31,9 @@ pub enum AgentConfigCommands {
         /// Workspace ID
         #[arg(long)]
         workspace: Option<String>,
+        /// Also create .mcp.json for MCP server integration
+        #[arg(long)]
+        mcp: bool,
     },
 }
 
@@ -84,30 +87,49 @@ pub async fn execute(command: AgentConfigCommands, _cli: &Cli) -> Result<(), Cli
             eprintln!("CLI reference injected into {}", file.display());
             Ok(())
         }
-        AgentConfigCommands::Init { token, workspace } => {
-            let path = PathBuf::from(".clickup.toml");
-            if path.exists() {
-                eprintln!("Project config already exists: {}", path.display());
-                eprintln!("Edit .clickup.toml directly to update.");
-                return Ok(());
+        AgentConfigCommands::Init { token, workspace, mcp } => {
+            // Create .clickup.toml
+            let config_path = PathBuf::from(".clickup.toml");
+            if config_path.exists() {
+                eprintln!("Project config already exists: {}", config_path.display());
+            } else {
+                let mut content = String::from("[auth]\n");
+                if let Some(t) = &token {
+                    content.push_str(&format!("token = \"{}\"\n", t));
+                } else {
+                    content.push_str("# token = \"pk_...\"\n");
+                }
+                content.push_str("\n[defaults]\n");
+                if let Some(ws) = &workspace {
+                    content.push_str(&format!("workspace_id = \"{}\"\n", ws));
+                } else {
+                    content.push_str("# workspace_id = \"...\"\n");
+                }
+                std::fs::write(&config_path, &content)?;
+                eprintln!("Project config created: .clickup.toml");
+                eprintln!("Add .clickup.toml to .gitignore if it contains a token.");
             }
 
-            let mut content = String::from("[auth]\n");
-            if let Some(t) = token {
-                content.push_str(&format!("token = \"{}\"\n", t));
-            } else {
-                content.push_str("# token = \"pk_...\"\n");
-            }
-            content.push_str("\n[defaults]\n");
-            if let Some(ws) = workspace {
-                content.push_str(&format!("workspace_id = \"{}\"\n", ws));
-            } else {
-                content.push_str("# workspace_id = \"...\"\n");
+            // Create .mcp.json if --mcp flag is set
+            if mcp {
+                let mcp_path = PathBuf::from(".mcp.json");
+                if mcp_path.exists() {
+                    eprintln!("MCP config already exists: {}", mcp_path.display());
+                } else {
+                    let clickup_bin = std::env::current_exe()
+                        .ok()
+                        .and_then(|p| p.to_str().map(String::from))
+                        .unwrap_or_else(|| "clickup".to_string());
+                    let mcp_content = format!(
+                        "{{\n  \"mcpServers\": {{\n    \"clickup-cli\": {{\n      \"command\": \"{}\",\n      \"args\": [\"mcp\", \"serve\"]\n    }}\n  }}\n}}\n",
+                        clickup_bin
+                    );
+                    std::fs::write(&mcp_path, &mcp_content)?;
+                    eprintln!("MCP config created: .mcp.json");
+                    eprintln!("The MCP server provides 143 tools with token-efficient compact responses.");
+                }
             }
 
-            std::fs::write(&path, &content)?;
-            eprintln!("Project config created: .clickup.toml");
-            eprintln!("Add .clickup.toml to .gitignore if it contains a token.");
             Ok(())
         }
     }

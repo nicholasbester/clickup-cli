@@ -220,18 +220,26 @@ The agent then runs CLI commands directly — the full ClickUp API in ~1,000 tok
 
 For Claude Desktop, Cursor, and other MCP-capable tools that prefer native tool integration. Note: MCP tool schemas consume more tokens in the agent's context than the CLI reference approach.
 
+Generate the MCP config automatically:
+
+```bash
+clickup agent-config init --mcp
+```
+
+Or add `.mcp.json` to your project root manually:
+
 ```json
 {
   "mcpServers": {
-    "clickup": {
-      "command": "clickup",
+    "clickup-cli": {
+      "command": "/opt/homebrew/bin/clickup",
       "args": ["mcp", "serve"]
     }
   }
 }
 ```
 
-This exposes 143 tools covering 100% of the ClickUp API as native tool calls — no shell commands needed. See the [MCP documentation](https://nicholasbester.github.io/clickup-cli/mcp) for full setup.
+This exposes 143 tools covering 100% of the ClickUp API as native tool calls with token-efficient compact responses. See the [MCP documentation](https://nicholasbester.github.io/clickup-cli/mcp) for full setup.
 
 ## Configuration
 

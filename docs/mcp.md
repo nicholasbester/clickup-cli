@@ -44,22 +44,36 @@ Add to your Cursor MCP settings:
 
 ### Claude Code
 
-Add to `.claude/settings.json` or project settings:
+Add `.mcp.json` to your project root:
 
 ```json
 {
   "mcpServers": {
-    "clickup": {
-      "command": "clickup",
+    "clickup-cli": {
+      "command": "/opt/homebrew/bin/clickup",
       "args": ["mcp", "serve"]
     }
   }
 }
 ```
 
+Or generate it automatically:
+
+```bash
+clickup agent-config init --mcp
+```
+
+**Note:** Use the full path to `clickup` (run `which clickup` to find it). Use `clickup-cli` as the server name to avoid conflicts with other ClickUp MCP integrations.
+
 ### Prerequisites
 
-Run `clickup setup --token pk_your_token` first. The MCP server reads the token and default workspace from your config file (or `.clickup.toml` for project-level config).
+Run `clickup setup --token pk_your_token` first, or create a project-level `.clickup.toml`:
+
+```bash
+clickup agent-config init --token pk_your_token --workspace 12345 --mcp
+```
+
+This creates both `.clickup.toml` (auth config) and `.mcp.json` (MCP server config) in one command.
 
 ## Available Tools (143)
 
