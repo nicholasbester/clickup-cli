@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build:
@@ -117,6 +118,24 @@ jobs:
           cd npm
           npm version "${VERSION}" --no-git-tag-version --allow-same-version
           npm publish --access public || echo "npm publish skipped (version may already exist)"
+
+      - name: Setup Node.js (GitHub Packages)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+          scope: '@nicholasbester'
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd npm
+          # Temporarily change scope for GitHub Packages
+          node -e "const p=require('./package.json'); p.name='@nicholasbester/clickup-cli'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n')"
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          npm publish --access public || echo "GitHub Packages publish skipped (version may already exist)"
 
       - name: Update Homebrew formula
         env:
