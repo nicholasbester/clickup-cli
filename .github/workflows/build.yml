@@ -91,6 +91,24 @@ jobs:
             clickup-linux-arm64.tar.gz
             clickup-windows-x86_64.zip
 
+      - name: Checkout source (for npm package)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd npm
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          npm publish --access public
+
       - name: Update Homebrew formula
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -109,7 +127,7 @@ jobs:
             desc "CLI for the ClickUp API, optimized for AI agents"
             homepage "https://github.com/nicholasbester/clickup-cli"
             version "${VERSION}"
-            license "Apache-2.0"
+            license "BUSL-1.1"
 
             on_macos do
               if Hardware::CPU.arm?
