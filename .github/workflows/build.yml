@@ -75,24 +75,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+          path: artifacts
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            clickup-macos-arm64.tar.gz
-            clickup-macos-x86_64.tar.gz
-            clickup-linux-x86_64.tar.gz
-            clickup-linux-arm64.tar.gz
-            clickup-windows-x86_64.zip
-
-      - name: Checkout source (for npm package)
-        uses: actions/checkout@v4
+            artifacts/clickup-macos-arm64.tar.gz
+            artifacts/clickup-macos-x86_64.tar.gz
+            artifacts/clickup-linux-x86_64.tar.gz
+            artifacts/clickup-linux-arm64.tar.gz
+            artifacts/clickup-windows-x86_64.zip
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -114,10 +115,10 @@ jobs:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          SHA_ARM64=$(sha256sum clickup-macos-arm64.tar.gz | cut -d' ' -f1)
-          SHA_X86_64=$(sha256sum clickup-macos-x86_64.tar.gz | cut -d' ' -f1)
-          SHA_LINUX_X86_64=$(sha256sum clickup-linux-x86_64.tar.gz | cut -d' ' -f1)
-          SHA_LINUX_ARM64=$(sha256sum clickup-linux-arm64.tar.gz | cut -d' ' -f1)
+          SHA_ARM64=$(sha256sum artifacts/clickup-macos-arm64.tar.gz | cut -d' ' -f1)
+          SHA_X86_64=$(sha256sum artifacts/clickup-macos-x86_64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_X86_64=$(sha256sum artifacts/clickup-linux-x86_64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_ARM64=$(sha256sum artifacts/clickup-linux-arm64.tar.gz | cut -d' ' -f1)
 
           git clone "https://x-access-token:${GH_TOKEN}@github.com/nicholasbester/homebrew-clickup-cli.git" tap
           cd tap
