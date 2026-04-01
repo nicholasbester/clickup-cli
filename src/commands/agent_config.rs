@@ -110,24 +110,45 @@ pub async fn execute(command: AgentConfigCommands, _cli: &Cli) -> Result<(), Cli
                 eprintln!("Add .clickup.toml to .gitignore if it contains a token.");
             }
 
-            // Create .mcp.json if --mcp flag is set
+            // Create or update .mcp.json if --mcp flag is set
             if mcp {
                 let mcp_path = PathBuf::from(".mcp.json");
-                if mcp_path.exists() {
-                    eprintln!("MCP config already exists: {}", mcp_path.display());
+                let clickup_bin = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.to_str().map(String::from))
+                    .unwrap_or_else(|| "clickup".to_string());
+
+                let server_entry = serde_json::json!({
+                    "command": clickup_bin,
+                    "args": ["mcp", "serve"]
+                });
+
+                let mut mcp_config: serde_json::Value = if mcp_path.exists() {
+                    let existing = std::fs::read_to_string(&mcp_path)?;
+                    serde_json::from_str(&existing).unwrap_or(serde_json::json!({"mcpServers": {}}))
                 } else {
-                    let clickup_bin = std::env::current_exe()
-                        .ok()
-                        .and_then(|p| p.to_str().map(String::from))
-                        .unwrap_or_else(|| "clickup".to_string());
-                    let mcp_content = format!(
-                        "{{\n  \"mcpServers\": {{\n    \"clickup-cli\": {{\n      \"command\": \"{}\",\n      \"args\": [\"mcp\", \"serve\"]\n    }}\n  }}\n}}\n",
-                        clickup_bin
-                    );
-                    std::fs::write(&mcp_path, &mcp_content)?;
+                    serde_json::json!({"mcpServers": {}})
+                };
+
+                mcp_config
+                    .as_object_mut()
+                    .unwrap()
+                    .entry("mcpServers")
+                    .or_insert(serde_json::json!({}))
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("clickup-cli".to_string(), server_entry);
+
+                let formatted = serde_json::to_string_pretty(&mcp_config)
+                    .unwrap_or_else(|_| mcp_config.to_string());
+                std::fs::write(&mcp_path, format!("{}\n", formatted))?;
+
+                if mcp_path.exists() {
+                    eprintln!("MCP config updated: .mcp.json (clickup-cli server added)");
+                } else {
                     eprintln!("MCP config created: .mcp.json");
-                    eprintln!("The MCP server provides 143 tools with token-efficient compact responses.");
                 }
+                eprintln!("The MCP server provides 143 tools with token-efficient compact responses.");
             }
 
             Ok(())
