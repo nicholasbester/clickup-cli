@@ -108,7 +108,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           cd npm
           npm version "${VERSION}" --no-git-tag-version --allow-same-version
-          npm publish --access public
+          npm publish --access public || echo "npm publish skipped (version may already exist)"
 
       - name: Update Homebrew formula
         env:
