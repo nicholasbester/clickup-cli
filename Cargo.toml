@@ -1,6 +1,6 @@
 [package]
 name = "clickup-cli"
-version = "0.6.3"
+version = "0.6.4"
 edition = "2021"
 description = "CLI for the ClickUp API, optimized for AI agents"
 license = "BUSL-1.1"
