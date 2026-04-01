@@ -1,0 +1,31 @@
+{
+  "name": "@nick.bester/clickup-cli",
+  "version": "0.6.4",
+  "description": "CLI for the ClickUp API, optimized for AI agents",
+  "license": "BUSL-1.1",
+  "author": "Nick Bester <nick@odinside.tech> (https://github.com/nicholasbester)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicholasbester/clickup-cli"
+  },
+  "homepage": "https://nicholasbester.github.io/clickup-cli/",
+  "keywords": [
+    "clickup",
+    "cli",
+    "api",
+    "ai-agents",
+    "mcp",
+    "productivity"
+  ],
+  "bin": {
+    "clickup": "bin/clickup"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin",
+    "install.js",
+    "README.md"
+  ]
+}

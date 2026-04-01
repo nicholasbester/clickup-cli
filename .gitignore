@@ -5,6 +5,8 @@
 # Rust
 target/
 *.json
+!npm/package.json
+!.claude/settings.json
 
 # Legacy
 builds/*
