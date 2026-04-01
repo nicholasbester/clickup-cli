@@ -324,4 +324,4 @@ clickup completions powershell > clickup.ps1
 
 ## License
 
-Apache-2.0
+[BSL 1.1](LICENSE) (Business Source License) — free to use, contributions welcome. Creating competing commercial products requires permission from the author. Converts to Apache 2.0 on 2030-04-01.
