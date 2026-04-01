@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://crates.io/crates/clickup-cli"><img src="https://img.shields.io/crates/v/clickup-cli" alt="crates.io" /></a>
+  <a href="https://www.npmjs.com/package/@nick.bester/clickup-cli"><img src="https://img.shields.io/npm/v/@nick.bester/clickup-cli" alt="npm" /></a>
   <a href="https://github.com/nicholasbester/clickup-cli/releases"><img src="https://img.shields.io/github/v/release/nicholasbester/clickup-cli" alt="GitHub release" /></a>
   <a href="https://github.com/nicholasbester/clickup-cli/actions"><img src="https://img.shields.io/github/actions/workflow/status/nicholasbester/clickup-cli/ci.yml" alt="CI" /></a>
   <a href="https://nicholasbester.github.io/clickup-cli/">Documentation</a>
@@ -33,6 +34,12 @@ The CLI flattens nested objects, selects only essential fields, and renders comp
 Beyond token efficiency, clickup-cli gives AI agents a simple, predictable interface to ClickUp: `clickup <resource> <action> [ID] [flags]`. No SDK, no auth boilerplate, no JSON parsing — just shell commands with structured output.
 
 ## Install
+
+### npm (any platform with Node.js)
+
+```bash
+npm install -g @nick.bester/clickup-cli
+```
 
 ### macOS (Homebrew)
 

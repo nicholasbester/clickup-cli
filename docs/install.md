@@ -6,6 +6,12 @@ nav_order: 2
 
 # Installation
 
+## npm (any platform with Node.js)
+
+```bash
+npm install -g @nick.bester/clickup-cli
+```
+
 ## macOS (Homebrew)
 
 ```bash

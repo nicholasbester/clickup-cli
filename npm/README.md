@@ -5,7 +5,7 @@ CLI for the [ClickUp API](https://clickup.com/api/), optimized for AI agents. Co
 ## Install
 
 ```bash
-npm install -g clickup-cli
+npm install -g @nick.bester/clickup-cli
 ```
 
 ## Quick Start
