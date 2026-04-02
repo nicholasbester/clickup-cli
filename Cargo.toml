@@ -1,9 +1,9 @@
 [package]
 name = "clickup-cli"
-version = "0.6.6"
+version = "0.6.7"
 edition = "2021"
 description = "CLI for the ClickUp API, optimized for AI agents"
-license = "BUSL-1.1"
+license = "Apache-2.0"
 repository = "https://github.com/nicholasbester/clickup-cli"
 homepage = "https://nicholasbester.github.io/clickup-cli/"
 keywords = ["clickup", "cli", "api", "ai-agents", "productivity"]

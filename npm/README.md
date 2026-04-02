@@ -139,4 +139,4 @@ clickup completions fish > ~/.config/fish/completions/clickup.fish
 
 ## License
 
-[BSL 1.1](https://github.com/nicholasbester/clickup-cli/blob/main/LICENSE) (Business Source License) — free to use, contributions welcome. Creating competing commercial products requires permission. Converts to Apache 2.0 on 2030-04-01.
+[Apache-2.0](https://github.com/nicholasbester/clickup-cli/blob/main/LICENSE)
