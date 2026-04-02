@@ -7,6 +7,7 @@ target/
 *.json
 !npm/package.json
 !.claude/settings.json
+!glama.json
 
 # Legacy
 builds/*
