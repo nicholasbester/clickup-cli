@@ -3630,13 +3630,18 @@ async fn dispatch_tool(
 // ── Main server loop ──────────────────────────────────────────────────────────
 
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
-    // Load config at startup
-    let config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
-    let token = config.auth.token.clone();
-    if token.is_empty() {
-        return Err("No API token configured. Run `clickup setup` first.".into());
-    }
-    let workspace_id = config.defaults.workspace_id.clone();
+    // Resolve token: CLICKUP_TOKEN env > config file
+    let token = std::env::var("CLICKUP_TOKEN")
+        .ok()
+        .filter(|t| !t.is_empty())
+        .or_else(|| Config::load().ok().map(|c| c.auth.token).filter(|t| !t.is_empty()))
+        .ok_or("No API token. Set CLICKUP_TOKEN env var or run `clickup setup`.")?;
+
+    // Resolve workspace: CLICKUP_WORKSPACE env > config file
+    let workspace_id = std::env::var("CLICKUP_WORKSPACE")
+        .ok()
+        .filter(|w| !w.is_empty())
+        .or_else(|| Config::load().ok().and_then(|c| c.defaults.workspace_id));
 
     let client = ClickUpClient::new(&token, 30)
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;

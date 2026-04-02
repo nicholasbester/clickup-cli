@@ -87,6 +87,13 @@ Requires [Rust](https://rustup.rs/) 1.70+:
 cargo install clickup-cli
 ```
 
+### Docker
+
+```bash
+docker build -t clickup-cli .
+docker run -i --rm -e CLICKUP_TOKEN=pk_xxx -e CLICKUP_WORKSPACE=12345 clickup-cli mcp serve
+```
+
 ### From source
 
 ```bash

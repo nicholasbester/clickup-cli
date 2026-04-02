@@ -65,6 +65,42 @@ clickup agent-config init --mcp
 
 **Note:** Use the full path to `clickup` (run `which clickup` to find it). Use `clickup-cli` as the server name to avoid conflicts with other ClickUp MCP integrations.
 
+### Docker
+
+Run the MCP server as a Docker container:
+
+```bash
+# Build
+docker build -t clickup-cli .
+
+# Run MCP server (stdio)
+docker run -i --rm \
+  -v ~/.config/clickup-cli:/root/.config/clickup-cli \
+  clickup-cli mcp serve
+```
+
+Or configure with environment variable:
+
+```bash
+docker run -i --rm \
+  -e CLICKUP_TOKEN=pk_your_token \
+  -e CLICKUP_WORKSPACE=your_workspace_id \
+  clickup-cli mcp serve
+```
+
+Use in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "clickup-cli": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "CLICKUP_TOKEN=pk_your_token", "-e", "CLICKUP_WORKSPACE=your_workspace_id", "clickup-cli", "mcp", "serve"]
+    }
+  }
+}
+```
+
 ### Prerequisites
 
 Run `clickup setup --token pk_your_token` first, or create a project-level `.clickup.toml`:
