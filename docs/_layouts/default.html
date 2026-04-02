@@ -38,8 +38,9 @@ body { font-family:'Outfit',sans-serif; color:var(--tx); background:var(--white)
 
 /* Main content */
 .main { margin-left:200px; }
-.content { padding:60px 56px; max-width:860px; margin:0 auto; }
-@media(max-width:768px) { .content { padding:40px 20px; } }
+.page-content { padding:60px 64px 60px 64px; max-width:960px; }
+.content { max-width:860px; }
+@media(max-width:768px) { .page-content { padding:40px 24px; } }
 
 /* Typography */
 h1 { font-family:'Cormorant Garamond',serif; font-size:clamp(28px,4vw,42px); font-weight:300; color:var(--deep); margin-bottom:12px; line-height:1.15; }
@@ -47,7 +48,7 @@ h1 em { color:var(--amber); font-style:italic; }
 h2 { font-family:'Cormorant Garamond',serif; font-size:clamp(22px,3vw,32px); font-weight:400; color:var(--deep); margin:48px 0 12px; line-height:1.2; border-bottom:2px solid var(--amber); padding-bottom:8px; display:inline-block; }
 h2 em { color:var(--amber); font-style:italic; }
 h3 { font-size:13px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--deep); margin:32px 0 12px; }
-p { font-size:14px; font-weight:200; color:var(--tx2); line-height:1.9; margin-bottom:16px; max-width:600px; }
+p { font-size:14px; font-weight:200; color:var(--tx2); line-height:1.9; margin-bottom:16px; }
 .lead { font-size:15px; font-weight:200; color:var(--tx2); line-height:1.9; max-width:560px; margin-bottom:40px; }
 
 /* Links */
@@ -55,10 +56,10 @@ a { color:var(--teal); text-decoration:none; }
 a:hover { color:var(--deep); }
 
 /* Code blocks */
-pre { background:#2C3E3A; color:#E8E4E0; border-radius:10px; padding:20px 24px; overflow-x:auto; font-family:'JetBrains Mono',monospace; font-size:12.5px; line-height:1.7; margin:16px 0 24px; position:relative; }
+pre { background:#2C3E3A; color:#E8E4E0; border-radius:10px; padding:24px 28px; overflow-x:auto; font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.8; margin:16px 0 28px; position:relative; max-width:none; width:100%; }
 pre::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--amber),var(--teal),var(--aqua)); border-radius:10px 10px 0 0; }
 code { font-family:'JetBrains Mono',monospace; font-size:12px; background:rgba(42,157,143,.08); color:var(--deep); padding:2px 6px; border-radius:3px; }
-pre code { background:none; color:inherit; padding:0; }
+pre code { background:none; color:inherit; padding:0; font-size:13px; }
 
 /* Tables */
 table { width:100%; border-collapse:collapse; margin:16px 0 24px; font-size:13px; }
@@ -86,7 +87,8 @@ li strong { color:var(--deep); font-weight:500; }
 .card-desc { font-size:11px; font-weight:200; color:var(--tx2); line-height:1.7; }
 
 /* Hero section */
-.hero { min-height:70vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:60px 40px; background:linear-gradient(175deg,var(--golden-lt) 0%,var(--cream) 30%,var(--aqua-lt) 60%,var(--sand) 90%,var(--golden-lt) 100%); position:relative; overflow:hidden; }
+.hero { min-height:70vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:60px 40px; background:linear-gradient(175deg,var(--golden-lt) 0%,var(--cream) 30%,var(--aqua-lt) 60%,var(--sand) 90%,var(--golden-lt) 100%); position:relative; overflow:hidden; margin:-60px -64px 40px -64px; }
+@media(max-width:768px) { .hero { margin:-40px -24px 32px -24px; } }
 .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 60% 40% at 25% 75%,rgba(42,157,143,.1),transparent 70%),radial-gradient(ellipse 50% 35% at 75% 20%,rgba(232,168,56,.15),transparent 60%); }
 .hero > * { position:relative; z-index:2; }
 .hero-num { font-size:10px; font-weight:500; letter-spacing:4px; text-transform:uppercase; color:var(--teal); margin-bottom:20px; }
@@ -112,9 +114,9 @@ li strong { color:var(--deep); font-weight:500; }
 
 /* Copy button for code blocks */
 pre { position:relative; }
-.copy-btn { position:absolute; top:12px; right:12px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.15); color:rgba(255,255,255,.5); padding:4px 10px; border-radius:4px; font-size:10px; font-family:'Outfit',sans-serif; cursor:pointer; transition:all .2s; letter-spacing:1px; text-transform:uppercase; }
-.copy-btn:hover { background:rgba(255,255,255,.2); color:rgba(255,255,255,.8); }
-.copy-btn.copied { color:var(--golden); border-color:var(--golden); }
+.copy-btn { position:absolute; top:14px; right:14px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); color:rgba(255,255,255,.6); padding:5px 14px; border-radius:5px; font-size:11px; font-family:'Outfit',sans-serif; cursor:pointer; transition:all .2s; letter-spacing:1px; text-transform:uppercase; }
+.copy-btn:hover { background:rgba(255,255,255,.25); color:#fff; }
+.copy-btn.copied { color:var(--golden); border-color:var(--golden); background:rgba(232,168,56,.15); }
 
 /* Film grain */
 body::after { content:''; position:fixed; inset:0; pointer-events:none; z-index:9999; opacity:.014; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size:256px; }
@@ -146,7 +148,9 @@ blockquote { border-left:3px solid var(--amber); padding-left:16px; margin:16px 
 </nav>
 
 <div class="main">
-  {{ content }}
+  <div class="page-content">
+    {{ content }}
+  </div>
 
   <div class="footer">
     <img src="{{ '/assets/clickup-cli-logo.svg' | relative_url }}" alt="clickup-cli" width="56" height="64" style="margin-bottom:12px">
