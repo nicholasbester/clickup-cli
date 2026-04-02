@@ -1,7 +1,6 @@
 ---
 layout: default
 title: MCP Server
-nav_order: 4
 ---
 
 # MCP Server

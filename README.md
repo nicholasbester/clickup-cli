@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/clickup-icon.svg" alt="ClickUp" width="60" />
+  <img src="docs/assets/clickup-cli-logo.svg" alt="clickup-cli" width="80" />
 </p>
 
 <h1 align="center">clickup-cli</h1>
@@ -14,6 +14,7 @@
   <a href="https://www.npmjs.com/package/@nick.bester/clickup-cli"><img src="https://img.shields.io/npm/v/@nick.bester/clickup-cli" alt="npm" /></a>
   <a href="https://github.com/nicholasbester/clickup-cli/releases"><img src="https://img.shields.io/github/v/release/nicholasbester/clickup-cli" alt="GitHub release" /></a>
   <a href="https://github.com/nicholasbester/clickup-cli/actions"><img src="https://img.shields.io/github/actions/workflow/status/nicholasbester/clickup-cli/ci.yml" alt="CI" /></a>
+  <a href="https://glama.ai/mcp/servers/nicholasbester/clickup-cli"><img src="https://glama.ai/mcp/servers/nicholasbester/clickup-cli/badges/score.svg" alt="Glama MCP" /></a>
   <a href="https://nicholasbester.github.io/clickup-cli/">Documentation</a>
 </p>
 

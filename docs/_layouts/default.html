@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ page.title }} — clickup-cli</title>
+<meta name="description" content="{{ site.description }}">
+<link rel="icon" type="image/svg+xml" href="{{ '/assets/clickup-cli-logo.svg' | relative_url }}">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Outfit:wght@200;300;400;500;600;700&family=Caveat:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --amber:#E8A838; --golden:#F4C95D; --golden-lt:#FBE8B3;
+  --teal:#2A9D8F; --deep:#1A6B60;
+  --aqua:#6EC6C8; --aqua-lt:#B8E4E6;
+  --cream:#FFF8ED; --sand:#F5E6D0; --white:#FFFCF7;
+  --terra:#D4714E; --coral:#E8836B; --glass:#7DB8A0;
+  --sand-dk:#C4A882;
+  --tx:#2C3E3A; --tx2:#5A7A72; --txm:#8FA8A0;
+  --brd:rgba(42,157,143,.1);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { font-family:'Outfit',sans-serif; color:var(--tx); background:var(--white); }
+
+/* Navigation */
+.nav { position:fixed; top:0; left:0; width:200px; height:100vh; background:white; border-right:1px solid var(--brd); padding:20px 8px; z-index:100; overflow-y:auto; }
+.nav::-webkit-scrollbar { width:3px; } .nav::-webkit-scrollbar-thumb { background:#D0CBC4; border-radius:2px; }
+.nav-logo { display:flex; justify-content:center; margin-bottom:12px; }
+.nav-logo img { width:48px; height:54px; }
+.nav-title { text-align:center; font-family:'Cormorant Garamond',serif; font-size:15px; color:var(--deep); margin-bottom:2px; }
+.nav-title em { color:var(--amber); font-style:italic; }
+.nav-sub { text-align:center; font-size:8px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--teal); margin-bottom:16px; }
+.nav-group { font-size:7px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:#A09B94; margin:14px 0 4px 6px; }
+.nav a { display:block; font-size:11px; color:#6B6560; text-decoration:none; padding:5px 10px; border-radius:4px; transition:all .15s; margin-bottom:1px; }
+.nav a:hover { background:#F7F5F2; color:var(--teal); }
+.nav a.active { background:rgba(42,157,143,.08); color:var(--teal); font-weight:500; }
+@media(max-width:900px) { .nav { display:none; } .main { margin-left:0!important; } }
+
+/* Main content */
+.main { margin-left:200px; }
+.content { padding:60px 56px; max-width:860px; margin:0 auto; }
+@media(max-width:768px) { .content { padding:40px 20px; } }
+
+/* Typography */
+h1 { font-family:'Cormorant Garamond',serif; font-size:clamp(28px,4vw,42px); font-weight:300; color:var(--deep); margin-bottom:12px; line-height:1.15; }
+h1 em { color:var(--amber); font-style:italic; }
+h2 { font-family:'Cormorant Garamond',serif; font-size:clamp(22px,3vw,32px); font-weight:400; color:var(--deep); margin:48px 0 12px; line-height:1.2; border-bottom:2px solid var(--amber); padding-bottom:8px; display:inline-block; }
+h2 em { color:var(--amber); font-style:italic; }
+h3 { font-size:13px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--deep); margin:32px 0 12px; }
+p { font-size:14px; font-weight:200; color:var(--tx2); line-height:1.9; margin-bottom:16px; max-width:600px; }
+.lead { font-size:15px; font-weight:200; color:var(--tx2); line-height:1.9; max-width:560px; margin-bottom:40px; }
+
+/* Links */
+a { color:var(--teal); text-decoration:none; }
+a:hover { color:var(--deep); }
+
+/* Code blocks */
+pre { background:#2C3E3A; color:#E8E4E0; border-radius:10px; padding:20px 24px; overflow-x:auto; font-family:'JetBrains Mono',monospace; font-size:12.5px; line-height:1.7; margin:16px 0 24px; position:relative; }
+pre::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--amber),var(--teal),var(--aqua)); border-radius:10px 10px 0 0; }
+code { font-family:'JetBrains Mono',monospace; font-size:12px; background:rgba(42,157,143,.08); color:var(--deep); padding:2px 6px; border-radius:3px; }
+pre code { background:none; color:inherit; padding:0; }
+
+/* Tables */
+table { width:100%; border-collapse:collapse; margin:16px 0 24px; font-size:13px; }
+th { text-align:left; padding:10px 14px; background:rgba(42,157,143,.06); color:var(--deep); font-weight:500; font-size:11px; letter-spacing:1px; text-transform:uppercase; border-bottom:2px solid var(--amber); }
+td { padding:10px 14px; border-bottom:1px solid var(--brd); color:var(--tx2); font-weight:300; }
+tr:hover td { background:rgba(42,157,143,.02); }
+
+/* Lists */
+ul, ol { margin:8px 0 24px 20px; }
+li { font-size:13px; font-weight:300; color:var(--tx2); line-height:1.9; margin-bottom:4px; }
+li strong { color:var(--deep); font-weight:500; }
+
+/* Badges/pills */
+.badge { display:inline-block; padding:3px 10px; border-radius:100px; font-size:10px; font-weight:500; letter-spacing:1px; text-transform:uppercase; }
+.badge-teal { background:rgba(42,157,143,.1); color:var(--teal); }
+.badge-amber { background:rgba(232,168,56,.15); color:var(--amber); }
+.badge-terra { background:rgba(212,113,78,.1); color:var(--terra); }
+
+/* Feature cards */
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin:20px 0 32px; }
+.card { background:var(--cream); border:1px solid var(--brd); border-radius:12px; padding:24px; transition:transform .3s; }
+.card:hover { transform:translateY(-2px); }
+.card-icon { font-size:24px; margin-bottom:10px; }
+.card-title { font-size:12px; font-weight:500; color:var(--deep); margin-bottom:6px; }
+.card-desc { font-size:11px; font-weight:200; color:var(--tx2); line-height:1.7; }
+
+/* Hero section */
+.hero { min-height:70vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:60px 40px; background:linear-gradient(175deg,var(--golden-lt) 0%,var(--cream) 30%,var(--aqua-lt) 60%,var(--sand) 90%,var(--golden-lt) 100%); position:relative; overflow:hidden; }
+.hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 60% 40% at 25% 75%,rgba(42,157,143,.1),transparent 70%),radial-gradient(ellipse 50% 35% at 75% 20%,rgba(232,168,56,.15),transparent 60%); }
+.hero > * { position:relative; z-index:2; }
+.hero-num { font-size:10px; font-weight:500; letter-spacing:4px; text-transform:uppercase; color:var(--teal); margin-bottom:20px; }
+.hero h1 { font-size:clamp(36px,6vw,64px); margin-bottom:16px; }
+.hero .lead { max-width:480px; margin-left:auto; margin-right:auto; }
+.hero-ver { font-size:11px; letter-spacing:3px; color:var(--txm); margin-top:24px; text-transform:uppercase; }
+.hero-badges { display:flex; gap:8px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
+.hero-badges img { height:20px; }
+
+/* Footer */
+.footer { text-align:center; padding:48px 40px; background:linear-gradient(180deg,var(--white),var(--cream),var(--golden-lt)); }
+.footer-tagline { font-family:'Caveat',cursive; font-size:17px; color:var(--terra); margin-top:8px; }
+.footer-copy { font-size:10px; letter-spacing:3px; color:var(--txm); margin-top:24px; text-transform:uppercase; }
+
+/* Section label */
+.sec-num { font-size:10px; font-weight:500; letter-spacing:3px; text-transform:uppercase; color:var(--teal); margin-bottom:6px; }
+
+/* Install block */
+.install-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin:20px 0 32px; }
+.install-card { background:var(--cream); border:1px solid var(--brd); border-radius:10px; padding:16px 20px; }
+.install-card-title { font-size:11px; font-weight:600; color:var(--deep); margin-bottom:8px; letter-spacing:1px; text-transform:uppercase; }
+.install-card code { font-size:11px; display:block; margin-top:4px; }
+
+/* Copy button for code blocks */
+pre { position:relative; }
+.copy-btn { position:absolute; top:12px; right:12px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.15); color:rgba(255,255,255,.5); padding:4px 10px; border-radius:4px; font-size:10px; font-family:'Outfit',sans-serif; cursor:pointer; transition:all .2s; letter-spacing:1px; text-transform:uppercase; }
+.copy-btn:hover { background:rgba(255,255,255,.2); color:rgba(255,255,255,.8); }
+.copy-btn.copied { color:var(--golden); border-color:var(--golden); }
+
+/* Film grain */
+body::after { content:''; position:fixed; inset:0; pointer-events:none; z-index:9999; opacity:.014; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size:256px; }
+
+/* Blockquote */
+blockquote { border-left:3px solid var(--amber); padding-left:16px; margin:16px 0 24px; font-family:'Cormorant Garamond',serif; font-size:17px; font-style:italic; color:var(--deep); line-height:1.6; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo">
+    <img src="{{ '/assets/clickup-cli-logo.svg' | relative_url }}" alt="clickup-cli" width="48" height="54">
+  </div>
+  <p class="nav-title">clickup <em>cli</em></p>
+  <p class="nav-sub">for the ClickUp API</p>
+
+  <p class="nav-group">Documentation</p>
+  <a href="{{ '/' | relative_url }}" {% if page.url == '/' or page.url == '/index.html' %}class="active"{% endif %}>Home</a>
+  <a href="{{ '/install' | relative_url }}" {% if page.url contains 'install' %}class="active"{% endif %}>Installation</a>
+  <a href="{{ '/commands' | relative_url }}" {% if page.url contains 'commands' %}class="active"{% endif %}>Commands</a>
+  <a href="{{ '/mcp' | relative_url }}" {% if page.url contains 'mcp' %}class="active"{% endif %}>MCP Server</a>
+
+  <p class="nav-group">Links</p>
+  <a href="https://github.com/nicholasbester/clickup-cli" target="_blank">GitHub ↗</a>
+  <a href="https://crates.io/crates/clickup-cli" target="_blank">crates.io ↗</a>
+  <a href="https://www.npmjs.com/package/@nick.bester/clickup-cli" target="_blank">npm ↗</a>
+  <a href="https://glama.ai/mcp/servers/nicholasbester/clickup-cli" target="_blank">Glama ↗</a>
+</nav>
+
+<div class="main">
+  {{ content }}
+
+  <div class="footer">
+    <img src="{{ '/assets/clickup-cli-logo.svg' | relative_url }}" alt="clickup-cli" width="56" height="64" style="margin-bottom:12px">
+    <p style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:var(--deep);">Token-efficient ClickUp for <em style="color:var(--amber);font-style:italic">every</em> AI agent.</p>
+    <p class="footer-tagline">Bringing warmth to your API experience</p>
+    <p class="footer-copy">clickup-cli · Apache-2.0 · 2026</p>
+  </div>
+</div>
+
+<script>
+// Add copy buttons to all code blocks
+document.querySelectorAll('pre').forEach(pre => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'Copy';
+  btn.addEventListener('click', () => {
+    const code = pre.querySelector('code') || pre;
+    navigator.clipboard.writeText(code.textContent.replace('Copy','').trim());
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>
