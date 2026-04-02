@@ -17,21 +17,17 @@ title: Home
   <p class="hero-ver">v0.6.7 · Rust · Apache-2.0</p>
 </div>
 
-<div class="content">
-
+<!-- The Problem -->
 <p class="sec-num">The Problem</p>
-## Why This <em>Exists</em>
+<h2>Why This <em>Exists</em></h2>
+<p>ClickUp's API returns deeply nested JSON. A single task list query produces <strong>~12,000 tokens</strong> of data — statuses wrapped in objects, assignees as arrays of user objects, timestamps as Unix milliseconds, custom fields, checklists, dependencies.</p>
+<p>For AI agents operating within context windows, this is a serious problem. A few API calls can consume most of the available context, leaving little room for reasoning.</p>
+<blockquote>You didn't build an AI agent to waste 12,000 tokens on a task list. There's an element for that.</blockquote>
 
-ClickUp's API returns deeply nested JSON. A single task list query produces **~12,000 tokens** of data — statuses wrapped in objects, assignees as arrays of user objects, timestamps as Unix milliseconds, custom fields, checklists, dependencies.
-
-For AI agents operating within context windows, this is a serious problem. A few API calls can consume most of the available context, leaving little room for reasoning.
-
-> You didn't build an AI agent to waste 12,000 tokens on a task list. There's an element for that.
-
+<!-- The Solution -->
 <p class="sec-num">The Solution</p>
-## Token-Efficient <em>Output</em>
-
-clickup-cli flattens nested objects, selects only essential fields, and renders compact output — whether you're using the CLI or the MCP server.
+<h2>Token-Efficient <em>Output</em></h2>
+<p>clickup-cli flattens nested objects, selects only essential fields, and renders compact output — whether you're using the CLI or the MCP server.</p>
 
 <div class="cards">
   <div class="card">
@@ -51,8 +47,9 @@ clickup-cli flattens nested objects, selects only essential fields, and renders 
   </div>
 </div>
 
+<!-- Coverage -->
 <p class="sec-num">Coverage</p>
-## 28 Resource Groups, 4 <em>Utilities</em>
+<h2>28 Resource Groups, 4 <em>Utilities</em></h2>
 
 <div class="cards">
   <div class="card">
@@ -81,8 +78,9 @@ clickup-cli flattens nested objects, selects only essential fields, and renders 
   </div>
 </div>
 
+<!-- Quick Start -->
 <p class="sec-num">Quick Start</p>
-## Get <em>Running</em>
+<h2>Get <em>Running</em></h2>
 
 <div class="install-grid">
   <div class="install-card">
@@ -104,8 +102,7 @@ clickup-cli flattens nested objects, selects only essential fields, and renders 
   </div>
 </div>
 
-```bash
-# Configure
+<pre><code># Configure
 clickup setup --token pk_your_token_here
 
 # Verify
@@ -113,29 +110,27 @@ clickup auth whoami
 
 # Use
 clickup task list --list 12345
-clickup task create --list 12345 --name "My Task" --priority 3
-```
+clickup task create --list 12345 --name "My Task" --priority 3</code></pre>
 
+<!-- AI Integration -->
 <p class="sec-num">AI Integration</p>
-## Two Ways to <em>Connect</em>
+<h2>Two Ways to <em>Connect</em></h2>
 
 <div class="cards">
   <div class="card" style="border-left:3px solid var(--amber)">
     <div class="card-title">CLI Mode (recommended)</div>
     <div class="card-desc">Most token-efficient. Inject a ~1,000 token command reference into your agent instructions. The agent runs CLI commands directly. Works with any LLM.</div>
-    <pre style="margin-top:12px;font-size:11px"><code>clickup agent-config inject   # Auto-detects CLAUDE.md, agent.md, .cursorrules</code></pre>
+    <pre style="margin-top:12px"><code>clickup agent-config inject   # Auto-detects CLAUDE.md, agent.md, .cursorrules</code></pre>
   </div>
   <div class="card" style="border-left:3px solid var(--teal)">
     <div class="card-title">MCP Mode (143 tools)</div>
-    <div class="card-desc">For Claude Desktop, Cursor, and tools that prefer native tool integration. 143 tools with compact responses. More tokens consumed by tool schemas.</div>
-    <pre style="margin-top:12px;font-size:11px"><code>clickup agent-config init --mcp</code></pre>
+    <div class="card-desc">For Claude Desktop, Cursor, and tools that prefer native tool integration. 143 tools with compact responses.</div>
+    <pre style="margin-top:12px"><code>clickup agent-config init --mcp</code></pre>
   </div>
 </div>
 
 <div style="text-align:center;margin:48px 0 24px">
-  <a href="{{ '/install' | relative_url }}" style="display:inline-block;padding:10px 28px;background:var(--deep);color:var(--golden-lt);border-radius:6px;font-size:12px;font-weight:500;letter-spacing:1px;text-transform:uppercase;text-decoration:none;transition:all .2s">Installation →</a>
-  <a href="{{ '/commands' | relative_url }}" style="display:inline-block;padding:10px 28px;background:transparent;color:var(--deep);border:1.5px solid var(--deep);border-radius:6px;font-size:12px;font-weight:500;letter-spacing:1px;text-transform:uppercase;text-decoration:none;margin-left:8px;transition:all .2s">Commands →</a>
-  <a href="{{ '/mcp' | relative_url }}" style="display:inline-block;padding:10px 28px;background:transparent;color:var(--teal);border:1.5px solid var(--teal);border-radius:6px;font-size:12px;font-weight:500;letter-spacing:1px;text-transform:uppercase;text-decoration:none;margin-left:8px;transition:all .2s">MCP Server →</a>
-</div>
-
+  <a href="{{ '/install' | relative_url }}" style="display:inline-block;padding:10px 28px;background:var(--deep);color:var(--golden-lt);border-radius:6px;font-size:12px;font-weight:500;letter-spacing:1px;text-transform:uppercase;text-decoration:none">Installation →</a>
+  <a href="{{ '/commands' | relative_url }}" style="display:inline-block;padding:10px 28px;background:transparent;color:var(--deep);border:1.5px solid var(--deep);border-radius:6px;font-size:12px;font-weight:500;letter-spacing:1px;text-transform:uppercase;text-decoration:none;margin-left:8px">Commands →</a>
+  <a href="{{ '/mcp' | relative_url }}" style="display:inline-block;padding:10px 28px;background:transparent;color:var(--teal);border:1.5px solid var(--teal);border-radius:6px;font-size:12px;font-weight:500;letter-spacing:1px;text-transform:uppercase;text-decoration:none;margin-left:8px">MCP Server →</a>
 </div>
