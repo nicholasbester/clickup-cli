@@ -1,7 +1,7 @@
 title: clickup-cli
 description: CLI for the ClickUp API, optimized for AI agents
-baseurl: /clickup-cli
-url: https://nicholasbester.github.io
+baseurl: ""
+url: https://clickup-cli.com
 
 exclude:
   - superpowers/

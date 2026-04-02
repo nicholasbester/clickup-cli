@@ -15,7 +15,7 @@
   <a href="https://github.com/nicholasbester/clickup-cli/releases"><img src="https://img.shields.io/github/v/release/nicholasbester/clickup-cli" alt="GitHub release" /></a>
   <a href="https://github.com/nicholasbester/clickup-cli/actions"><img src="https://img.shields.io/github/actions/workflow/status/nicholasbester/clickup-cli/ci.yml" alt="CI" /></a>
   <a href="https://glama.ai/mcp/servers/nicholasbester/clickup-cli"><img src="https://glama.ai/mcp/servers/nicholasbester/clickup-cli/badges/score.svg" alt="Glama MCP" /></a>
-  <a href="https://nicholasbester.github.io/clickup-cli/">Documentation</a>
+  <a href="https://clickup-cli.com/">Documentation</a>
 </p>
 
 ## Why?
@@ -254,7 +254,7 @@ Or add `.mcp.json` to your project root manually:
 }
 ```
 
-This exposes 143 tools covering 100% of the ClickUp API as native tool calls with token-efficient compact responses. See the [MCP documentation](https://nicholasbester.github.io/clickup-cli/mcp) for full setup.
+This exposes 143 tools covering 100% of the ClickUp API as native tool calls with token-efficient compact responses. See the [MCP documentation](https://clickup-cli.com/mcp) for full setup.
 
 ## Configuration
 

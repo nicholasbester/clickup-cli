@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://nicholasbester.github.io/clickup-cli/">Documentation</a> · <a href="https://github.com/nicholasbester/clickup-cli">GitHub</a> · <a href="https://nicholasbester.github.io/clickup-cli/commands">Command Reference</a> · <a href="https://nicholasbester.github.io/clickup-cli/mcp">MCP Server</a>
+  <a href="https://clickup-cli.com/">Documentation</a> · <a href="https://github.com/nicholasbester/clickup-cli">GitHub</a> · <a href="https://clickup-cli.com/commands">Command Reference</a> · <a href="https://clickup-cli.com/mcp">MCP Server</a>
 </p>
 
 ## Why?
@@ -132,9 +132,9 @@ clickup completions fish > ~/.config/fish/completions/clickup.fish
 
 ## Links
 
-- **Documentation:** [nicholasbester.github.io/clickup-cli](https://nicholasbester.github.io/clickup-cli/)
-- **Command Reference:** [nicholasbester.github.io/clickup-cli/commands](https://nicholasbester.github.io/clickup-cli/commands)
-- **MCP Server:** [nicholasbester.github.io/clickup-cli/mcp](https://nicholasbester.github.io/clickup-cli/mcp)
+- **Documentation:** [clickup-cli.com](https://clickup-cli.com/)
+- **Command Reference:** [clickup-cli.com/commands](https://clickup-cli.com/commands)
+- **MCP Server:** [clickup-cli.com/mcp](https://clickup-cli.com/mcp)
 - **GitHub:** [github.com/nicholasbester/clickup-cli](https://github.com/nicholasbester/clickup-cli)
 
 ## License
