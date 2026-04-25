@@ -44,6 +44,29 @@ impl ClickUpClient {
         }
     }
 
+    async fn parse_success_response(
+        resp: reqwest::Response,
+        status: u16,
+    ) -> Result<serde_json::Value, CliError> {
+        if status == 204 {
+            return Ok(serde_json::json!({}));
+        }
+
+        let body_text = resp.text().await.map_err(|e| CliError::ClientError {
+            message: format!("Failed to read response body: {}", e),
+            status,
+        })?;
+
+        if body_text.trim().is_empty() {
+            return Ok(serde_json::json!({}));
+        }
+
+        serde_json::from_str(&body_text).map_err(|e| CliError::ClientError {
+            message: format!("Failed to parse response: {}", e),
+            status,
+        })
+    }
+
     async fn request(
         &self,
         method: reqwest::Method,
@@ -73,15 +96,7 @@ impl ClickUpClient {
             self.update_rate_limits(resp.headers());
 
             if (200..300).contains(&status) {
-                if status == 204 {
-                    return Ok(serde_json::json!({}));
-                }
-                let json: serde_json::Value =
-                    resp.json().await.map_err(|e| CliError::ClientError {
-                        message: format!("Failed to parse response: {}", e),
-                        status,
-                    })?;
-                return Ok(json);
+                return Self::parse_success_response(resp, status).await;
             }
 
             // Retry on 429 — wait for rate limit reset, retry once
@@ -207,14 +222,7 @@ impl ClickUpClient {
         self.update_rate_limits(resp.headers());
 
         if (200..300).contains(&status) {
-            if status == 204 {
-                return Ok(serde_json::json!({}));
-            }
-            let json: serde_json::Value = resp.json().await.map_err(|e| CliError::ClientError {
-                message: format!("Failed to parse response: {}", e),
-                status,
-            })?;
-            return Ok(json);
+            return Self::parse_success_response(resp, status).await;
         }
 
         let body_text = resp.text().await.unwrap_or_default();
