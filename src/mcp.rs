@@ -112,7 +112,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_list",
-            "description": "List tasks in a specific ClickUp list with optional status/assignee filters. Returns the first page of task objects in compact form (id, name, status, assignees, due_date). For cross-list or cross-space queries use clickup_task_search instead; for a single task use clickup_task_get.",
+            "description": "List tasks in a specific ClickUp list with optional status/assignee filters. Returns compact task objects plus pagination metadata. Use page to fetch a specific zero-based ClickUp page, limit to cap returned tasks, or all to auto-fetch pages until ClickUp reports last_page. For cross-list or cross-space queries use clickup_task_search instead; for a single task use clickup_task_get.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -127,7 +127,10 @@ pub fn tool_list() -> Value {
                         "items": {"type": "string"},
                         "description": "User IDs (as strings) to filter assignees. Obtain from clickup_member_list or clickup_user_get. Omit to return tasks regardless of assignee."
                     },
-                    "include_closed": {"type": "boolean", "description": "true = include tasks whose status is in the 'closed' group; false or omitted = exclude closed tasks from the response."}
+                    "include_closed": {"type": "boolean", "description": "true = include tasks whose status is in the 'closed' group; false or omitted = exclude closed tasks from the response."},
+                    "page": {"type": "integer", "minimum": 0, "description": "Zero-based ClickUp task page to fetch. Defaults to 0. When all is true, this is the starting page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of tasks to return in this tool response. With all=true, this caps the total across fetched pages; otherwise it caps the fetched page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp returns last_page=true or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["list_id"]
             }
@@ -208,7 +211,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_search",
-            "description": "Search tasks across an entire ClickUp workspace with optional space/list/status/assignee filters — useful for cross-list queries. Returns a paginated array of task objects. For tasks in a single list, prefer clickup_task_list (fewer parameters, same shape).",
+            "description": "Search tasks across an entire ClickUp workspace with optional space/list/status/assignee filters — useful for cross-list queries. Returns compact task objects plus pagination metadata. Use page to fetch a specific zero-based ClickUp page, limit to cap returned tasks, or all to auto-fetch pages until ClickUp reports last_page. For tasks in a single list, prefer clickup_task_list (fewer parameters, same shape).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -232,7 +235,10 @@ pub fn tool_list() -> Value {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "User IDs (as strings) to restrict to tasks assigned to them. Obtain from clickup_member_list. Omit to return tasks regardless of assignee."
-                    }
+                    },
+                    "page": {"type": "integer", "minimum": 0, "description": "Zero-based ClickUp task page to fetch. Defaults to 0. When all is true, this is the starting page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of tasks to return in this tool response. With all=true, this caps the total across fetched pages; otherwise it caps the fetched page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp returns last_page=true or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": []
             }
@@ -1975,6 +1981,164 @@ pub fn filtered_tool_list(filter: &filter::Filter) -> serde_json::Value {
 
 // ── Tool execution ────────────────────────────────────────────────────────────
 
+const MCP_TASK_FIELDS: &[&str] = &["id", "name", "status", "priority", "assignees", "due_date"];
+
+#[derive(Debug, Clone, Copy)]
+struct TaskPagination {
+    page: u32,
+    all: bool,
+    limit: Option<usize>,
+}
+
+fn task_pagination(args: &Value) -> Result<TaskPagination, String> {
+    let page = match args.get("page") {
+        Some(v) => {
+            let n = v
+                .as_u64()
+                .ok_or_else(|| "Parameter page must be a non-negative integer".to_string())?;
+            u32::try_from(n)
+                .map_err(|_| "Parameter page is too large for ClickUp pagination".to_string())?
+        }
+        None => 0,
+    };
+
+    let limit = match args.get("limit") {
+        Some(v) => {
+            let n = v
+                .as_u64()
+                .ok_or_else(|| "Parameter limit must be a positive integer".to_string())?;
+            if n == 0 {
+                return Err("Parameter limit must be a positive integer".to_string());
+            }
+            Some(
+                usize::try_from(n)
+                    .map_err(|_| "Parameter limit is too large for this platform".to_string())?,
+            )
+        }
+        None => None,
+    };
+
+    Ok(TaskPagination {
+        page,
+        all: args.get("all").and_then(|v| v.as_bool()).unwrap_or(false),
+        limit,
+    })
+}
+
+fn push_string_array_params(
+    params: &mut Vec<String>,
+    args: &Value,
+    arg_name: &str,
+    query_name: &str,
+) {
+    if let Some(values) = args.get(arg_name).and_then(|v| v.as_array()) {
+        for value in values {
+            if let Some(value) = value.as_str() {
+                params.push(format!("{}={}", query_name, value));
+            }
+        }
+    }
+}
+
+fn query_string(params: &[String]) -> String {
+    if params.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", params.join("&"))
+    }
+}
+
+fn paginated_task_response(
+    tasks: Vec<Value>,
+    pagination: TaskPagination,
+    pages_fetched: u32,
+    last_page: bool,
+    truncated: bool,
+) -> Value {
+    let has_more = !last_page;
+    let next_page = if has_more {
+        pagination.page.checked_add(pages_fetched)
+    } else {
+        None
+    };
+
+    json!({
+        "tasks": compact_items(&tasks, MCP_TASK_FIELDS),
+        "pagination": {
+            "page": pagination.page,
+            "all": pagination.all,
+            "limit": pagination.limit,
+            "count": tasks.len(),
+            "pages_fetched": pages_fetched,
+            "last_page": last_page,
+            "has_more": has_more,
+            "next_page": next_page,
+            "truncated": truncated
+        }
+    })
+}
+
+async fn fetch_paginated_tasks(
+    client: &ClickUpClient,
+    base_path: &str,
+    params: Vec<String>,
+    pagination: TaskPagination,
+) -> Result<Value, String> {
+    let mut tasks = Vec::new();
+    let mut current_page = pagination.page;
+    let mut pages_fetched = 0u32;
+    let mut truncated = false;
+
+    loop {
+        let mut page_params = params.clone();
+        page_params.push(format!("page={}", current_page));
+        let path = format!("{}{}", base_path, query_string(&page_params));
+        let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+        let page_tasks = resp
+            .get("tasks")
+            .and_then(|t| t.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let page_is_last = resp
+            .get("last_page")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        tasks.extend(page_tasks);
+        pages_fetched += 1;
+
+        if let Some(limit) = pagination.limit {
+            if tasks.len() > limit {
+                tasks.truncate(limit);
+                truncated = true;
+            }
+            if tasks.len() >= limit {
+                return Ok(paginated_task_response(
+                    tasks,
+                    pagination,
+                    pages_fetched,
+                    page_is_last,
+                    truncated,
+                ));
+            }
+        }
+
+        if !pagination.all || page_is_last {
+            return Ok(paginated_task_response(
+                tasks,
+                pagination,
+                pages_fetched,
+                page_is_last,
+                truncated,
+            ));
+        }
+
+        current_page = current_page
+            .checked_add(1)
+            .ok_or_else(|| "Next page exceeds ClickUp pagination range".to_string())?;
+    }
+}
+
 async fn call_tool(
     name: &str,
     args: &Value,
@@ -2117,35 +2281,15 @@ async fn dispatch_tool(
                 .get("list_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: list_id")?;
-            let mut qs = String::new();
+            let pagination = task_pagination(args)?;
+            let mut params = Vec::new();
             if let Some(include_closed) = args.get("include_closed").and_then(|v| v.as_bool()) {
-                qs.push_str(&format!("&include_closed={}", include_closed));
+                params.push(format!("include_closed={}", include_closed));
             }
-            if let Some(statuses) = args.get("statuses").and_then(|v| v.as_array()) {
-                for s in statuses {
-                    if let Some(s) = s.as_str() {
-                        qs.push_str(&format!("&statuses[]={}", s));
-                    }
-                }
-            }
-            if let Some(assignees) = args.get("assignees").and_then(|v| v.as_array()) {
-                for a in assignees {
-                    if let Some(a) = a.as_str() {
-                        qs.push_str(&format!("&assignees[]={}", a));
-                    }
-                }
-            }
-            let path = format!("/v2/list/{}/task?{}", list_id, qs.trim_start_matches('&'));
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let tasks = resp
-                .get("tasks")
-                .and_then(|t| t.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(
-                &tasks,
-                &["id", "name", "status", "priority", "assignees", "due_date"],
-            ))
+            push_string_array_params(&mut params, args, "statuses", "statuses[]");
+            push_string_array_params(&mut params, args, "assignees", "assignees[]");
+            let base_path = format!("/v2/list/{}/task", list_id);
+            fetch_paginated_tasks(client, &base_path, params, pagination).await
         }
 
         "clickup_task_get" => {
@@ -2252,46 +2396,14 @@ async fn dispatch_tool(
 
         "clickup_task_search" => {
             let team_id = resolve_workspace(args)?;
-            let mut qs = String::new();
-            if let Some(space_ids) = args.get("space_ids").and_then(|v| v.as_array()) {
-                for id in space_ids {
-                    if let Some(id) = id.as_str() {
-                        qs.push_str(&format!("&space_ids[]={}", id));
-                    }
-                }
-            }
-            if let Some(list_ids) = args.get("list_ids").and_then(|v| v.as_array()) {
-                for id in list_ids {
-                    if let Some(id) = id.as_str() {
-                        qs.push_str(&format!("&list_ids[]={}", id));
-                    }
-                }
-            }
-            if let Some(statuses) = args.get("statuses").and_then(|v| v.as_array()) {
-                for s in statuses {
-                    if let Some(s) = s.as_str() {
-                        qs.push_str(&format!("&statuses[]={}", s));
-                    }
-                }
-            }
-            if let Some(assignees) = args.get("assignees").and_then(|v| v.as_array()) {
-                for a in assignees {
-                    if let Some(a) = a.as_str() {
-                        qs.push_str(&format!("&assignees[]={}", a));
-                    }
-                }
-            }
-            let path = format!("/v2/team/{}/task?{}", team_id, qs.trim_start_matches('&'));
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let tasks = resp
-                .get("tasks")
-                .and_then(|t| t.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(
-                &tasks,
-                &["id", "name", "status", "priority", "assignees", "due_date"],
-            ))
+            let pagination = task_pagination(args)?;
+            let mut params = Vec::new();
+            push_string_array_params(&mut params, args, "space_ids", "space_ids[]");
+            push_string_array_params(&mut params, args, "list_ids", "list_ids[]");
+            push_string_array_params(&mut params, args, "statuses", "statuses[]");
+            push_string_array_params(&mut params, args, "assignees", "assignees[]");
+            let base_path = format!("/v2/team/{}/task", team_id);
+            fetch_paginated_tasks(client, &base_path, params, pagination).await
         }
 
         "clickup_comment_list" => {
@@ -4793,6 +4905,58 @@ async fn dispatch_tool(
         }
 
         unknown => Err(format!("Unknown tool: {}", unknown)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_pagination_defaults_to_first_page() {
+        let pagination = task_pagination(&json!({})).unwrap();
+
+        assert_eq!(pagination.page, 0);
+        assert!(!pagination.all);
+        assert_eq!(pagination.limit, None);
+    }
+
+    #[test]
+    fn task_pagination_rejects_invalid_values() {
+        assert!(task_pagination(&json!({"page": -1})).is_err());
+        assert!(task_pagination(&json!({"limit": 0})).is_err());
+        assert!(task_pagination(&json!({"limit": "10"})).is_err());
+    }
+
+    #[test]
+    fn paginated_task_response_includes_metadata() {
+        let pagination = TaskPagination {
+            page: 2,
+            all: false,
+            limit: Some(10),
+        };
+        let tasks = vec![json!({
+            "id": "abc",
+            "name": "Example",
+            "status": {"status": "open"},
+            "priority": {"priority": "normal"},
+            "assignees": [{"username": "alex"}],
+            "due_date": "1735689600000"
+        })];
+
+        let response = paginated_task_response(tasks, pagination, 1, false, false);
+
+        assert_eq!(response["tasks"][0]["id"], json!("abc"));
+        assert_eq!(response["tasks"][0]["status"], json!("open"));
+        assert_eq!(response["tasks"][0]["assignees"], json!("alex"));
+        assert_eq!(response["pagination"]["page"], json!(2));
+        assert_eq!(response["pagination"]["limit"], json!(10));
+        assert_eq!(response["pagination"]["count"], json!(1));
+        assert_eq!(response["pagination"]["pages_fetched"], json!(1));
+        assert_eq!(response["pagination"]["last_page"], json!(false));
+        assert_eq!(response["pagination"]["has_more"], json!(true));
+        assert_eq!(response["pagination"]["next_page"], json!(3));
+        assert_eq!(response["pagination"]["truncated"], json!(false));
     }
 }
 

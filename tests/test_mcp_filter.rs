@@ -265,6 +265,43 @@ fn filtered_tool_list_returns_only_allowed_tools() {
     );
 }
 
+#[test]
+fn task_tools_expose_pagination_controls() {
+    let tools = tool_list();
+    let array = tools.as_array().unwrap();
+
+    for tool_name in ["clickup_task_list", "clickup_task_search"] {
+        let tool = array
+            .iter()
+            .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some(tool_name))
+            .unwrap_or_else(|| panic!("missing tool {}", tool_name));
+        let properties = tool["inputSchema"]["properties"].as_object().unwrap();
+
+        assert!(
+            properties.contains_key("page"),
+            "{} should expose page",
+            tool_name
+        );
+        assert!(
+            properties.contains_key("limit"),
+            "{} should expose limit",
+            tool_name
+        );
+        assert!(
+            properties.contains_key("all"),
+            "{} should expose all",
+            tool_name
+        );
+
+        let description = tool["description"].as_str().unwrap();
+        assert!(
+            description.contains("pagination metadata"),
+            "{} should document pagination metadata",
+            tool_name
+        );
+    }
+}
+
 // ── handle_tools_call_early tests ────────────────────────────────────────────
 
 use clickup_cli::mcp::handle_tools_call_early;
