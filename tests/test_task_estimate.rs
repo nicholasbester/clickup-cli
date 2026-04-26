@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use std::path::Path;
 use tempfile::TempDir;
-use wiremock::matchers::{method, path as path_matcher, body_json};
+use wiremock::matchers::{body_json, method, path as path_matcher};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn clickup(dir: &Path, server: &MockServer) -> Command {
@@ -19,7 +19,7 @@ fn clickup(dir: &Path, server: &MockServer) -> Command {
 async fn test_task_set_estimate_v2() {
     let dir = TempDir::new().unwrap();
     let server = MockServer::start().await;
-    
+
     // Mock for v2 update task (task-level estimate)
     Mock::given(method("PUT"))
         .and(path_matcher("/v2/task/abc123"))
@@ -44,10 +44,12 @@ async fn test_task_set_estimate_v2() {
 async fn test_task_set_estimate_v3() {
     let dir = TempDir::new().unwrap();
     let server = MockServer::start().await;
-    
+
     // Mock for v3 per-assignee estimate
     Mock::given(method("PATCH"))
-        .and(path_matcher("/v3/workspaces/99/tasks/abc123/time_estimates_by_user"))
+        .and(path_matcher(
+            "/v3/workspaces/99/tasks/abc123/time_estimates_by_user",
+        ))
         .and(body_json(serde_json::json!({
             "time_estimates": [{"user_id": "123", "time_estimate": 900000}]
         })))
@@ -59,7 +61,16 @@ async fn test_task_set_estimate_v3() {
         .await;
 
     clickup(dir.path(), &server)
-        .args(["task", "set-estimate", "--id", "abc123", "--time", "900000", "--assignee", "123"])
+        .args([
+            "task",
+            "set-estimate",
+            "--id",
+            "abc123",
+            "--time",
+            "900000",
+            "--assignee",
+            "123",
+        ])
         .assert()
         .success();
 }
@@ -68,7 +79,7 @@ async fn test_task_set_estimate_v3() {
 async fn test_error_reporting_improved() {
     let dir = TempDir::new().unwrap();
     let server = MockServer::start().await;
-    
+
     // Mock for 400 error with message
     Mock::given(method("PUT"))
         .and(path_matcher("/v2/task/abc123"))

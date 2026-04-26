@@ -643,9 +643,7 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 let body = serde_json::json!({
                     "time_estimate": time
                 });
-                client
-                    .put(&format!("/v2/task/{}", task.id), &body)
-                    .await?
+                client.put(&format!("/v2/task/{}", task.id), &body).await?
             };
             output.print_single(&resp, TASK_FIELDS, "id");
             Ok(())
