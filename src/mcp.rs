@@ -190,7 +190,8 @@ pub fn tool_list() -> Value {
                         "type": "array",
                         "items": {"type": "integer"},
                         "description": "User IDs to remove from assignees (no-op if the user is not currently assigned)."
-                    }
+                    },
+                    "time_estimate": {"type": "integer", "description": "New total time estimate in milliseconds. Omit to keep current estimate."}
                 },
                 "required": ["task_id"]
             }
@@ -1404,16 +1405,16 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_set_estimate",
-            "description": "Set a per-user time estimate on a ClickUp task. Additive — other users' estimates are untouched. To replace all user estimates at once use clickup_task_replace_estimates instead. Estimates are used in workload views and reports. Returns the updated task estimate object.",
+            "description": "Set a time estimate on a ClickUp task. If user_id is provided, sets a per-user estimate (additive, Business plan+). If user_id is omitted, sets the total task-level estimate (compatible with all plans). Estimates are in milliseconds.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task. Obtain from clickup_task_list (field: id)."},
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "user_id": {"type": "integer", "description": "Numeric ID of the user whose estimate to set. Obtain from clickup_member_list."},
+                    "user_id": {"type": "integer", "description": "Numeric ID of the user whose estimate to set. Omit to set task-level estimate."},
                     "time_estimate": {"type": "integer", "description": "Estimated effort in milliseconds (e.g. 3600000 = 1 hour, 28800000 = 8 hours)."}
                 },
-                "required": ["task_id", "user_id", "time_estimate"]
+                "required": ["task_id", "time_estimate"]
             }
         },
         {
@@ -2226,6 +2227,9 @@ async fn dispatch_tool(
             }
             if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
                 body["description"] = json!(desc);
+            }
+            if let Some(te) = args.get("time_estimate").and_then(|v| v.as_i64()) {
+                body["time_estimate"] = json!(te);
             }
             if let Some(add) = args.get("add_assignees") {
                 body["assignees"] = json!({"add": add, "rem": args.get("rem_assignees").cloned().unwrap_or(json!([]))});
@@ -3978,31 +3982,36 @@ async fn dispatch_tool(
         }
 
         "clickup_task_set_estimate" => {
-            let team_id = resolve_workspace(args)?;
             let task_id = args
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
-            let user_id = args
-                .get("user_id")
-                .and_then(|v| v.as_i64())
-                .ok_or("Missing required parameter: user_id")?;
+            let user_id = args.get("user_id").and_then(|v| v.as_i64());
             let time_estimate = args
                 .get("time_estimate")
                 .and_then(|v| v.as_i64())
                 .ok_or("Missing required parameter: time_estimate")?;
-            let body =
-                json!({"time_estimates": [{"user_id": user_id, "time_estimate": time_estimate}]});
-            client
-                .patch(
-                    &format!(
-                        "/v3/workspaces/{}/tasks/{}/time_estimates_by_user",
-                        team_id, task_id
-                    ),
-                    &body,
-                )
-                .await
-                .map_err(|e| e.to_string())?;
+
+            if let Some(user_id) = user_id {
+                let team_id = resolve_workspace(args)?;
+                let body = json!({"time_estimates": [{"user_id": user_id, "time_estimate": time_estimate}]});
+                client
+                    .patch(
+                        &format!(
+                            "/v3/workspaces/{}/tasks/{}/time_estimates_by_user",
+                            team_id, task_id
+                        ),
+                        &body,
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+            } else {
+                let body = json!({"time_estimate": time_estimate});
+                client
+                    .put(&format!("/v2/task/{}", task_id), &body)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
             Ok(json!({"message": format!("Time estimate set for task {}", task_id)}))
         }
 
