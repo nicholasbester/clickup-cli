@@ -245,11 +245,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_comment_list",
-            "description": "List comments on a ClickUp task in chronological order (oldest first). Only top-level comments are returned; use clickup_comment_replies to fetch a threaded reply chain. Returns a compact array of comment objects (id, comment_text, user, resolved, date).",
+            "description": "List comments on a ClickUp task, newest first. Only top-level comments are returned; use clickup_comment_replies to fetch a threaded reply chain. Supports ClickUp's start/start_id pagination and returns compact comments plus pagination metadata.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "string", "description": "ID of the task to read comments from. Obtain from clickup_task_list (field: id) or clickup_task_search."}
+                    "task_id": {"type": "string", "description": "ID of the task to read comments from. Obtain from clickup_task_list (field: id) or clickup_task_search."},
+                    "start": {"type": "integer", "description": "Unix timestamp in milliseconds from the last comment of the previous page. Must be provided together with start_id."},
+                    "start_id": {"type": "string", "description": "Comment ID from the last comment of the previous page. Must be provided together with start."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of comments to return in this tool response."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch comment pages until fewer than 25 comments are returned or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["task_id"]
             }
@@ -425,23 +429,28 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_view_tasks",
-            "description": "Fetch the tasks currently visible in a ClickUp view, honouring the view's configured filters, sort order, and grouping. Returns a paginated array of task objects. Use clickup_view_list to discover view IDs and clickup_view_get for the view's definition.",
+            "description": "Fetch the tasks currently visible in a ClickUp view, honouring the view's configured filters, sort order, and grouping. Returns compact task objects plus pagination metadata. Use page to fetch a specific zero-based ClickUp page, limit to cap returned tasks, or all to auto-fetch pages until ClickUp reports last_page.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "view_id": {"type": "string", "description": "ID of the view to read tasks from. Obtain from clickup_view_list (field: id)."},
-                    "page": {"type": "integer", "description": "Zero-indexed page number (default 0). Each page returns up to 30 tasks; increment to paginate."}
+                    "page": {"type": "integer", "minimum": 0, "description": "Zero-based ClickUp task page to fetch. Defaults to 0. When all is true, this is the starting page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of tasks to return in this tool response. With all=true, this caps the total across fetched pages; otherwise it caps the fetched page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp returns last_page=true or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["view_id"]
             }
         },
         {
             "name": "clickup_doc_list",
-            "description": "List all ClickUp docs in a workspace. Docs are long-form markdown documents separate from tasks and can contain nested pages. Returns a compact array of doc objects (id, name, date_created, date_updated). Use clickup_doc_get for a single doc or clickup_doc_pages to list a doc's pages. Uses v3 cursor pagination.",
+            "description": "List all ClickUp docs in a workspace. Docs are long-form markdown documents separate from tasks and can contain nested pages. Returns compact docs plus cursor pagination metadata. Use clickup_doc_get for a single doc or clickup_doc_pages to list a doc's pages.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."}
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of docs to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": []
             }
@@ -531,12 +540,14 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_template_list",
-            "description": "List the task templates available in a workspace. Task templates are saved task shapes (name, description, checklists, subtasks, custom fields, etc.) that can be applied via clickup_template_apply_task to create new tasks quickly. Returns an array of template objects (id, name).",
+            "description": "List the task templates available in a workspace. Task templates are saved task shapes that can be applied via clickup_template_apply_task. Returns compact templates plus pagination metadata. Use page to fetch a specific zero-based page, limit to cap returned templates, or all to auto-fetch until a short page is returned.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "page": {"type": "integer", "description": "Zero-indexed page number (default 0). Each page returns up to 100 templates; increment to paginate."}
+                    "page": {"type": "integer", "minimum": 0, "description": "Zero-based page number. Defaults to 0. When all is true, this is the starting page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of templates to return in this tool response."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until fewer than 100 templates are returned or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": []
             }
@@ -1046,13 +1057,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_message_list",
-            "description": "List messages in a ClickUp Chat channel, newest first. Only top-level messages are returned; use clickup_chat_reply_list for threaded replies. Uses v3 cursor pagination — pass the 'cursor' from the previous response to page further back. Returns an array of message objects plus a next_cursor.",
+            "description": "List messages in a ClickUp Chat channel, newest first. Only top-level messages are returned; use clickup_chat_reply_list for threaded replies. Returns compact messages plus cursor pagination metadata.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."},
-                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page (newest messages)."}
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page (newest messages)."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of messages to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["channel_id"]
             }
@@ -1274,12 +1287,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_attachment_list",
-            "description": "List files attached to a ClickUp task — each attachment's id, title, size, mime type, url, and uploader. Extracts the attachments array from the Get Task response (ClickUp has no dedicated list endpoint). Use clickup_attachment_upload to add a new file. Returns an array of attachment objects.",
+            "description": "List files attached to a ClickUp task using ClickUp's v3 cursor-paginated attachment endpoint. Returns compact attachments plus pagination metadata. Use clickup_attachment_upload to add a new file.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "task_id": {"type": "string", "description": "ID of the task whose attachments to list. Obtain from clickup_task_list (field: id)."}
+                    "task_id": {"type": "string", "description": "ID of the task whose attachments to list. Obtain from clickup_task_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of attachments to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["task_id"]
             }
@@ -1484,36 +1500,45 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_channel_list",
-            "description": "List all ClickUp Chat channels in a workspace that the authenticated user can see. Uses v3 cursor pagination. Returns an array of channel objects (id, name, visibility, topic, last_message_at). Use clickup_chat_channel_create to create new channels.",
+            "description": "List all ClickUp Chat channels in a workspace that the authenticated user can see. Returns compact channels plus cursor pagination metadata. Use clickup_chat_channel_create to create new channels.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "include_closed": {"type": "boolean", "description": "true = include archived/closed channels in the result; false or omitted = only active channels."}
+                    "include_closed": {"type": "boolean", "description": "true = include archived/closed channels in the result; false or omitted = only active channels."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of channels to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": []
             }
         },
         {
             "name": "clickup_chat_channel_followers",
-            "description": "List the users who follow (receive notifications from) a ClickUp Chat channel. Followers are a subset of members — a member may or may not be a follower. Returns an array of user objects.",
+            "description": "List the users who follow (receive notifications from) a ClickUp Chat channel. Followers are a subset of members. Returns compact users plus cursor pagination metadata.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."}
+                    "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of followers to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["channel_id"]
             }
         },
         {
             "name": "clickup_chat_channel_members",
-            "description": "List the users who are members of a ClickUp Chat channel (can read and post). For notification-receivers only use clickup_chat_channel_followers. Returns an array of user objects (id, username, email).",
+            "description": "List the users who are members of a ClickUp Chat channel (can read and post). For notification-receivers only use clickup_chat_channel_followers. Returns compact users plus cursor pagination metadata.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."}
+                    "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of members to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["channel_id"]
             }
@@ -1533,12 +1558,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_reaction_list",
-            "description": "List the emoji reactions on a ClickUp Chat message grouped by emoji — each entry includes the emoji, count, and the users who reacted with it. Returns an array of reaction summary objects.",
+            "description": "List the emoji reactions on a ClickUp Chat message grouped by emoji. Returns reaction summaries plus cursor pagination metadata.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "message_id": {"type": "string", "description": "ID of the message whose reactions to list. Obtain from clickup_chat_message_list (field: id)."}
+                    "message_id": {"type": "string", "description": "ID of the message whose reactions to list. Obtain from clickup_chat_message_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of reactions to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["message_id"]
             }
@@ -1571,12 +1599,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_reply_list",
-            "description": "List the threaded replies attached to a top-level ClickUp Chat message, oldest first. Returns an array of reply objects. Use clickup_chat_reply_send to post a new reply.",
+            "description": "List the threaded replies attached to a top-level ClickUp Chat message, oldest first. Returns replies plus cursor pagination metadata. Use clickup_chat_reply_send to post a new reply.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "message_id": {"type": "string", "description": "ID of the parent message. Obtain from clickup_chat_message_list (field: id)."}
+                    "message_id": {"type": "string", "description": "ID of the parent message. Obtain from clickup_chat_message_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of replies to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["message_id"]
             }
@@ -1596,12 +1627,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_tagged_users",
-            "description": "List the users explicitly @-mentioned (tagged) in a ClickUp Chat message body. Useful for reading who a message was addressed to. Returns an array of user objects.",
+            "description": "List the users explicitly @-mentioned (tagged) in a ClickUp Chat message body. Useful for reading who a message was addressed to. Returns compact users plus cursor pagination metadata.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "message_id": {"type": "string", "description": "ID of the message. Obtain from clickup_chat_message_list (field: id)."}
+                    "message_id": {"type": "string", "description": "ID of the message. Obtain from clickup_chat_message_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from the previous response's next_cursor field. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Maximum number of users to fetch for this request/page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until ClickUp omits next_cursor or limit is reached; false or omitted = fetch one page."}
                 },
                 "required": ["message_id"]
             }
@@ -1929,7 +1963,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_audit_log_query",
-            "description": "Query the ClickUp audit log (who did what, when) for a workspace — filter by event type, acting user, and date range. Requires Enterprise plan. Uses v3 cursor pagination. Returns an array of audit event objects (actor, event, target, timestamp).",
+            "description": "Query the ClickUp audit log (who did what, when) for a workspace — filter by event type, acting user, and date range. Requires Enterprise plan. Supports ClickUp's audit-log pagination body fields.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1937,7 +1971,10 @@ pub fn tool_list() -> Value {
                     "type": {"type": "string", "description": "Audit event type filter (e.g. 'task_created', 'user_added', 'permission_changed'). Required. See ClickUp docs for the full list."},
                     "user_id": {"type": "integer", "description": "Restrict to events performed by this user ID. Obtain from clickup_member_list. Omit for all users."},
                     "start_date": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds (e.g. 1735689600000 for 2025-01-01). Omit for no lower bound."},
-                    "end_date": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Omit for no upper bound."}
+                    "end_date": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Omit for no upper bound."},
+                    "page_rows": {"type": "integer", "minimum": 1, "description": "Number of audit rows to return for this page."},
+                    "page_timestamp": {"type": "integer", "description": "Timestamp anchor for audit-log pagination. Use the timestamp of the last row from the previous page, or a current timestamp for the first page."},
+                    "page_direction": {"type": "string", "enum": ["before", "after"], "description": "Audit-log pagination direction. Defaults to before when omitted by ClickUp."}
                 },
                 "required": ["type"]
             }
@@ -1982,12 +2019,35 @@ pub fn filtered_tool_list(filter: &filter::Filter) -> serde_json::Value {
 // ── Tool execution ────────────────────────────────────────────────────────────
 
 const MCP_TASK_FIELDS: &[&str] = &["id", "name", "status", "priority", "assignees", "due_date"];
+const MCP_COMMENT_FIELDS: &[&str] = &["id", "user", "date", "comment_text"];
+const MCP_DOC_FIELDS: &[&str] = &["id", "name", "date_created", "date_updated"];
+const MCP_CHANNEL_FIELDS: &[&str] = &["id", "name", "type"];
+const MCP_USER_FIELDS: &[&str] = &["id", "username", "email"];
+const MCP_MESSAGE_FIELDS: &[&str] = &["id", "content", "date"];
+const MCP_ATTACHMENT_FIELDS: &[&str] = &["id", "title", "url", "date"];
 
 #[derive(Debug, Clone, Copy)]
 struct TaskPagination {
     page: u32,
     all: bool,
     limit: Option<usize>,
+}
+
+fn parse_positive_usize(args: &Value, name: &str) -> Result<Option<usize>, String> {
+    match args.get(name) {
+        Some(v) => {
+            let n = v
+                .as_u64()
+                .ok_or_else(|| format!("Parameter {} must be a positive integer", name))?;
+            if n == 0 {
+                return Err(format!("Parameter {} must be a positive integer", name));
+            }
+            Ok(Some(usize::try_from(n).map_err(|_| {
+                format!("Parameter {} is too large for this platform", name)
+            })?))
+        }
+        None => Ok(None),
+    }
 }
 
 fn task_pagination(args: &Value) -> Result<TaskPagination, String> {
@@ -2002,26 +2062,62 @@ fn task_pagination(args: &Value) -> Result<TaskPagination, String> {
         None => 0,
     };
 
-    let limit = match args.get("limit") {
-        Some(v) => {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| "Parameter limit must be a positive integer".to_string())?;
-            if n == 0 {
-                return Err("Parameter limit must be a positive integer".to_string());
-            }
-            Some(
-                usize::try_from(n)
-                    .map_err(|_| "Parameter limit is too large for this platform".to_string())?,
-            )
-        }
-        None => None,
-    };
-
     Ok(TaskPagination {
         page,
         all: args.get("all").and_then(|v| v.as_bool()).unwrap_or(false),
-        limit,
+        limit: parse_positive_usize(args, "limit")?,
+    })
+}
+
+#[derive(Debug, Clone)]
+struct CursorPagination {
+    cursor: Option<String>,
+    all: bool,
+    limit: Option<usize>,
+}
+
+fn cursor_pagination(args: &Value) -> Result<CursorPagination, String> {
+    Ok(CursorPagination {
+        cursor: args
+            .get("cursor")
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+            .map(str::to_string),
+        all: args.get("all").and_then(|v| v.as_bool()).unwrap_or(false),
+        limit: parse_positive_usize(args, "limit")?,
+    })
+}
+
+#[derive(Debug, Clone)]
+struct CommentPagination {
+    start: Option<i64>,
+    start_id: Option<String>,
+    all: bool,
+    limit: Option<usize>,
+}
+
+fn comment_pagination(args: &Value) -> Result<CommentPagination, String> {
+    let start = match args.get("start") {
+        Some(v) => Some(v.as_i64().ok_or_else(|| {
+            "Parameter start must be a Unix timestamp in milliseconds".to_string()
+        })?),
+        None => None,
+    };
+    let start_id = args
+        .get("start_id")
+        .and_then(|v| v.as_str())
+        .filter(|v| !v.is_empty())
+        .map(str::to_string);
+
+    if start.is_some() != start_id.is_some() {
+        return Err("Parameters start and start_id must be provided together".to_string());
+    }
+
+    Ok(CommentPagination {
+        start,
+        start_id,
+        all: args.get("all").and_then(|v| v.as_bool()).unwrap_or(false),
+        limit: parse_positive_usize(args, "limit")?,
     })
 }
 
@@ -2076,6 +2172,228 @@ fn paginated_task_response(
             "truncated": truncated
         }
     })
+}
+
+fn response_items(resp: &Value, keys: &[&str]) -> Vec<Value> {
+    keys.iter()
+        .find_map(|key| resp.get(*key).and_then(|items| items.as_array()).cloned())
+        .unwrap_or_default()
+}
+
+fn next_cursor(resp: &Value) -> Option<String> {
+    resp.get("next_cursor")
+        .and_then(|v| v.as_str())
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+}
+
+fn cursor_paginated_response(
+    key: &str,
+    items: Value,
+    pagination: &CursorPagination,
+    count: usize,
+    pages_fetched: u32,
+    next_cursor: Option<String>,
+) -> Value {
+    let has_more = next_cursor.is_some();
+    json!({
+        key: items,
+        "pagination": {
+            "cursor": pagination.cursor,
+            "all": pagination.all,
+            "limit": pagination.limit,
+            "count": count,
+            "pages_fetched": pages_fetched,
+            "next_cursor": next_cursor,
+            "has_more": has_more
+        }
+    })
+}
+
+async fn fetch_cursor_paginated_items(
+    client: &ClickUpClient,
+    base_path: &str,
+    params: Vec<String>,
+    response_keys: &[&str],
+    pagination: CursorPagination,
+) -> Result<(Vec<Value>, Option<String>, u32), String> {
+    let mut items = Vec::new();
+    let mut cursor = pagination.cursor.clone();
+    let mut pages_fetched = 0u32;
+
+    loop {
+        let mut page_params = params.clone();
+        if let Some(cursor) = &cursor {
+            page_params.push(format!("cursor={}", cursor));
+        }
+        if let Some(limit) = pagination.limit {
+            let remaining = limit.saturating_sub(items.len());
+            if remaining == 0 {
+                return Ok((items, cursor, pages_fetched));
+            }
+            page_params.push(format!("limit={}", remaining));
+        }
+
+        let path = format!("{}{}", base_path, query_string(&page_params));
+        let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+        let page_items = response_items(&resp, response_keys);
+        let page_next_cursor = next_cursor(&resp);
+
+        items.extend(page_items);
+        pages_fetched += 1;
+
+        if let Some(limit) = pagination.limit {
+            if items.len() >= limit {
+                items.truncate(limit);
+                return Ok((items, page_next_cursor, pages_fetched));
+            }
+        }
+
+        if !pagination.all || page_next_cursor.is_none() {
+            return Ok((items, page_next_cursor, pages_fetched));
+        }
+
+        cursor = page_next_cursor;
+    }
+}
+
+fn comment_page_token(comments: &[Value]) -> (Option<i64>, Option<String>) {
+    comments.last().map_or((None, None), |comment| {
+        let start = comment
+            .get("date")
+            .and_then(|v| v.as_i64())
+            .or_else(|| comment.get("date").and_then(|v| v.as_str()?.parse().ok()));
+        let start_id = comment
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        (start, start_id)
+    })
+}
+
+async fn fetch_paginated_comments(
+    client: &ClickUpClient,
+    base_path: &str,
+    pagination: CommentPagination,
+) -> Result<Value, String> {
+    const COMMENT_PAGE_SIZE: usize = 25;
+
+    let mut comments = Vec::new();
+    let mut start = pagination.start;
+    let mut start_id = pagination.start_id.clone();
+    let mut pages_fetched = 0u32;
+    let mut has_more;
+
+    loop {
+        let mut params = Vec::new();
+        if let (Some(start), Some(start_id)) = (start, start_id.as_ref()) {
+            params.push(format!("start={}", start));
+            params.push(format!("start_id={}", start_id));
+        }
+
+        let path = format!("{}{}", base_path, query_string(&params));
+        let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+        let mut page_comments = response_items(&resp, &["comments"]);
+        pages_fetched += 1;
+
+        has_more = page_comments.len() >= COMMENT_PAGE_SIZE;
+
+        if let Some(limit) = pagination.limit {
+            let remaining = limit.saturating_sub(comments.len());
+            if page_comments.len() > remaining {
+                page_comments.truncate(remaining);
+                has_more = true;
+            }
+        }
+
+        comments.extend(page_comments);
+
+        if let Some(limit) = pagination.limit {
+            if comments.len() >= limit {
+                break;
+            }
+        }
+
+        if !pagination.all || !has_more {
+            break;
+        }
+
+        let (next_start, next_start_id) = comment_page_token(&comments);
+        if next_start.is_none() || next_start_id.is_none() {
+            has_more = false;
+            break;
+        }
+        start = next_start;
+        start_id = next_start_id;
+    }
+
+    let (next_start, next_start_id) = if has_more {
+        comment_page_token(&comments)
+    } else {
+        (None, None)
+    };
+
+    Ok(json!({
+        "comments": compact_items(&comments, MCP_COMMENT_FIELDS),
+        "pagination": {
+            "start": pagination.start,
+            "start_id": pagination.start_id,
+            "all": pagination.all,
+            "limit": pagination.limit,
+            "count": comments.len(),
+            "pages_fetched": pages_fetched,
+            "has_more": has_more,
+            "next_start": next_start,
+            "next_start_id": next_start_id
+        }
+    }))
+}
+
+async fn fetch_count_paginated_items(
+    client: &ClickUpClient,
+    base_path: &str,
+    response_key: &str,
+    pagination: TaskPagination,
+    page_size: usize,
+) -> Result<(Vec<Value>, bool, u32), String> {
+    let mut items = Vec::new();
+    let mut page = pagination.page;
+    let mut pages_fetched = 0u32;
+    let mut has_more;
+
+    loop {
+        let path = format!("{}?page={}", base_path, page);
+        let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+        let mut page_items = response_items(&resp, &[response_key]);
+        pages_fetched += 1;
+        has_more = page_items.len() >= page_size;
+
+        if let Some(limit) = pagination.limit {
+            let remaining = limit.saturating_sub(items.len());
+            if page_items.len() > remaining {
+                page_items.truncate(remaining);
+                has_more = true;
+            }
+        }
+
+        items.extend(page_items);
+
+        if let Some(limit) = pagination.limit {
+            if items.len() >= limit {
+                break;
+            }
+        }
+
+        if !pagination.all || !has_more {
+            break;
+        }
+
+        page = page
+            .checked_add(1)
+            .ok_or_else(|| "Next page exceeds ClickUp pagination range".to_string())?;
+    }
+
+    Ok((items, has_more, pages_fetched))
 }
 
 async fn fetch_paginated_tasks(
@@ -2411,17 +2729,9 @@ async fn dispatch_tool(
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
+            let pagination = comment_pagination(args)?;
             let path = format!("/v2/task/{}/comment", task_id);
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let comments = resp
-                .get("comments")
-                .and_then(|c| c.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(
-                &comments,
-                &["id", "user", "date", "comment_text"],
-            ))
+            fetch_paginated_comments(client, &path, pagination).await
         }
 
         "clickup_comment_create" => {
@@ -2665,30 +2975,31 @@ async fn dispatch_tool(
                 .get("view_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: view_id")?;
-            let page = args.get("page").and_then(|v| v.as_i64()).unwrap_or(0);
-            let path = format!("/v2/view/{}/task?page={}", view_id, page);
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let tasks = resp
-                .get("tasks")
-                .and_then(|t| t.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(
-                &tasks,
-                &["id", "name", "status", "priority", "assignees", "due_date"],
-            ))
+            let pagination = task_pagination(args)?;
+            let base_path = format!("/v2/view/{}/task", view_id);
+            fetch_paginated_tasks(client, &base_path, Vec::new(), pagination).await
         }
 
         "clickup_doc_list" => {
             let team_id = resolve_workspace(args)?;
+            let pagination = cursor_pagination(args)?;
             let path = format!("/v3/workspaces/{}/docs", team_id);
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let docs = resp
-                .get("docs")
-                .and_then(|d| d.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(&docs, &["id", "name", "date_created"]))
+            let (docs, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                Vec::new(),
+                &["docs"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "docs",
+                compact_items(&docs, MCP_DOC_FIELDS),
+                &pagination,
+                docs.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_doc_get" => {
@@ -2802,15 +3113,28 @@ async fn dispatch_tool(
 
         "clickup_template_list" => {
             let team_id = resolve_workspace(args)?;
-            let page = args.get("page").and_then(|v| v.as_i64()).unwrap_or(0);
-            let path = format!("/v2/team/{}/taskTemplate?page={}", team_id, page);
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let templates = resp
-                .get("templates")
-                .and_then(|t| t.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(&templates, &["id", "name"]))
+            let pagination = task_pagination(args)?;
+            let base_path = format!("/v2/team/{}/taskTemplate", team_id);
+            let (templates, has_more, pages_fetched) =
+                fetch_count_paginated_items(client, &base_path, "templates", pagination, 100)
+                    .await?;
+            let next_page = if has_more {
+                pagination.page.checked_add(pages_fetched)
+            } else {
+                None
+            };
+            Ok(json!({
+                "templates": compact_items(&templates, &["id", "name"]),
+                "pagination": {
+                    "page": pagination.page,
+                    "all": pagination.all,
+                    "limit": pagination.limit,
+                    "count": templates.len(),
+                    "pages_fetched": pages_fetched,
+                    "has_more": has_more,
+                    "next_page": next_page
+                }
+            }))
         }
 
         "clickup_space_get" => {
@@ -3591,20 +3915,27 @@ async fn dispatch_tool(
                 .get("channel_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: channel_id")?;
-            let mut path = format!(
+            let pagination = cursor_pagination(args)?;
+            let path = format!(
                 "/v3/workspaces/{}/chat/channels/{}/messages",
                 team_id, channel_id
             );
-            if let Some(cursor) = args.get("cursor").and_then(|v| v.as_str()) {
-                path.push_str(&format!("?cursor={}", cursor));
-            }
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let messages = resp
-                .get("messages")
-                .and_then(|m| m.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(&messages, &["id", "content", "date"]))
+            let (messages, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                Vec::new(),
+                &["data", "messages"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "messages",
+                compact_items(&messages, MCP_MESSAGE_FIELDS),
+                &pagination,
+                messages.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_chat_message_send" => {
@@ -3927,22 +4258,32 @@ async fn dispatch_tool(
         }
 
         "clickup_attachment_list" => {
+            let team_id = resolve_workspace(args)?;
             let task_id = args
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
-            // ClickUp has no dedicated list-attachments endpoint. The `attachments`
-            // array is returned inline by GET /v2/task/{id}, per the API docs.
-            let resp = client
-                .get(&format!("/v2/task/{}", task_id))
-                .await
-                .map_err(|e| e.to_string())?;
-            let attachments = resp
-                .get("attachments")
-                .and_then(|a| a.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(&attachments, &["id", "title", "url", "date"]))
+            let pagination = cursor_pagination(args)?;
+            let path = format!(
+                "/v3/workspaces/{}/attachments/{}/attachments",
+                team_id, task_id
+            );
+            let (attachments, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                Vec::new(),
+                &["data", "attachments"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "attachments",
+                compact_items(&attachments, MCP_ATTACHMENT_FIELDS),
+                &pagination,
+                attachments.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_shared_list" => {
@@ -4215,17 +4556,28 @@ async fn dispatch_tool(
 
         "clickup_chat_channel_list" => {
             let team_id = resolve_workspace(args)?;
-            let mut path = format!("/v3/workspaces/{}/chat/channels", team_id);
+            let pagination = cursor_pagination(args)?;
+            let mut params = Vec::new();
             if let Some(include_closed) = args.get("include_closed").and_then(|v| v.as_bool()) {
-                path.push_str(&format!("?include_closed={}", include_closed));
+                params.push(format!("include_closed={}", include_closed));
             }
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let channels = resp
-                .get("channels")
-                .and_then(|c| c.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(&channels, &["id", "name", "type"]))
+            let path = format!("/v3/workspaces/{}/chat/channels", team_id);
+            let (channels, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                params,
+                &["data", "channels"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "channels",
+                compact_items(&channels, MCP_CHANNEL_FIELDS),
+                &pagination,
+                channels.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_chat_channel_followers" => {
@@ -4234,14 +4586,27 @@ async fn dispatch_tool(
                 .get("channel_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: channel_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/channels/{}/followers",
-                    team_id, channel_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+            let pagination = cursor_pagination(args)?;
+            let path = format!(
+                "/v3/workspaces/{}/chat/channels/{}/followers",
+                team_id, channel_id
+            );
+            let (followers, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                Vec::new(),
+                &["data", "followers"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "followers",
+                compact_items(&followers, MCP_USER_FIELDS),
+                &pagination,
+                followers.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_chat_channel_members" => {
@@ -4250,14 +4615,27 @@ async fn dispatch_tool(
                 .get("channel_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: channel_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/channels/{}/members",
-                    team_id, channel_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+            let pagination = cursor_pagination(args)?;
+            let path = format!(
+                "/v3/workspaces/{}/chat/channels/{}/members",
+                team_id, channel_id
+            );
+            let (members, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                Vec::new(),
+                &["data", "members"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "members",
+                compact_items(&members, MCP_USER_FIELDS),
+                &pagination,
+                members.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_chat_message_update" => {
@@ -4287,14 +4665,27 @@ async fn dispatch_tool(
                 .get("message_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: message_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/messages/{}/reactions",
-                    team_id, message_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+            let pagination = cursor_pagination(args)?;
+            let path = format!(
+                "/v3/workspaces/{}/chat/messages/{}/reactions",
+                team_id, message_id
+            );
+            let (reactions, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                Vec::new(),
+                &["data", "reactions"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "reactions",
+                Value::Array(reactions.clone()),
+                &pagination,
+                reactions.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_chat_reaction_add" => {
@@ -4349,14 +4740,27 @@ async fn dispatch_tool(
                 .get("message_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: message_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/messages/{}/replies",
-                    team_id, message_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+            let pagination = cursor_pagination(args)?;
+            let path = format!(
+                "/v3/workspaces/{}/chat/messages/{}/replies",
+                team_id, message_id
+            );
+            let (replies, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                Vec::new(),
+                &["data", "replies"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "replies",
+                Value::Array(replies.clone()),
+                &pagination,
+                replies.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_chat_reply_send" => {
@@ -4389,14 +4793,27 @@ async fn dispatch_tool(
                 .get("message_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: message_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/messages/{}/tagged_users",
-                    team_id, message_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+            let pagination = cursor_pagination(args)?;
+            let path = format!(
+                "/v3/workspaces/{}/chat/messages/{}/tagged_users",
+                team_id, message_id
+            );
+            let (users, next_cursor, pages_fetched) = fetch_cursor_paginated_items(
+                client,
+                &path,
+                Vec::new(),
+                &["data", "users"],
+                pagination.clone(),
+            )
+            .await?;
+            Ok(cursor_paginated_response(
+                "users",
+                compact_items(&users, MCP_USER_FIELDS),
+                &pagination,
+                users.len(),
+                pages_fetched,
+                next_cursor,
+            ))
         }
 
         "clickup_time_current" => {
@@ -4869,6 +5286,29 @@ async fn dispatch_tool(
                 body["date_filter"] = json!({"start_date": start_date, "end_date": args.get("end_date").and_then(|v| v.as_i64()).unwrap_or(i64::MAX)});
             } else if let Some(end_date) = args.get("end_date").and_then(|v| v.as_i64()) {
                 body["date_filter"] = json!({"end_date": end_date});
+            }
+            let mut pagination = json!({});
+            if let Some(page_rows) = args.get("page_rows").and_then(|v| v.as_u64()) {
+                if page_rows == 0 {
+                    return Err("Parameter page_rows must be a positive integer".to_string());
+                }
+                pagination["pageRows"] = json!(page_rows);
+            }
+            if let Some(page_timestamp) = args.get("page_timestamp").and_then(|v| v.as_i64()) {
+                pagination["pageTimestamp"] = json!(page_timestamp);
+            }
+            if let Some(page_direction) = args.get("page_direction").and_then(|v| v.as_str()) {
+                if page_direction != "before" && page_direction != "after" {
+                    return Err("Parameter page_direction must be 'before' or 'after'".to_string());
+                }
+                pagination["pageDirection"] = json!(page_direction);
+            }
+            if pagination
+                .as_object()
+                .map(|o| !o.is_empty())
+                .unwrap_or(false)
+            {
+                body["pagination"] = pagination;
             }
             let resp = client
                 .post(&format!("/v3/workspaces/{}/auditlogs", team_id), &body)

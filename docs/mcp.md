@@ -210,7 +210,7 @@ All tool names are prefixed with `clickup_` (e.g., `clickup_task_list`).
 
 The MCP server uses JSON-RPC 2.0 over stdio. It reads requests from stdin and writes responses to stdout. The server uses the same HTTP client and authentication as the CLI commands, and returns **token-efficient compact responses** — the same field flattening as the CLI's table output, but as JSON. Status objects, priority objects, assignee arrays, and timestamps are all flattened to simple values.
 
-Paginated task tools (`clickup_task_list` and `clickup_task_search`) accept `page`, `limit`, and `all`. `page` is ClickUp's zero-based page number, `limit` caps the number of tasks returned in the tool response, and `all=true` auto-fetches pages until ClickUp reports `last_page=true` or `limit` is reached. These tools return `{ "tasks": [...], "pagination": {...} }`, including `count`, `pages_fetched`, `last_page`, `has_more`, `next_page`, and `truncated`.
+Paginated MCP tools expose the pagination controls used by the underlying ClickUp endpoint and include pagination metadata in the response. Page-based task tools (`clickup_task_list`, `clickup_task_search`, and `clickup_view_tasks`) accept `page`, `limit`, and `all`, and return `last_page`, `has_more`, and `next_page` metadata. Cursor-based v3 tools such as docs, chat, and attachments accept `cursor`, `limit`, and `all`, and return `next_cursor`. Task comments accept ClickUp's `start` and `start_id` pair, plus `limit` and `all`. Audit logs expose `page_rows`, `page_timestamp`, and `page_direction`.
 
 ```
 LLM ↔ JSON-RPC (stdio) ↔ clickup mcp serve ↔ ClickUp API

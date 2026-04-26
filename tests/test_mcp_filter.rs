@@ -266,11 +266,16 @@ fn filtered_tool_list_returns_only_allowed_tools() {
 }
 
 #[test]
-fn task_tools_expose_pagination_controls() {
+fn paginated_tools_expose_pagination_controls() {
     let tools = tool_list();
     let array = tools.as_array().unwrap();
 
-    for tool_name in ["clickup_task_list", "clickup_task_search"] {
+    for tool_name in [
+        "clickup_task_list",
+        "clickup_task_search",
+        "clickup_view_tasks",
+        "clickup_template_list",
+    ] {
         let tool = array
             .iter()
             .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some(tool_name))
@@ -292,12 +297,72 @@ fn task_tools_expose_pagination_controls() {
             "{} should expose all",
             tool_name
         );
+    }
+
+    for tool_name in [
+        "clickup_doc_list",
+        "clickup_attachment_list",
+        "clickup_chat_channel_list",
+        "clickup_chat_channel_followers",
+        "clickup_chat_channel_members",
+        "clickup_chat_message_list",
+        "clickup_chat_reaction_list",
+        "clickup_chat_reply_list",
+        "clickup_chat_tagged_users",
+    ] {
+        let tool = array
+            .iter()
+            .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some(tool_name))
+            .unwrap_or_else(|| panic!("missing tool {}", tool_name));
+        let properties = tool["inputSchema"]["properties"].as_object().unwrap();
+
+        assert!(
+            properties.contains_key("cursor"),
+            "{} should expose cursor",
+            tool_name
+        );
+        assert!(
+            properties.contains_key("limit"),
+            "{} should expose limit",
+            tool_name
+        );
+        assert!(
+            properties.contains_key("all"),
+            "{} should expose all",
+            tool_name
+        );
 
         let description = tool["description"].as_str().unwrap();
         assert!(
             description.contains("pagination metadata"),
             "{} should document pagination metadata",
             tool_name
+        );
+    }
+
+    let comments = array
+        .iter()
+        .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some("clickup_comment_list"))
+        .expect("missing clickup_comment_list");
+    let properties = comments["inputSchema"]["properties"].as_object().unwrap();
+    for prop in ["start", "start_id", "limit", "all"] {
+        assert!(
+            properties.contains_key(prop),
+            "clickup_comment_list should expose {}",
+            prop
+        );
+    }
+
+    let audit = array
+        .iter()
+        .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some("clickup_audit_log_query"))
+        .expect("missing clickup_audit_log_query");
+    let properties = audit["inputSchema"]["properties"].as_object().unwrap();
+    for prop in ["page_rows", "page_timestamp", "page_direction"] {
+        assert!(
+            properties.contains_key(prop),
+            "clickup_audit_log_query should expose {}",
+            prop
         );
     }
 }
