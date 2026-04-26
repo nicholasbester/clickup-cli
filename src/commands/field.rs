@@ -28,7 +28,7 @@ pub enum FieldCommands {
     Set {
         /// Field ID
         field_id: String,
-        /// Field value (string, number, or JSON)
+        /// Field value (string, number, or JSON; use the option ID for drop_down fields)
         #[arg(long)]
         value: String,
         /// Task ID (auto-detected from git branch if omitted)

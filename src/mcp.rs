@@ -1,6 +1,6 @@
 use crate::client::ClickUpClient;
 use crate::config::Config;
-use crate::output::compact_items;
+use crate::output::{compact_items, flatten_value};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -264,7 +264,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_field_list",
-            "description": "List the custom field definitions available on a ClickUp list — field id, name, type (text, number, dropdown, labels, date, url, email, phone, money, progress, formula, etc.), and for dropdown/labels fields the permitted option values. Use this before clickup_field_set to learn the correct field_id and value shape. Returns an array of custom field definitions.",
+            "description": "List the custom field definitions available on a ClickUp list — field id, name, type (text, number, drop_down, labels, date, url, email, phone, money, progress, formula, etc.), and for drop_down/labels fields the permitted option values extracted from type_config.options. Use this before clickup_field_set to learn the correct field_id, option ids, and value shape. Returns an array of custom field definitions.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -275,13 +275,13 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_field_set",
-            "description": "Set or overwrite a single custom field value on a ClickUp task. The value's JSON shape must match the field type (string for text/url/email, number for number/currency/progress, array of option ids for dropdown/labels, Unix ms for date, etc.). Use clickup_field_list first to see the field type and option ids. Use clickup_field_unset to clear a value. Returns an empty object on success.",
+            "description": "Set or overwrite a single custom field value on a ClickUp task. The value's JSON shape must match the field type (string for text/url/email and for a drop_down option id, number for number/currency/progress, array of option ids for labels, Unix ms for date, etc.). Use clickup_field_list first to see the field type and option ids. Use clickup_field_unset to clear a value. Returns an empty object on success.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task whose field value should change. Obtain from clickup_task_list (field: id)."},
                     "field_id": {"type": "string", "description": "ID of the custom field to set. Obtain from clickup_field_list (field: id) or clickup_task_get (custom_fields[].id)."},
-                    "value": {"description": "New value; the accepted type depends on the custom field type. Examples: 'hello' (text), 42 (number), ['option-uuid'] (dropdown), 1735689600000 (date as Unix ms). See clickup_field_list for the field's type."}
+                    "value": {"description": "New value; the accepted type depends on the custom field type. Examples: 'hello' (text), 42 (number), 'option-uuid' (drop_down), ['option-uuid'] (labels), 1735689600000 (date as Unix ms). See clickup_field_list for the field's type and option ids."}
                 },
                 "required": ["task_id", "field_id", "value"]
             }
@@ -1973,6 +1973,35 @@ pub fn filtered_tool_list(filter: &filter::Filter) -> serde_json::Value {
     serde_json::Value::Array(filtered)
 }
 
+/// Compact custom field definitions while preserving option IDs for fields
+/// whose possible values live in `type_config.options`.
+pub fn compact_custom_fields(fields: &[Value]) -> Value {
+    let compacted: Vec<Value> = fields
+        .iter()
+        .map(|field| {
+            let mut obj = serde_json::Map::new();
+            for key in ["id", "name", "type", "required"] {
+                obj.insert(
+                    key.to_string(),
+                    Value::String(flatten_value(field.get(key))),
+                );
+            }
+
+            if let Some(options) = field
+                .get("type_config")
+                .and_then(|config| config.get("options"))
+                .and_then(|options| options.as_array())
+            {
+                obj.insert("options".to_string(), Value::Array(options.clone()));
+            }
+
+            Value::Object(obj)
+        })
+        .collect();
+
+    Value::Array(compacted)
+}
+
 // ── Tool execution ────────────────────────────────────────────────────────────
 
 async fn call_tool(
@@ -2345,7 +2374,7 @@ async fn dispatch_tool(
                 .and_then(|f| f.as_array())
                 .cloned()
                 .unwrap_or_default();
-            Ok(compact_items(&fields, &["id", "name", "type", "required"]))
+            Ok(compact_custom_fields(&fields))
         }
 
         "clickup_field_set" => {

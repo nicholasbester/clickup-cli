@@ -176,7 +176,7 @@ clickup view tasks VIEW_ID
 # Tags and custom fields
 clickup tag list --space 12345
 clickup field list --list 12345
-clickup field set TASK_ID FIELD_ID --value "some value"
+clickup field set FIELD_ID --value "some value" TASK_ID
 
 # Chat (v3)
 clickup chat channel-list
