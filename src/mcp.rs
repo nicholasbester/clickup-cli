@@ -25,6 +25,126 @@ fn tool_error(msg: String) -> Value {
     json!({"content":[{"type":"text","text":msg}],"isError":true})
 }
 
+fn encode_query_value(value: &str) -> String {
+    value
+        .bytes()
+        .flat_map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                vec![byte as char]
+            }
+            _ => format!("%{:02X}", byte).chars().collect(),
+        })
+        .collect()
+}
+
+fn push_query_param(params: &mut Vec<String>, name: &str, value: impl ToString) {
+    params.push(format!(
+        "{}={}",
+        name,
+        encode_query_value(&value.to_string())
+    ));
+}
+
+fn push_string_array_query_params(
+    params: &mut Vec<String>,
+    args: &Value,
+    arg_name: &str,
+    query_name: &str,
+) {
+    if let Some(values) = args.get(arg_name).and_then(|v| v.as_array()) {
+        for value in values {
+            if let Some(value) = value.as_str() {
+                push_query_param(params, query_name, value);
+            }
+        }
+    }
+}
+
+fn push_number_array_query_params(
+    params: &mut Vec<String>,
+    args: &Value,
+    arg_name: &str,
+    query_name: &str,
+) {
+    if let Some(values) = args.get(arg_name).and_then(|v| v.as_array()) {
+        for value in values {
+            if let Some(value) = value.as_i64() {
+                push_query_param(params, query_name, value);
+            }
+        }
+    }
+}
+
+fn push_bool_query_param(params: &mut Vec<String>, args: &Value, arg_name: &str, query_name: &str) {
+    if let Some(value) = args.get(arg_name).and_then(|v| v.as_bool()) {
+        push_query_param(params, query_name, value);
+    }
+}
+
+fn push_i64_query_param(params: &mut Vec<String>, args: &Value, arg_name: &str, query_name: &str) {
+    if let Some(value) = args.get(arg_name).and_then(|v| v.as_i64()) {
+        push_query_param(params, query_name, value);
+    }
+}
+
+fn push_string_query_param(
+    params: &mut Vec<String>,
+    args: &Value,
+    arg_name: &str,
+    query_name: &str,
+) {
+    if let Some(value) = args.get(arg_name).and_then(|v| v.as_str()) {
+        push_query_param(params, query_name, value);
+    }
+}
+
+fn task_search_query_params(args: &Value) -> Vec<String> {
+    let mut params = Vec::new();
+
+    push_string_array_query_params(&mut params, args, "space_ids", "space_ids[]");
+    push_string_array_query_params(&mut params, args, "project_ids", "project_ids[]");
+    push_string_array_query_params(&mut params, args, "list_ids", "list_ids[]");
+    push_string_array_query_params(&mut params, args, "statuses", "statuses[]");
+    push_string_array_query_params(&mut params, args, "assignees", "assignees[]");
+    push_string_array_query_params(&mut params, args, "tags", "tags[]");
+    push_number_array_query_params(&mut params, args, "custom_items", "custom_items[]");
+
+    for key in [
+        "include_closed",
+        "subtasks",
+        "reverse",
+        "include_markdown_description",
+    ] {
+        push_bool_query_param(&mut params, args, key, key);
+    }
+
+    for key in [
+        "due_date_gt",
+        "due_date_lt",
+        "date_created_gt",
+        "date_created_lt",
+        "date_updated_gt",
+        "date_updated_lt",
+        "date_done_gt",
+        "date_done_lt",
+    ] {
+        push_i64_query_param(&mut params, args, key, key);
+    }
+
+    push_string_query_param(&mut params, args, "parent", "parent");
+    push_string_query_param(&mut params, args, "order_by", "order_by");
+
+    if let Some(custom_fields) = args.get("custom_fields").and_then(|v| v.as_array()) {
+        push_query_param(
+            &mut params,
+            "custom_fields",
+            serde_json::to_string(custom_fields).unwrap_or_else(|_| "[]".to_string()),
+        );
+    }
+
+    params
+}
+
 /// Inspects a `tools/call` request and returns a JSON-RPC response when the
 /// request can be resolved WITHOUT executing the tool itself (missing tool
 /// name, or tool is filtered out). Returns `None` when the caller should
@@ -208,7 +328,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_search",
-            "description": "Search tasks across an entire ClickUp workspace with optional space/list/status/assignee filters — useful for cross-list queries. Returns a paginated array of task objects. For tasks in a single list, prefer clickup_task_list (fewer parameters, same shape).",
+            "description": "Search tasks across an entire ClickUp workspace with ClickUp's filtered team tasks endpoint. Supports hierarchy, assignee, status, tag, date range, custom field, custom item type, parent/subtask, and ordering filters. Returns a paginated array of task objects. For tasks in a single list, prefer clickup_task_list (fewer parameters, same shape).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -217,6 +337,11 @@ pub fn tool_list() -> Value {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Restrict results to these space IDs. Obtain from clickup_space_list (field: id). Omit to search all spaces."
+                    },
+                    "project_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Restrict results to these folder/project IDs. ClickUp's API parameter is project_ids[]. Obtain IDs from clickup_folder_list."
                     },
                     "list_ids": {
                         "type": "array",
@@ -232,7 +357,36 @@ pub fn tool_list() -> Value {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "User IDs (as strings) to restrict to tasks assigned to them. Obtain from clickup_member_list. Omit to return tasks regardless of assignee."
-                    }
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tag names to filter by. Tags must match ClickUp tag names in the relevant spaces."
+                    },
+                    "include_closed": {"type": "boolean", "description": "true = include tasks in closed statuses; false or omitted = exclude closed tasks."},
+                    "subtasks": {"type": "boolean", "description": "true = include subtasks in search results; false or omitted = exclude subtasks unless parent is provided."},
+                    "parent": {"type": "string", "description": "Parent task ID. When set, returns subtasks under this parent task."},
+                    "order_by": {"type": "string", "description": "Sort field supported by ClickUp, such as id, created, updated, or due_date."},
+                    "reverse": {"type": "boolean", "description": "true = reverse the selected sort order."},
+                    "due_date_gt": {"type": "integer", "description": "Filter tasks with due_date greater than this Unix timestamp in milliseconds."},
+                    "due_date_lt": {"type": "integer", "description": "Filter tasks with due_date less than this Unix timestamp in milliseconds."},
+                    "date_created_gt": {"type": "integer", "description": "Filter tasks created after this Unix timestamp in milliseconds."},
+                    "date_created_lt": {"type": "integer", "description": "Filter tasks created before this Unix timestamp in milliseconds."},
+                    "date_updated_gt": {"type": "integer", "description": "Filter tasks updated after this Unix timestamp in milliseconds."},
+                    "date_updated_lt": {"type": "integer", "description": "Filter tasks updated before this Unix timestamp in milliseconds."},
+                    "date_done_gt": {"type": "integer", "description": "Filter tasks completed after this Unix timestamp in milliseconds."},
+                    "date_done_lt": {"type": "integer", "description": "Filter tasks completed before this Unix timestamp in milliseconds."},
+                    "custom_fields": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "ClickUp custom field filters. Each object is sent inside the custom_fields JSON query parameter, e.g. [{\"field_id\":\"...\",\"operator\":\"=\",\"value\":\"...\"}]. Use operators supported by ClickUp, including IS NULL / IS NOT NULL for unset/set checks."
+                    },
+                    "custom_items": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Filter by ClickUp custom task type IDs. Include 0 for regular tasks, 1 for milestones, or workspace-defined custom item type IDs."
+                    },
+                    "include_markdown_description": {"type": "boolean", "description": "true = ask ClickUp to return task descriptions in Markdown format."}
                 },
                 "required": []
             }
@@ -2252,36 +2406,13 @@ async fn dispatch_tool(
 
         "clickup_task_search" => {
             let team_id = resolve_workspace(args)?;
-            let mut qs = String::new();
-            if let Some(space_ids) = args.get("space_ids").and_then(|v| v.as_array()) {
-                for id in space_ids {
-                    if let Some(id) = id.as_str() {
-                        qs.push_str(&format!("&space_ids[]={}", id));
-                    }
-                }
-            }
-            if let Some(list_ids) = args.get("list_ids").and_then(|v| v.as_array()) {
-                for id in list_ids {
-                    if let Some(id) = id.as_str() {
-                        qs.push_str(&format!("&list_ids[]={}", id));
-                    }
-                }
-            }
-            if let Some(statuses) = args.get("statuses").and_then(|v| v.as_array()) {
-                for s in statuses {
-                    if let Some(s) = s.as_str() {
-                        qs.push_str(&format!("&statuses[]={}", s));
-                    }
-                }
-            }
-            if let Some(assignees) = args.get("assignees").and_then(|v| v.as_array()) {
-                for a in assignees {
-                    if let Some(a) = a.as_str() {
-                        qs.push_str(&format!("&assignees[]={}", a));
-                    }
-                }
-            }
-            let path = format!("/v2/team/{}/task?{}", team_id, qs.trim_start_matches('&'));
+            let params = task_search_query_params(args);
+            let query = if params.is_empty() {
+                String::new()
+            } else {
+                format!("?{}", params.join("&"))
+            };
+            let path = format!("/v2/team/{}/task{}", team_id, query);
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let tasks = resp
                 .get("tasks")
@@ -4913,4 +5044,62 @@ pub async fn serve(filter: filter::Filter) -> Result<(), Box<dyn std::error::Err
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_search_query_params_include_rich_filters() {
+        let args = json!({
+            "space_ids": ["space 1"],
+            "project_ids": ["folder-1"],
+            "list_ids": ["list-1"],
+            "statuses": ["in progress"],
+            "assignees": ["123"],
+            "tags": ["release train"],
+            "include_closed": true,
+            "subtasks": true,
+            "parent": "parent-1",
+            "order_by": "due_date",
+            "reverse": true,
+            "due_date_gt": 1700000000000_i64,
+            "date_updated_lt": 1800000000000_i64,
+            "custom_items": [0, 1300],
+            "include_markdown_description": true,
+            "custom_fields": [
+                {"field_id": "cf-1", "operator": "IS NOT NULL"},
+                {"field_id": "cf-2", "operator": "=", "value": "ready"}
+            ]
+        });
+
+        let params = task_search_query_params(&args);
+
+        assert!(params.contains(&"space_ids[]=space%201".to_string()));
+        assert!(params.contains(&"project_ids[]=folder-1".to_string()));
+        assert!(params.contains(&"list_ids[]=list-1".to_string()));
+        assert!(params.contains(&"statuses[]=in%20progress".to_string()));
+        assert!(params.contains(&"assignees[]=123".to_string()));
+        assert!(params.contains(&"tags[]=release%20train".to_string()));
+        assert!(params.contains(&"include_closed=true".to_string()));
+        assert!(params.contains(&"subtasks=true".to_string()));
+        assert!(params.contains(&"parent=parent-1".to_string()));
+        assert!(params.contains(&"order_by=due_date".to_string()));
+        assert!(params.contains(&"reverse=true".to_string()));
+        assert!(params.contains(&"due_date_gt=1700000000000".to_string()));
+        assert!(params.contains(&"date_updated_lt=1800000000000".to_string()));
+        assert!(params.contains(&"custom_items[]=0".to_string()));
+        assert!(params.contains(&"custom_items[]=1300".to_string()));
+        assert!(params.contains(&"include_markdown_description=true".to_string()));
+        assert!(
+            params.iter().any(|param| {
+                param.starts_with("custom_fields=%5B")
+                    && param.contains("IS%20NOT%20NULL")
+                    && param.contains("%22value%22%3A%22ready%22")
+            }),
+            "custom_fields should be serialized as one encoded JSON query value: {:?}",
+            params
+        );
+    }
 }
