@@ -410,7 +410,7 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
         } => {
             let mut body = serde_json::json!({ "name": name });
             if let Some(d) = description {
-                body["description"] = serde_json::Value::String(d);
+                body["markdown_content"] = serde_json::Value::String(d);
             }
             if let Some(s) = status {
                 body["status"] = serde_json::Value::String(s);
@@ -461,7 +461,7 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 body.insert("priority".into(), serde_json::json!(p));
             }
             if let Some(d) = description {
-                body.insert("description".into(), serde_json::Value::String(d));
+                body.insert("markdown_content".into(), serde_json::Value::String(d));
             }
             // Assignee add/remove uses nested object
             if add_assignee.is_some() || rem_assignee.is_some() {

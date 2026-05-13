@@ -2367,7 +2367,7 @@ async fn dispatch_tool(
                 .ok_or("Missing required parameter: name")?;
             let mut body = json!({"name": name});
             if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
-                body["description"] = json!(desc);
+                body["markdown_content"] = json!(desc);
             }
             if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
                 body["status"] = json!(status);
@@ -2408,7 +2408,7 @@ async fn dispatch_tool(
                 body["priority"] = json!(priority);
             }
             if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
-                body["description"] = json!(desc);
+                body["markdown_content"] = json!(desc);
             }
             if let Some(add) = args.get("add_assignees") {
                 body["assignees"] = json!({"add": add, "rem": args.get("rem_assignees").cloned().unwrap_or(json!([]))});
