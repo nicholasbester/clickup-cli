@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `task create --description` and `task update --description` (and the `clickup_task_create` / `clickup_task_update` MCP tools) now render markdown in the ClickUp UI (#22). The CLI was sending the plain-text `description` API field, which doesn't interpret markdown; switched to `markdown_content`, ClickUp's documented markdown-rendering field. Plain-text descriptions still display identically. User-facing flag and MCP schema parameter name (`description`) are unchanged.
 
+### Changed
+- CLI help and MCP tool descriptions corrected after an audit against ClickUp's official OpenAPI spec. No behaviour change; documentation only.
+  - `comment create`, `comment update`, `comment reply` (and the corresponding `clickup_comment_*` MCP tools) no longer claim markdown support. ClickUp's v2 comment API only accepts plain `comment_text` and renders neither markdown nor rich text; markdown syntax is stored verbatim. @mentions are still rendered.
+  - `clickup_doc_create` MCP `parent.type` cheat sheet corrected: the enum is 4=space, 5=folder, 6=list, 7=everything, 12=workspace. The previous text said 7=task, which is wrong.
+  - `clickup_webhook_delete` MCP description: the alternative-to-delete suggestion now points at `status='inactive'`. The previous text said `'suspended'`, which is not a value the API accepts.
+  - `clickup_audit_log_query` MCP `type` parameter description: corrected example enum values to ClickUp's actual categories (AUTH, HIERARCHY, USER, CUSTOM_FIELDS, AGENT, OTHER). The previous text invented `task_created`, `user_added`, `permission_changed`.
+  - `clickup_chat_channel_update` MCP `description` field no longer claims markdown support; ClickUp's chat-channel description field is plain text.
+
 ## [0.9.1] - 2026-04-23
 
 ### Fixed

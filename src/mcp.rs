@@ -404,12 +404,12 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_comment_create",
-            "description": "Post a new top-level comment on a ClickUp task. Supports markdown and @mentions in the text body. Returns the created comment object including its new id, which you can pass to clickup_comment_reply, clickup_comment_update, etc.",
+            "description": "Post a new top-level comment on a ClickUp task. @mentions are recognised by ClickUp. Note: ClickUp's v2 comment API stores the body verbatim and does NOT render markdown. Tokens like `**bold**` appear as literal characters in the UI. Returns the created comment object including its new id, which you can pass to clickup_comment_reply, clickup_comment_update, etc.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task to comment on. Obtain from clickup_task_list (field: id) or clickup_task_search."},
-                    "text": {"type": "string", "description": "Comment body. Markdown and @mentions (e.g. '@username') are supported."},
+                    "text": {"type": "string", "description": "Comment body. @mentions (e.g. '@username') are rendered. Markdown is NOT rendered by ClickUp's v2 comment API. Markdown syntax is stored as literal text."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the comment to — they will receive a notification. Obtain from clickup_member_list."},
                     "notify_all": {"type": "boolean", "description": "true = send a notification to every assignee of the task; false or omitted = only notify people mentioned or the explicit assignee."}
                 },
@@ -868,7 +868,7 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "comment_id": {"type": "string", "description": "ID of the comment to edit. Obtain from clickup_comment_list (field: id)."},
-                    "text": {"type": "string", "description": "Replacement body for the comment. ClickUp accepts markdown plus @mentions (e.g. '@username'). The previous body is overwritten entirely."},
+                    "text": {"type": "string", "description": "Replacement body for the comment. @mentions (e.g. '@username') are rendered. Markdown is NOT rendered by ClickUp's v2 comment API; markdown syntax is stored as literal text. The previous body is overwritten entirely."},
                     "assignee": {"type": "integer", "description": "Reassign the comment to this user ID, who will receive a notification. Obtain from clickup_member_list."},
                     "resolved": {"type": "boolean", "description": "true = mark the comment thread resolved/closed; false = reopen it."}
                 },
@@ -1104,7 +1104,7 @@ pub fn tool_list() -> Value {
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "name": {"type": "string", "description": "Display name for the doc (shown in the doc tree)."},
-                    "parent": {"type": "object", "description": "Optional parent object to attach the doc under. Shape: { 'id': '<id>', 'type': <int> } where type is 4=space, 5=folder, 6=list, 7=task. Omit to create at the workspace root."}
+                    "parent": {"type": "object", "description": "Optional parent object to attach the doc under. Shape: { 'id': '<id>', 'type': <int> } where type is 4=space, 5=folder, 6=list, 7=everything, 12=workspace. Omit to create at the workspace root."}
                 },
                 "required": ["name"]
             }
@@ -1175,7 +1175,7 @@ pub fn tool_list() -> Value {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
                     "channel_id": {"type": "string", "description": "ID of the channel to update. Obtain from clickup_chat_channel_list (field: id)."},
                     "name": {"type": "string", "description": "New display name for the channel. Must be unique within the workspace."},
-                    "description": {"type": "string", "description": "New channel description/topic shown in the channel header. Markdown supported."}
+                    "description": {"type": "string", "description": "New channel description shown in the channel header."}
                 },
                 "required": ["channel_id"]
             }
@@ -1284,7 +1284,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_webhook_delete",
-            "description": "Permanently delete a ClickUp webhook, stopping all future event deliveries to its endpoint. Destructive and irreversible — the webhook record is removed immediately. If you only want to pause deliveries, use clickup_webhook_update with status='suspended' instead. Returns an empty object on success.",
+            "description": "Permanently delete a ClickUp webhook, stopping all future event deliveries to its endpoint. Destructive and irreversible: the webhook record is removed immediately. If you only want to pause deliveries, use clickup_webhook_update with status='inactive' instead. Returns an empty object on success.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1624,7 +1624,7 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "comment_id": {"type": "string", "description": "ID of the parent comment to reply to. Obtain from clickup_comment_list (field: id)."},
-                    "text": {"type": "string", "description": "Reply body. Markdown and @mentions supported."},
+                    "text": {"type": "string", "description": "Reply body. @mentions are rendered. Markdown is NOT rendered by ClickUp's v2 comment API; markdown syntax is stored as literal text."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the reply to — they receive a notification. Obtain from clickup_member_list."}
                 },
                 "required": ["comment_id", "text"]
@@ -2082,7 +2082,7 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "type": {"type": "string", "description": "Audit event type filter (e.g. 'task_created', 'user_added', 'permission_changed'). Required. See ClickUp docs for the full list."},
+                    "type": {"type": "string", "description": "Audit event type filter. Required. ClickUp's documented categories include 'AUTH', 'HIERARCHY', 'USER', 'CUSTOM_FIELDS', 'AGENT', 'OTHER'. See ClickUp docs for the full enum."},
                     "user_id": {"type": "integer", "description": "Restrict to events performed by this user ID. Obtain from clickup_member_list. Omit for all users."},
                     "start_date": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds (e.g. 1735689600000 for 2025-01-01). Omit for no lower bound."},
                     "end_date": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Omit for no upper bound."}
