@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `task create --description` and `task update --description` (and the `clickup_task_create` / `clickup_task_update` MCP tools) now render markdown in the ClickUp UI (#22). The CLI was sending the plain-text `description` API field, which doesn't interpret markdown; switched to `markdown_content`, ClickUp's documented markdown-rendering field. Plain-text descriptions still display identically. User-facing flag and MCP schema parameter name (`description`) are unchanged.
+- `list create --content` and `list update --content` (and the `clickup_list_create` / `clickup_list_update` MCP tools) now render markdown in the ClickUp UI. Same root cause as the task-description bug above: the CLI was sending the plain-text `content` field, but ClickUp's docs explicitly say to use `markdown_content` to format a list description. CLI flag and MCP arg name (`content`) are unchanged.
+- `clickup_chat_reaction_add` MCP tool and `chat reaction-add` CLI: the request body field was `emoji`, ClickUp's OpenAPI spec names it `reaction`. The CLI/MCP input arg name remains `emoji`, only the wire field changed. Without this fix the endpoint returned `Reaction required`.
+- `clickup_tag_update` MCP tool sent `tag_fg` / `tag_bg` on the tag-update endpoint. ClickUp's update endpoint uses `fg_color` / `bg_color` (an inconsistency with the create endpoint, which still uses `tag_fg` / `tag_bg`). The CLI was already correct; the MCP tool now matches. Caller-facing arg names unchanged.
+- `task time-in-status` bulk mode comma-joined every task ID into a single `task_ids=` query parameter, which ClickUp treats as one unknown ID. Switched to repeated `task_ids=A&task_ids=B&...` query params per the OpenAPI spec.
+- `doc create --parent-type` sent the type as a string (`"SPACE"` etc.). ClickUp's spec requires an integer enum (4=space, 5=folder, 6=list, 7=everything, 12=workspace). CLI now accepts the string names case-insensitively (plus the raw integers) and translates to the integer enum. Help text expanded to list the new values (EVERYTHING, WORKSPACE).
+- `doc list --creator` sent `creator_id=` as the query param, ClickUp's docs name it `creator`. Filter was silently ignored before; now applies as documented.
 
 ## [0.9.1] - 2026-04-23
 

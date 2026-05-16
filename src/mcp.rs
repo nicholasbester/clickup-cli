@@ -3010,7 +3010,7 @@ async fn dispatch_tool(
                 .ok_or("Missing required parameter: name")?;
             let mut body = json!({"name": name});
             if let Some(content) = args.get("content").and_then(|v| v.as_str()) {
-                body["content"] = json!(content);
+                body["markdown_content"] = json!(content);
             }
             if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) {
                 body["due_date"] = json!(due_date);
@@ -3039,7 +3039,7 @@ async fn dispatch_tool(
                 body["name"] = json!(name);
             }
             if let Some(content) = args.get("content").and_then(|v| v.as_str()) {
-                body["content"] = json!(content);
+                body["markdown_content"] = json!(content);
             }
             if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) {
                 body["due_date"] = json!(due_date);
@@ -3928,11 +3928,15 @@ async fn dispatch_tool(
             if let Some(name) = args.get("name").and_then(|v| v.as_str()) {
                 tag["name"] = json!(name);
             }
+            // ClickUp's tag UPDATE endpoint uses `fg_color` / `bg_color`,
+            // unlike CREATE which uses `tag_fg` / `tag_bg`. (Quirk confirmed
+            // against the OpenAPI spec.) Keep the input arg names matching
+            // CREATE for caller ergonomics; translate on the wire.
             if let Some(fg) = args.get("tag_fg").and_then(|v| v.as_str()) {
-                tag["tag_fg"] = json!(fg);
+                tag["fg_color"] = json!(fg);
             }
             if let Some(bg) = args.get("tag_bg").and_then(|v| v.as_str()) {
-                tag["tag_bg"] = json!(bg);
+                tag["bg_color"] = json!(bg);
             }
             let body = json!({"tag": tag});
             client
@@ -4355,7 +4359,7 @@ async fn dispatch_tool(
                 .get("emoji")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: emoji")?;
-            let body = json!({"emoji": emoji});
+            let body = json!({"reaction": emoji});
             client
                 .post(
                     &format!(

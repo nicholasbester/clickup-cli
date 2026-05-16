@@ -285,7 +285,7 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::ReactionAdd { msg_id, emoji } => {
-            let body = serde_json::json!({ "emoji": emoji });
+            let body = serde_json::json!({ "reaction": emoji });
             let resp = client
                 .post(&format!("{}/messages/{}/reactions", base, msg_id), &body)
                 .await?;

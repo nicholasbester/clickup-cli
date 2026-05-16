@@ -697,13 +697,16 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                     }
                 }
             } else {
-                // Bulk mode
-                let task_ids = ids.join(",");
+                // Bulk mode. ClickUp's endpoint requires repeated `task_ids=`
+                // query params, not a comma-joined list; a comma-joined value
+                // is treated as a single unknown ID.
+                let query = ids
+                    .iter()
+                    .map(|id| format!("task_ids={}", id))
+                    .collect::<Vec<_>>()
+                    .join("&");
                 let resp = client
-                    .get(&format!(
-                        "/v2/task/bulk_time_in_status/task_ids?task_ids={}",
-                        task_ids
-                    ))
+                    .get(&format!("/v2/task/bulk_time_in_status/task_ids?{}", query))
                     .await?;
                 if cli.output == "json" {
                     println!("{}", serde_json::to_string_pretty(&resp).unwrap());
