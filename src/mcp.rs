@@ -1214,7 +1214,8 @@ pub fn tool_list() -> Value {
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "channel_id": {"type": "string", "description": "ID of the target channel. Obtain from clickup_chat_channel_list (field: id)."},
-                    "content": {"type": "string", "description": "Message body. Supports markdown, @mentions (e.g. '@username'), and emoji."}
+                    "content": {"type": "string", "description": "Message body. Supports markdown, @mentions (e.g. '@username'), and emoji."},
+                    "type": {"type": "string", "description": "Message subtype. Defaults to 'message' (a normal chat message). Use 'post' for a long-form post. ClickUp requires this field server-side."}
                 },
                 "required": ["channel_id", "content"]
             }
@@ -1233,15 +1234,18 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_dm",
-            "description": "Send a direct message from the authenticated user to another workspace member. If no DM channel exists between the two users, one is created automatically. Returns the created message object. Use clickup_chat_message_send for channel messages.",
+            "description": "Create or fetch the direct-message channel between the authenticated user and one or more other workspace members (ClickUp groups DMs around the participant set). Returns the channel object including its id. To send a message in the channel, follow with clickup_chat_message_send using the returned channel id.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "user_id": {"type": "integer", "description": "Numeric user ID of the recipient. Obtain from clickup_member_list or clickup_user_get (field: id)."},
-                    "content": {"type": "string", "description": "Message body. Supports markdown, emoji, and @mentions."}
+                    "user_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Numeric user IDs of the DM participants (excluding the caller). ClickUp permits up to 15 participants for a group DM. Obtain IDs from clickup_member_list or clickup_user_get."
+                    }
                 },
-                "required": ["user_id", "content"]
+                "required": ["user_ids"]
             }
         },
         {
@@ -3668,8 +3672,11 @@ async fn dispatch_tool(
                 path.push_str(&format!("?cursor={}", cursor));
             }
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            // v3 envelope: { "data": [...], "next_cursor": "..." }
+            // Older shape used "messages" — fall back for safety.
             let messages = resp
-                .get("messages")
+                .get("data")
+                .or_else(|| resp.get("messages"))
                 .and_then(|m| m.as_array())
                 .cloned()
                 .unwrap_or_default();
@@ -3686,7 +3693,11 @@ async fn dispatch_tool(
                 .get("content")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: content")?;
-            let body = json!({"content": content});
+            let msg_type = args
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("message");
+            let body = json!({"content": content, "type": msg_type});
             let resp = client
                 .post(
                     &format!(
@@ -3718,15 +3729,14 @@ async fn dispatch_tool(
 
         "clickup_chat_dm" => {
             let team_id = resolve_workspace(args)?;
-            let user_id = args
-                .get("user_id")
-                .and_then(|v| v.as_i64())
-                .ok_or("Missing required parameter: user_id")?;
-            let content = args
-                .get("content")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: content")?;
-            let body = json!({"user_id": user_id, "content": content});
+            let user_ids = args
+                .get("user_ids")
+                .and_then(|v| v.as_array())
+                .ok_or("Missing required parameter: user_ids (array of integers)")?;
+            if user_ids.is_empty() {
+                return Err("user_ids must contain at least one user id".to_string());
+            }
+            let body = json!({"user_ids": user_ids});
             let resp = client
                 .post(
                     &format!("/v3/workspaces/{}/chat/channels/direct_message", team_id),
@@ -3734,7 +3744,8 @@ async fn dispatch_tool(
                 )
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(json!({"message": "DM sent", "id": resp.get("id")}))
+            let channel = resp.get("data").cloned().unwrap_or(resp);
+            Ok(json!({"message": "DM channel ready", "id": channel.get("id"), "channel": channel}))
         }
 
         "clickup_webhook_create" => {
@@ -4287,8 +4298,10 @@ async fn dispatch_tool(
                 path.push_str(&format!("?include_closed={}", include_closed));
             }
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            // v3 envelope wraps the list in "data"; older shape used "channels".
             let channels = resp
-                .get("channels")
+                .get("data")
+                .or_else(|| resp.get("channels"))
                 .and_then(|c| c.as_array())
                 .cloned()
                 .unwrap_or_default();
@@ -4398,10 +4411,13 @@ async fn dispatch_tool(
                 .get("emoji")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: emoji")?;
+            // Emoji typically contain bytes outside the URL path's unreserved
+            // set; percent-encode the segment so the request is well-formed.
+            let encoded_emoji = encode_query_value(emoji);
             client
                 .delete(&format!(
                     "/v3/workspaces/{}/chat/messages/{}/reactions/{}",
-                    team_id, message_id, emoji
+                    team_id, message_id, encoded_emoji
                 ))
                 .await
                 .map_err(|e| e.to_string())?;
@@ -4423,7 +4439,15 @@ async fn dispatch_tool(
                 ))
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(resp)
+            // v3 envelope: { "data": [...], "next_cursor": "..." }
+            // Older shape used "replies"; bare array also seen in practice.
+            let replies = resp
+                .get("data")
+                .or_else(|| resp.get("replies"))
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_else(|| resp.as_array().cloned().unwrap_or_default());
+            Ok(compact_items(&replies, &["id", "content", "date"]))
         }
 
         "clickup_chat_reply_send" => {

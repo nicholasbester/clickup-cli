@@ -293,8 +293,22 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::ReactionRemove { msg_id, emoji } => {
+            // Emoji like 👍 contain bytes outside the URL path's unreserved set;
+            // percent-encode the segment so the request is well-formed.
+            let encoded: String = emoji
+                .bytes()
+                .flat_map(|byte| match byte {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                        vec![byte as char]
+                    }
+                    _ => format!("%{:02X}", byte).chars().collect(),
+                })
+                .collect();
             client
-                .delete(&format!("{}/messages/{}/reactions/{}", base, msg_id, emoji))
+                .delete(&format!(
+                    "{}/messages/{}/reactions/{}",
+                    base, msg_id, encoded
+                ))
                 .await?;
             output.print_message(&format!(
                 "Reaction '{}' removed from message {}",
