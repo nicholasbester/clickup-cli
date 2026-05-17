@@ -2095,17 +2095,31 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_audit_log_query",
-            "description": "Query the ClickUp audit log (who did what, when) for a workspace — filter by event type, acting user, and date range. Requires Enterprise plan. Uses v3 cursor pagination. Returns an array of audit event objects (actor, event, target, timestamp).",
+            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires Enterprise plan. Uses v3 cursor pagination. Body shape per ClickUp's OpenAPI spec: { applicability, filter?, pagination? }. Returns the raw response (data array plus pagination cursor).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "type": {"type": "string", "description": "Audit event type filter. Required. ClickUp's documented categories include 'AUTH', 'HIERARCHY', 'USER', 'CUSTOM_FIELDS', 'AGENT', 'OTHER'. See ClickUp docs for the full enum."},
-                    "user_id": {"type": "integer", "description": "Restrict to events performed by this user ID. Obtain from clickup_member_list. Omit for all users."},
-                    "start_date": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds (e.g. 1735689600000 for 2025-01-01). Omit for no lower bound."},
-                    "end_date": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Omit for no upper bound."}
+                    "applicability": {"type": "string", "description": "Required. Scope of the query. ClickUp's documented values: WORKSPACE, TEAMS, USERS."},
+                    "event_type": {"type": "string", "description": "Optional filter on event category. ClickUp's documented categories include AUTH, HIERARCHY, USER, CUSTOM_FIELDS, AGENT, OTHER. Maps to filter.eventType."},
+                    "event_status": {"type": "string", "description": "Optional filter on event status (e.g. SUCCESS, FAILURE). Maps to filter.eventStatus."},
+                    "user_id": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of user IDs to filter on. Maps to filter.userId."
+                    },
+                    "user_email": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of user emails to filter on. Maps to filter.userEmail."
+                    },
+                    "start_time": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds. Maps to filter.startTime."},
+                    "end_time": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Maps to filter.endTime."},
+                    "page_rows": {"type": "integer", "description": "Pagination page size. Maps to pagination.pageRows."},
+                    "page_timestamp": {"type": "integer", "description": "Pagination cursor timestamp. Maps to pagination.pageTimestamp."},
+                    "page_direction": {"type": "string", "description": "Pagination direction (NEXT or PREVIOUS). Maps to pagination.pageDirection."}
                 },
-                "required": ["type"]
+                "required": ["applicability"]
             }
         },
         {
@@ -5001,19 +5015,54 @@ async fn dispatch_tool(
 
         "clickup_audit_log_query" => {
             let team_id = resolve_workspace(args)?;
-            let event_type = args
-                .get("type")
+            let applicability = args
+                .get("applicability")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: type")?;
-            let mut body = json!({"type": event_type});
-            if let Some(user_id) = args.get("user_id").and_then(|v| v.as_i64()) {
-                body["user_id"] = json!(user_id);
+                .ok_or("Missing required parameter: applicability")?;
+
+            // ClickUp's audit-log body per the v3 OpenAPI spec:
+            //   { applicability, filter?: {...}, pagination?: {...} }
+            // The previous implementation invented `{type, user_id, date_filter}`,
+            // which the endpoint does not recognise.
+            let mut body = json!({"applicability": applicability});
+
+            let mut filter = serde_json::Map::new();
+            if let Some(t) = args.get("event_type").and_then(|v| v.as_str()) {
+                filter.insert("eventType".into(), json!(t));
             }
-            if let Some(start_date) = args.get("start_date").and_then(|v| v.as_i64()) {
-                body["date_filter"] = json!({"start_date": start_date, "end_date": args.get("end_date").and_then(|v| v.as_i64()).unwrap_or(i64::MAX)});
-            } else if let Some(end_date) = args.get("end_date").and_then(|v| v.as_i64()) {
-                body["date_filter"] = json!({"end_date": end_date});
+            if let Some(s) = args.get("event_status").and_then(|v| v.as_str()) {
+                filter.insert("eventStatus".into(), json!(s));
             }
+            if let Some(ids) = args.get("user_id").and_then(|v| v.as_array()) {
+                filter.insert("userId".into(), Value::Array(ids.clone()));
+            }
+            if let Some(emails) = args.get("user_email").and_then(|v| v.as_array()) {
+                filter.insert("userEmail".into(), Value::Array(emails.clone()));
+            }
+            if let Some(t) = args.get("start_time").and_then(|v| v.as_i64()) {
+                filter.insert("startTime".into(), json!(t));
+            }
+            if let Some(t) = args.get("end_time").and_then(|v| v.as_i64()) {
+                filter.insert("endTime".into(), json!(t));
+            }
+            if !filter.is_empty() {
+                body["filter"] = Value::Object(filter);
+            }
+
+            let mut pagination = serde_json::Map::new();
+            if let Some(n) = args.get("page_rows").and_then(|v| v.as_i64()) {
+                pagination.insert("pageRows".into(), json!(n));
+            }
+            if let Some(t) = args.get("page_timestamp").and_then(|v| v.as_i64()) {
+                pagination.insert("pageTimestamp".into(), json!(t));
+            }
+            if let Some(d) = args.get("page_direction").and_then(|v| v.as_str()) {
+                pagination.insert("pageDirection".into(), json!(d));
+            }
+            if !pagination.is_empty() {
+                body["pagination"] = Value::Object(pagination);
+            }
+
             let resp = client
                 .post(&format!("/v3/workspaces/{}/auditlogs", team_id), &body)
                 .await
