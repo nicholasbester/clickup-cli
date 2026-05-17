@@ -1836,15 +1836,17 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_time_rename_tag",
-            "description": "Rename a time-entry tag across the entire workspace. All historical time entries carrying the old name are updated. Cannot change colour via this endpoint. Returns an empty object on success.",
+            "description": "Rename a time-entry tag across the entire workspace. All historical time entries carrying the old name are updated. ClickUp's spec requires the new background and foreground hex colours on every rename call (pass the existing values if you don't want to change them). Returns an empty object on success.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "name": {"type": "string", "description": "Current name of the tag to rename. Obtain from clickup_time_tags (field: name)."},
-                    "new_name": {"type": "string", "description": "Replacement name for the tag. Must not collide with an existing time-entry tag."}
+                    "new_name": {"type": "string", "description": "Replacement name for the tag. Must not collide with an existing time-entry tag."},
+                    "tag_bg": {"type": "string", "description": "Required. New background colour as a hex string (e.g. #000000). Pass the existing value to leave the colour unchanged."},
+                    "tag_fg": {"type": "string", "description": "Required. New foreground colour as a hex string (e.g. #FFFFFF). Pass the existing value to leave the colour unchanged."}
                 },
-                "required": ["name", "new_name"]
+                "required": ["name", "new_name", "tag_bg", "tag_fg"]
             }
         },
         {
@@ -4611,7 +4613,20 @@ async fn dispatch_tool(
                 .get("new_name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: new_name")?;
-            let body = json!({"name": name, "new_name": new_name});
+            // ClickUp's spec marks tag_bg and tag_fg as required on the
+            // PUT /v2/team/{ws}/time_entries/tags endpoint, even when the
+            // caller only wants to rename. Callers can repeat the existing
+            // hex colours to leave them unchanged.
+            let tag_bg = args
+                .get("tag_bg")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: tag_bg")?;
+            let tag_fg = args
+                .get("tag_fg")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: tag_fg")?;
+            let body =
+                json!({"name": name, "new_name": new_name, "tag_bg": tag_bg, "tag_fg": tag_fg});
             client
                 .put(&format!("/v2/team/{}/time_entries/tags", team_id), &body)
                 .await
