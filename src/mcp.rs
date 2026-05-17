@@ -1,5 +1,6 @@
 use crate::client::ClickUpClient;
 use crate::config::Config;
+use crate::git;
 use crate::output::{compact_items, flatten_value};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -2190,6 +2191,28 @@ async fn dispatch_tool(
             .ok_or_else(|| "No workspace_id found in config. Please run `clickup setup` or provide team_id in the tool arguments.".to_string())
     };
 
+    // Normalise a caller-supplied task_id and, if it's a custom-format ID
+    // (e.g. `PROJ-42`), return the `custom_task_ids=true&team_id=<ws>` query
+    // fragment that ClickUp requires. Returns the cleaned task id (with any
+    // `CU-` prefix stripped) plus an optional query fragment to attach to the
+    // request URL. The returned fragment does NOT include a leading `?` or `&`.
+    let resolve_task = |args: &Value, key: &str| -> Result<(String, Option<String>), String> {
+        let raw = args
+            .get(key)
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| format!("Missing required parameter: {}", key))?;
+        let resolved = git::parse_task_id(raw);
+        if resolved.is_custom {
+            let ws = resolve_workspace(args)?;
+            Ok((
+                resolved.id,
+                Some(format!("custom_task_ids=true&team_id={}", ws)),
+            ))
+        } else {
+            Ok((resolved.id, None))
+        }
+    };
+
     match name {
         "clickup_whoami" => {
             let resp = client.get("/v2/user").await.map_err(|e| e.to_string())?;
@@ -2332,15 +2355,18 @@ async fn dispatch_tool(
         }
 
         "clickup_task_get" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let include_subtasks = args
                 .get("include_subtasks")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let path = format!("/v2/task/{}?include_subtasks={}", task_id, include_subtasks);
+            let path = match custom_q {
+                Some(q) => format!(
+                    "/v2/task/{}?include_subtasks={}&{}",
+                    task_id, include_subtasks, q
+                ),
+                None => format!("/v2/task/{}?include_subtasks={}", task_id, include_subtasks),
+            };
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             Ok(compact_items(
                 &[resp],
@@ -2393,10 +2419,7 @@ async fn dispatch_tool(
         }
 
         "clickup_task_update" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let mut body = json!({});
             if let Some(name) = args.get("name").and_then(|v| v.as_str()) {
                 body["name"] = json!(name);
@@ -2415,7 +2438,10 @@ async fn dispatch_tool(
             } else if let Some(rem) = args.get("rem_assignees") {
                 body["assignees"] = json!({"add": [], "rem": rem});
             }
-            let path = format!("/v2/task/{}", task_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}?{}", task_id, q),
+                None => format!("/v2/task/{}", task_id),
+            };
             let resp = client.put(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(compact_items(
                 &[resp],
@@ -2424,11 +2450,11 @@ async fn dispatch_tool(
         }
 
         "clickup_task_delete" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
-            let path = format!("/v2/task/{}", task_id);
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}?{}", task_id, q),
+                None => format!("/v2/task/{}", task_id),
+            };
             client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Task {} deleted", task_id)}))
         }
@@ -2455,11 +2481,11 @@ async fn dispatch_tool(
         }
 
         "clickup_comment_list" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
-            let path = format!("/v2/task/{}/comment", task_id);
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/comment?{}", task_id, q),
+                None => format!("/v2/task/{}/comment", task_id),
+            };
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let comments = resp
                 .get("comments")
@@ -2473,10 +2499,7 @@ async fn dispatch_tool(
         }
 
         "clickup_comment_create" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let text = args
                 .get("text")
                 .and_then(|v| v.as_str())
@@ -2488,7 +2511,10 @@ async fn dispatch_tool(
             if let Some(notify_all) = args.get("notify_all").and_then(|v| v.as_bool()) {
                 body["notify_all"] = json!(notify_all);
             }
-            let path = format!("/v2/task/{}/comment", task_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/comment?{}", task_id, q),
+                None => format!("/v2/task/{}/comment", task_id),
+            };
             let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": "Comment created", "id": resp.get("id")}))
         }
@@ -2509,10 +2535,7 @@ async fn dispatch_tool(
         }
 
         "clickup_field_set" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let field_id = args
                 .get("field_id")
                 .and_then(|v| v.as_str())
@@ -2521,7 +2544,10 @@ async fn dispatch_tool(
                 .get("value")
                 .ok_or("Missing required parameter: value")?;
             let body = json!({"value": value});
-            let path = format!("/v2/task/{}/field/{}", task_id, field_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/field/{}?{}", task_id, field_id, q),
+                None => format!("/v2/task/{}/field/{}", task_id, field_id),
+            };
             client.post(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Field {} set on task {}", field_id, task_id)}))
         }
@@ -2591,15 +2617,15 @@ async fn dispatch_tool(
         }
 
         "clickup_checklist_create" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let name = args
                 .get("name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: name")?;
-            let path = format!("/v2/task/{}/checklist", task_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/checklist?{}", task_id, q),
+                None => format!("/v2/task/{}/checklist", task_id),
+            };
             let body = json!({"name": name});
             let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
             let checklist = resp.get("checklist").cloned().unwrap_or(resp);
@@ -2786,15 +2812,15 @@ async fn dispatch_tool(
         }
 
         "clickup_task_add_tag" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let tag_name = args
                 .get("tag_name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: tag_name")?;
-            let path = format!("/v2/task/{}/tag/{}", task_id, tag_name);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/tag/{}?{}", task_id, tag_name, q),
+                None => format!("/v2/task/{}/tag/{}", task_id, tag_name),
+            };
             client
                 .post(&path, &json!({}))
                 .await
@@ -2803,15 +2829,15 @@ async fn dispatch_tool(
         }
 
         "clickup_task_remove_tag" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let tag_name = args
                 .get("tag_name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: tag_name")?;
-            let path = format!("/v2/task/{}/tag/{}", task_id, tag_name);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/tag/{}?{}", task_id, tag_name, q),
+                None => format!("/v2/task/{}/tag/{}", task_id, tag_name),
+            };
             client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Tag '{}' removed from task {}", tag_name, task_id)}))
         }
@@ -3140,10 +3166,7 @@ async fn dispatch_tool(
         }
 
         "clickup_task_add_dep" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let mut body = json!({});
             if let Some(dep) = args.get("depends_on").and_then(|v| v.as_str()) {
                 body["depends_on"] = json!(dep);
@@ -3151,18 +3174,19 @@ async fn dispatch_tool(
             if let Some(dep) = args.get("dependency_of").and_then(|v| v.as_str()) {
                 body["dependency_of"] = json!(dep);
             }
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/dependency?{}", task_id, q),
+                None => format!("/v2/task/{}/dependency", task_id),
+            };
             client
-                .post(&format!("/v2/task/{}/dependency", task_id), &body)
+                .post(&path, &body)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Dependency added to task {}", task_id)}))
         }
 
         "clickup_task_remove_dep" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let mut body = json!({});
             if let Some(dep) = args.get("depends_on").and_then(|v| v.as_str()) {
                 body["depends_on"] = json!(dep);
@@ -3170,43 +3194,46 @@ async fn dispatch_tool(
             if let Some(dep) = args.get("dependency_of").and_then(|v| v.as_str()) {
                 body["dependency_of"] = json!(dep);
             }
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/dependency?{}", task_id, q),
+                None => format!("/v2/task/{}/dependency", task_id),
+            };
             client
-                .delete_with_body(&format!("/v2/task/{}/dependency", task_id), &body)
+                .delete_with_body(&path, &body)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Dependency removed from task {}", task_id)}))
         }
 
         "clickup_task_link" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let links_to = args
                 .get("links_to")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: links_to")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/link/{}?{}", task_id, links_to, q),
+                None => format!("/v2/task/{}/link/{}", task_id, links_to),
+            };
             let resp = client
-                .post(
-                    &format!("/v2/task/{}/link/{}", task_id, links_to),
-                    &json!({}),
-                )
+                .post(&path, &json!({}))
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Task {} linked to {}", task_id, links_to), "data": resp}))
         }
 
         "clickup_task_unlink" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let links_to = args
                 .get("links_to")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: links_to")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/link/{}?{}", task_id, links_to, q),
+                None => format!("/v2/task/{}/link/{}", task_id, links_to),
+            };
             client
-                .delete(&format!("/v2/task/{}/link/{}", task_id, links_to))
+                .delete(&path)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Task {} unlinked from {}", task_id, links_to)}))
@@ -3963,30 +3990,32 @@ async fn dispatch_tool(
         }
 
         "clickup_field_unset" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let field_id = args
                 .get("field_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: field_id")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/field/{}?{}", task_id, field_id, q),
+                None => format!("/v2/task/{}/field/{}", task_id, field_id),
+            };
             client
-                .delete(&format!("/v2/task/{}/field/{}", task_id, field_id))
+                .delete(&path)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Field {} unset on task {}", field_id, task_id)}))
         }
 
         "clickup_attachment_list" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             // ClickUp has no dedicated list-attachments endpoint. The `attachments`
             // array is returned inline by GET /v2/task/{id}, per the API docs.
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}?{}", task_id, q),
+                None => format!("/v2/task/{}", task_id),
+            };
             let resp = client
-                .get(&format!("/v2/task/{}", task_id))
+                .get(&path)
                 .await
                 .map_err(|e| e.to_string())?;
             let attachments = resp
@@ -4107,12 +4136,13 @@ async fn dispatch_tool(
         }
 
         "clickup_task_time_in_status" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/time_in_status?{}", task_id, q),
+                None => format!("/v2/task/{}/time_in_status", task_id),
+            };
             let resp = client
-                .get(&format!("/v2/task/{}/time_in_status", task_id))
+                .get(&path)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(resp)
@@ -4857,15 +4887,15 @@ async fn dispatch_tool(
         }
 
         "clickup_attachment_upload" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let file_path = args
                 .get("file_path")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: file_path")?;
-            let path = format!("/v2/task/{}/attachment", task_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/attachment?{}", task_id, q),
+                None => format!("/v2/task/{}/attachment", task_id),
+            };
             let resp = client
                 .upload_file(&path, std::path::Path::new(file_path))
                 .await
