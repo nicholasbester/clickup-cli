@@ -1578,16 +1578,26 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_replace_estimates",
-            "description": "Replace all time estimates for a task (PUT replaces all user estimates)",
+            "description": "Replace the full set of per-user time estimates on a task. The request body is an array; any user not in the array has their estimate removed. To set one user's estimate without disturbing others, use clickup_task_set_estimate instead. Body shape per ClickUp's spec: [{assignee, time}]. Requires Business plan for multiple owners.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "string", "description": "Task ID"},
+                    "task_id": {"type": "string", "description": "Task ID. Custom task IDs (PROJ-42) are auto-detected."},
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
-                    "user_id": {"type": "integer", "description": "User ID"},
-                    "time_estimate": {"type": "integer", "description": "Time estimate in milliseconds"}
+                    "estimates": {
+                        "type": "array",
+                        "description": "Full set of per-user estimates to replace with. Every assignee not present here will have their estimate removed. At least one entry required.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "assignee": {"description": "User ID (integer) or the literal string 'unassigned'."},
+                                "time": {"type": "integer", "description": "Time estimate in milliseconds (>= 0)."}
+                            },
+                            "required": ["assignee", "time"]
+                        }
+                    }
                 },
-                "required": ["task_id", "user_id", "time_estimate"]
+                "required": ["task_id", "estimates"]
             }
         },
         {
@@ -4226,16 +4236,18 @@ async fn dispatch_tool(
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
-            let user_id = args
-                .get("user_id")
-                .and_then(|v| v.as_i64())
-                .ok_or("Missing required parameter: user_id")?;
-            let time_estimate = args
-                .get("time_estimate")
-                .and_then(|v| v.as_i64())
-                .ok_or("Missing required parameter: time_estimate")?;
-            let body =
-                json!({"time_estimates": [{"user_id": user_id, "time_estimate": time_estimate}]});
+            // ClickUp's spec body is an ARRAY of {assignee, time}.
+            // The previous shape {time_estimates: [{user_id, time_estimate}]}
+            // had the wrong field names and the wrong wrapping, and it only
+            // accepted a single user, silently erasing all other estimates.
+            let estimates = args
+                .get("estimates")
+                .and_then(|v| v.as_array())
+                .ok_or("Missing required parameter: estimates (array of {assignee, time})")?;
+            if estimates.is_empty() {
+                return Err("estimates must contain at least one {assignee, time} entry".to_string());
+            }
+            let body = Value::Array(estimates.clone());
             client
                 .put(
                     &format!(

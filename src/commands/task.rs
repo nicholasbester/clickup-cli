@@ -203,12 +203,17 @@ pub enum TaskCommands {
     /// Replace all per-user time estimates on a task (v3)
     #[command(name = "replace-estimates")]
     ReplaceEstimates {
-        /// Assignee user ID
+        /// Per-user estimate in the form ASSIGNEE:MS (repeat for each user).
+        /// ASSIGNEE is a numeric user ID or the literal string `unassigned`.
+        /// At least one --estimate is required unless --body is provided.
+        /// This REPLACES the full set of per-user estimates on the task; any
+        /// user not listed here is removed.
+        #[arg(long = "estimate")]
+        estimates: Vec<String>,
+        /// Raw JSON body (overrides --estimate). Must be an array of
+        /// {assignee, time} objects per ClickUp's spec.
         #[arg(long)]
-        assignee: String,
-        /// Time estimate in milliseconds
-        #[arg(long)]
-        time: u64,
+        body: Option<String>,
         /// Task ID (auto-detected from git branch if omitted)
         id: Option<String>,
     },
@@ -632,12 +637,78 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
             output.print_single(&resp, TASK_FIELDS, "id");
             Ok(())
         }
-        TaskCommands::ReplaceEstimates { id, assignee, time } => {
+        TaskCommands::ReplaceEstimates {
+            id,
+            estimates,
+            body: raw_body,
+            ..
+        } => {
             let task = git::require_task(cli, id.as_deref(), true)?;
             let ws_id = resolve_workspace(cli)?;
-            let body = serde_json::json!({
-                "time_estimates": [{"user_id": assignee, "time_estimate": time}]
-            });
+
+            // ClickUp's spec for this endpoint:
+            //   PUT /v3/workspaces/{ws}/tasks/{id}/time_estimates_by_user
+            //   body: [ { assignee: int|"unassigned", time: ms_int }, ... ]
+            // The previous implementation wrapped a single entry in
+            // {time_estimates: [{user_id, time_estimate}]} which is neither
+            // the right shape nor the right field names. Worse, it accepted
+            // only one assignee at a time, so calling "replace" silently
+            // erased every other user's estimate. This rebuild accepts an
+            // array.
+            let body: serde_json::Value = if let Some(raw) = raw_body {
+                serde_json::from_str(&raw).map_err(|e| CliError::ClientError {
+                    message: format!("Invalid JSON body: {}", e),
+                    status: 0,
+                })?
+            } else {
+                if estimates.is_empty() {
+                    return Err(CliError::ClientError {
+                        message: "Provide at least one --estimate ASSIGNEE:MS or use --body for the raw JSON array.".into(),
+                        status: 0,
+                    });
+                }
+                let entries: Result<Vec<serde_json::Value>, CliError> = estimates
+                    .into_iter()
+                    .map(|raw| {
+                        let (assignee_raw, ms_raw) = raw.split_once(':').ok_or_else(|| {
+                            CliError::ClientError {
+                                message: format!(
+                                    "--estimate must be ASSIGNEE:MS (got '{}')",
+                                    raw
+                                ),
+                                status: 0,
+                            }
+                        })?;
+                        let assignee_raw = assignee_raw.trim();
+                        let ms = ms_raw.trim().parse::<i64>().map_err(|_| {
+                            CliError::ClientError {
+                                message: format!(
+                                    "--estimate MS must be a non-negative integer (got '{}')",
+                                    ms_raw
+                                ),
+                                status: 0,
+                            }
+                        })?;
+                        let assignee_val = if assignee_raw.eq_ignore_ascii_case("unassigned") {
+                            serde_json::Value::String("unassigned".to_string())
+                        } else {
+                            let n = assignee_raw.parse::<i64>().map_err(|_| {
+                                CliError::ClientError {
+                                    message: format!(
+                                        "--estimate ASSIGNEE must be a numeric user id or 'unassigned' (got '{}')",
+                                        assignee_raw
+                                    ),
+                                    status: 0,
+                                }
+                            })?;
+                            serde_json::json!(n)
+                        };
+                        Ok(serde_json::json!({"assignee": assignee_val, "time": ms}))
+                    })
+                    .collect();
+                serde_json::Value::Array(entries?)
+            };
+
             let resp = client
                 .put(
                     &format!(
