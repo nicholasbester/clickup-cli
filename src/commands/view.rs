@@ -141,10 +141,7 @@ pub async fn execute(command: ViewCommands, cli: &Cli) -> Result<(), CliError> {
                     status: 0,
                 });
             };
-            let body = serde_json::json!({
-                "name": name,
-                "type": view_type,
-            });
+            let body = default_view_body(&name, &view_type);
             let resp = client.post(&url, &body).await?;
             let view = resp.get("view").cloned().unwrap_or(resp);
             output.print_single(&view, VIEW_FIELDS, "id");
@@ -183,4 +180,54 @@ pub async fn execute(command: ViewCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
     }
+}
+
+/// Build the minimal create-view body that ClickUp's v2 spec accepts.
+///
+/// All of `grouping`, `divide`, `sorting`, `filters`, `columns`,
+/// `team_sidebar`, and `settings` are marked required by the OpenAPI spec.
+/// Sending only `{name, type}` 400s. We populate them with the documented
+/// neutral defaults so a basic `view create --name X --type list ...` call
+/// succeeds; the resulting view can be reshaped in the ClickUp UI afterwards.
+pub(crate) fn default_view_body(name: &str, view_type: &str) -> serde_json::Value {
+    serde_json::json!({
+        "name": name,
+        "type": view_type,
+        "grouping": {
+            "field": null,
+            "dir": 1,
+            "collapsed": [],
+            "ignore": false
+        },
+        "divide": {
+            "field": null,
+            "dir": null,
+            "collapsed": []
+        },
+        "sorting": {"fields": []},
+        "filters": {
+            "op": "AND",
+            "fields": [],
+            "search": "",
+            "show_closed": false
+        },
+        "columns": {"fields": []},
+        "team_sidebar": {
+            "assignees": [],
+            "assigned_comments": false,
+            "unassigned_tasks": false
+        },
+        "settings": {
+            "show_task_locations": false,
+            "show_subtasks": 3,
+            "show_subtask_parent_names": false,
+            "show_closed_subtasks": false,
+            "show_assignees": true,
+            "show_images": true,
+            "collapse_empty_columns": null,
+            "me_comments": true,
+            "me_subtasks": true,
+            "me_checklists": true
+        }
+    })
 }

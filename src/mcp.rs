@@ -3472,7 +3472,11 @@ async fn dispatch_tool(
                 .get("type")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: type")?;
-            let body = json!({"name": name, "type": view_type});
+            // ClickUp's view-create endpoint requires grouping / divide /
+            // sorting / filters / columns / team_sidebar / settings. Reuse
+            // the CLI helper for the documented neutral defaults so the MCP
+            // tool also succeeds with just name + type.
+            let body = crate::commands::view::default_view_body(name, view_type);
             let resp = client
                 .post(&format!("/v2/{}/{}/view", scope, scope_id), &body)
                 .await
