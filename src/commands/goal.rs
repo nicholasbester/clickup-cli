@@ -144,10 +144,14 @@ pub async fn execute(command: GoalCommands, cli: &Cli) -> Result<(), CliError> {
             owner,
         } => {
             let ws_id = resolve_workspace(cli)?;
+            // ClickUp's create-goal spec requires `multiple_owners` (bool).
+            // The CLI exposes only a single `--owner`, so we always send false;
+            // multi-owner goals can be created via the MCP tool or a raw API call.
             let mut body = serde_json::json!({
                 "name": name,
                 "due_date": due_date,
                 "description": description,
+                "multiple_owners": false,
             });
             if let Some(c) = color {
                 body["color"] = serde_json::Value::String(c);

@@ -1128,7 +1128,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_doc_edit_page",
-            "description": "Rename or rewrite an existing page inside a ClickUp doc. The supplied content replaces the current page body entirely (not an append). For a fresh page use clickup_doc_add_page instead. Returns the updated page object.",
+            "description": "Rename or rewrite an existing page inside a ClickUp doc. By default the supplied content replaces the current page body. Pass mode='append' or mode='prepend' to merge with the existing body instead. For a fresh page use clickup_doc_add_page instead. Returns the updated page object.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1136,7 +1136,8 @@ pub fn tool_list() -> Value {
                     "doc_id": {"type": "string", "description": "ID of the parent doc. Obtain from clickup_doc_list (field: id)."},
                     "page_id": {"type": "string", "description": "ID of the page to edit. Obtain from clickup_doc_pages (field: id)."},
                     "name": {"type": "string", "description": "New page title. Omit to keep current title."},
-                    "content": {"type": "string", "description": "New page body in ClickUp-flavoured markdown. Replaces the existing body entirely. Omit to leave content unchanged."}
+                    "content": {"type": "string", "description": "New page body in ClickUp-flavoured markdown. Replaces the existing body unless mode is set. Omit to leave content unchanged."},
+                    "mode": {"type": "string", "description": "How to combine content with the existing body: 'replace' (default), 'append', or 'prepend'. Sent as content_edit_mode on the wire."}
                 },
                 "required": ["doc_id", "page_id"]
             }
@@ -2688,6 +2689,14 @@ async fn dispatch_tool(
             if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
                 body["description"] = json!(desc);
             }
+            // ClickUp's create-goal spec requires `multiple_owners` (bool).
+            // Derive it from the size of the owner_ids array.
+            let owner_count = args
+                .get("owner_ids")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            body["multiple_owners"] = json!(owner_count > 1);
             if let Some(owner_ids) = args.get("owner_ids") {
                 body["owners"] = owner_ids.clone();
             }
@@ -3569,6 +3578,17 @@ async fn dispatch_tool(
             }
             if let Some(content) = args.get("content").and_then(|v| v.as_str()) {
                 body["content"] = json!(content);
+            }
+            if let Some(mode) = args.get("mode").and_then(|v| v.as_str()) {
+                let allowed = ["replace", "append", "prepend"];
+                if !allowed.contains(&mode) {
+                    return Err(format!(
+                        "Invalid mode '{}'. Valid values: {}",
+                        mode,
+                        allowed.join(", ")
+                    ));
+                }
+                body["content_edit_mode"] = json!(mode);
             }
             let resp = client
                 .put(
