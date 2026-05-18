@@ -3178,10 +3178,7 @@ async fn dispatch_tool(
                 Some(q) => format!("/v2/task/{}/dependency?{}", task_id, q),
                 None => format!("/v2/task/{}/dependency", task_id),
             };
-            client
-                .post(&path, &body)
-                .await
-                .map_err(|e| e.to_string())?;
+            client.post(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Dependency added to task {}", task_id)}))
         }
 
@@ -3232,10 +3229,7 @@ async fn dispatch_tool(
                 Some(q) => format!("/v2/task/{}/link/{}?{}", task_id, links_to, q),
                 None => format!("/v2/task/{}/link/{}", task_id, links_to),
             };
-            client
-                .delete(&path)
-                .await
-                .map_err(|e| e.to_string())?;
+            client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Task {} unlinked from {}", task_id, links_to)}))
         }
 
@@ -3999,10 +3993,7 @@ async fn dispatch_tool(
                 Some(q) => format!("/v2/task/{}/field/{}?{}", task_id, field_id, q),
                 None => format!("/v2/task/{}/field/{}", task_id, field_id),
             };
-            client
-                .delete(&path)
-                .await
-                .map_err(|e| e.to_string())?;
+            client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Field {} unset on task {}", field_id, task_id)}))
         }
 
@@ -4014,10 +4005,7 @@ async fn dispatch_tool(
                 Some(q) => format!("/v2/task/{}?{}", task_id, q),
                 None => format!("/v2/task/{}", task_id),
             };
-            let resp = client
-                .get(&path)
-                .await
-                .map_err(|e| e.to_string())?;
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let attachments = resp
                 .get("attachments")
                 .and_then(|a| a.as_array())
@@ -4141,10 +4129,7 @@ async fn dispatch_tool(
                 Some(q) => format!("/v2/task/{}/time_in_status?{}", task_id, q),
                 None => format!("/v2/task/{}/time_in_status", task_id),
             };
-            let resp = client
-                .get(&path)
-                .await
-                .map_err(|e| e.to_string())?;
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             Ok(resp)
         }
 
