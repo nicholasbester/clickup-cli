@@ -51,7 +51,9 @@ pub async fn execute(command: GroupCommands, cli: &Cli) -> Result<(), CliError> 
         GroupCommands::List => {
             // ClickUp's GET /v2/group requires team_id as a query param.
             let team_id = resolve_workspace(cli)?;
-            let resp = client.get(&format!("/v2/group?team_id={}", team_id)).await?;
+            let resp = client
+                .get(&format!("/v2/group?team_id={}", team_id))
+                .await?;
             let groups = resp
                 .get("groups")
                 .and_then(|g| g.as_array())
@@ -99,15 +101,15 @@ pub async fn execute(command: GroupCommands, cli: &Cli) -> Result<(), CliError> 
                 let parse = |ids: Vec<String>| -> Result<Vec<serde_json::Value>, CliError> {
                     ids.into_iter()
                         .map(|s| {
-                            s.parse::<i64>()
-                                .map(|n| serde_json::json!(n))
-                                .map_err(|_| CliError::ClientError {
+                            s.parse::<i64>().map(|n| serde_json::json!(n)).map_err(|_| {
+                                CliError::ClientError {
                                     message: format!(
                                         "member id must be a numeric user id, got '{}'",
                                         s
                                     ),
                                     status: 0,
-                                })
+                                }
+                            })
                         })
                         .collect()
                 };
