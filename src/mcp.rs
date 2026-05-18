@@ -4245,7 +4245,9 @@ async fn dispatch_tool(
                 .and_then(|v| v.as_array())
                 .ok_or("Missing required parameter: estimates (array of {assignee, time})")?;
             if estimates.is_empty() {
-                return Err("estimates must contain at least one {assignee, time} entry".to_string());
+                return Err(
+                    "estimates must contain at least one {assignee, time} entry".to_string()
+                );
             }
             let body = Value::Array(estimates.clone());
             client
