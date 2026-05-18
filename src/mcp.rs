@@ -2124,14 +2124,27 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_acl_update",
-            "description": "Change the privacy (ACL) of a ClickUp hierarchy object — make a space/folder/list private (explicit members only) or public (whole workspace). Uses the v3 ACL endpoint. Requires Enterprise plan. Returns the updated object.",
+            "description": "Change the privacy (ACL) of a ClickUp hierarchy object — toggle private/public and grant or revoke per-user/per-group access. Uses the v3 ACL endpoint. Requires Enterprise plan. Body shape per ClickUp's OpenAPI spec: { private?: bool, entries?: [{kind, id, permission_level?}] }.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "object_type": {"type": "string", "description": "Type of object to change: 'space', 'folder', or 'list'."},
                     "object_id": {"type": "string", "description": "ID of the space/folder/list. Obtain from the matching list endpoint (clickup_space_list, clickup_folder_list, or clickup_list_list)."},
-                    "private": {"type": "boolean", "description": "true = make the object private (only explicit members see it); false = make it public (visible to the whole workspace)."}
+                    "private": {"type": "boolean", "description": "true = make the object private (only explicit members see it); false = make it public (visible to the whole workspace). Omit to leave unchanged."},
+                    "entries": {
+                        "type": "array",
+                        "description": "Grant or revoke per-principal access. Each entry: {kind: 'user'|'group', id: string, permission_level?: integer}. permission_level enum: 1=read, 3=comment, 4=edit, 5=create; pass 0 to revoke. Maps directly to ClickUp's `entries` array per the v3 spec.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "kind": {"type": "string", "enum": ["user", "group"], "description": "Principal type."},
+                                "id": {"type": "string", "description": "User ID (for kind='user') or user-group ID (for kind='group')."},
+                                "permission_level": {"type": "integer", "description": "1=read, 3=comment, 4=edit, 5=create. Pass 0 to revoke. Defaults to read (1) if omitted on a grant."}
+                            },
+                            "required": ["kind", "id"]
+                        }
+                    }
                 },
                 "required": ["object_type", "object_id"]
             }
@@ -5083,6 +5096,35 @@ async fn dispatch_tool(
             let mut body = json!({});
             if let Some(private) = args.get("private").and_then(|v| v.as_bool()) {
                 body["private"] = json!(private);
+            }
+            if let Some(entries) = args.get("entries").and_then(|v| v.as_array()) {
+                let mut normalized: Vec<Value> = Vec::with_capacity(entries.len());
+                for (i, entry) in entries.iter().enumerate() {
+                    let kind = entry
+                        .get("kind")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| format!("entries[{}] missing required field 'kind'", i))?;
+                    if kind != "user" && kind != "group" {
+                        return Err(format!(
+                            "entries[{}] kind must be 'user' or 'group' (got '{}')",
+                            i, kind
+                        ));
+                    }
+                    let id = entry
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| format!("entries[{}] missing required field 'id'", i))?;
+                    let mut out = serde_json::Map::new();
+                    out.insert("kind".into(), json!(kind));
+                    out.insert("id".into(), json!(id));
+                    if let Some(level) = entry.get("permission_level").and_then(|v| v.as_i64()) {
+                        out.insert("permission_level".into(), json!(level));
+                    }
+                    normalized.push(Value::Object(out));
+                }
+                if !normalized.is_empty() {
+                    body["entries"] = Value::Array(normalized);
+                }
             }
             client
                 .patch(
