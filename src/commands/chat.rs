@@ -165,8 +165,10 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
                 ""
             };
             let resp = client.get(&format!("{}/channels{}", base, query)).await?;
+            // v3 envelope wraps the list in "data"; older shape used "channels".
             let mut channels = resp
-                .get("channels")
+                .get("data")
+                .or_else(|| resp.get("channels"))
                 .and_then(|v| v.as_array())
                 .cloned()
                 .unwrap_or_default();
@@ -238,14 +240,14 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             let resp = client
                 .get(&format!("{}/channels/{}/messages", base, channel))
                 .await?;
+            // v3 envelope wraps the list in "data"; older shape used "messages",
+            // and some endpoints return a bare array.
             let mut messages = resp
-                .get("messages")
+                .get("data")
+                .or_else(|| resp.get("messages"))
                 .and_then(|v| v.as_array())
                 .cloned()
-                .unwrap_or_else(|| {
-                    // Response may be an array directly
-                    resp.as_array().cloned().unwrap_or_default()
-                });
+                .unwrap_or_else(|| resp.as_array().cloned().unwrap_or_default());
             if let Some(limit) = cli.limit {
                 messages.truncate(limit);
             }
@@ -320,8 +322,11 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             let resp = client
                 .get(&format!("{}/messages/{}/replies", base, msg_id))
                 .await?;
+            // v3 envelope wraps the list in "data"; older shape used "replies",
+            // and some endpoints return a bare array.
             let mut replies = resp
-                .get("replies")
+                .get("data")
+                .or_else(|| resp.get("replies"))
                 .and_then(|v| v.as_array())
                 .cloned()
                 .unwrap_or_else(|| resp.as_array().cloned().unwrap_or_default());
