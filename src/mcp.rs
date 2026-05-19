@@ -2095,29 +2095,56 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_audit_log_query",
-            "description": "Query the ClickUp audit log (who did what, when) for a workspace — filter by event type, acting user, and date range. Requires Enterprise plan. Uses v3 cursor pagination. Returns an array of audit event objects (actor, event, target, timestamp).",
+            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires Enterprise plan. Uses v3 cursor pagination. Body shape per ClickUp's OpenAPI spec: { applicability, filter?, pagination? }. Returns the raw response (data array plus pagination cursor).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "type": {"type": "string", "description": "Audit event type filter. Required. ClickUp's documented categories include 'AUTH', 'HIERARCHY', 'USER', 'CUSTOM_FIELDS', 'AGENT', 'OTHER'. See ClickUp docs for the full enum."},
-                    "user_id": {"type": "integer", "description": "Restrict to events performed by this user ID. Obtain from clickup_member_list. Omit for all users."},
-                    "start_date": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds (e.g. 1735689600000 for 2025-01-01). Omit for no lower bound."},
-                    "end_date": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Omit for no upper bound."}
+                    "applicability": {"type": "string", "description": "Required. Scope of the query. ClickUp's documented values: WORKSPACE, TEAMS, USERS."},
+                    "event_type": {"type": "string", "description": "Optional filter on event category. ClickUp's documented categories include AUTH, HIERARCHY, USER, CUSTOM_FIELDS, AGENT, OTHER. Maps to filter.eventType."},
+                    "event_status": {"type": "string", "description": "Optional filter on event status (e.g. SUCCESS, FAILURE). Maps to filter.eventStatus."},
+                    "user_id": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of user IDs to filter on. Maps to filter.userId."
+                    },
+                    "user_email": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of user emails to filter on. Maps to filter.userEmail."
+                    },
+                    "start_time": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds. Maps to filter.startTime."},
+                    "end_time": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Maps to filter.endTime."},
+                    "page_rows": {"type": "integer", "description": "Pagination page size. Maps to pagination.pageRows."},
+                    "page_timestamp": {"type": "integer", "description": "Pagination cursor timestamp. Maps to pagination.pageTimestamp."},
+                    "page_direction": {"type": "string", "description": "Pagination direction (NEXT or PREVIOUS). Maps to pagination.pageDirection."}
                 },
-                "required": ["type"]
+                "required": ["applicability"]
             }
         },
         {
             "name": "clickup_acl_update",
-            "description": "Change the privacy (ACL) of a ClickUp hierarchy object — make a space/folder/list private (explicit members only) or public (whole workspace). Uses the v3 ACL endpoint. Requires Enterprise plan. Returns the updated object.",
+            "description": "Change the privacy (ACL) of a ClickUp hierarchy object — toggle private/public and grant or revoke per-user/per-group access. Uses the v3 ACL endpoint. Requires Enterprise plan. Body shape per ClickUp's OpenAPI spec: { private?: bool, entries?: [{kind, id, permission_level?}] }.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "object_type": {"type": "string", "description": "Type of object to change: 'space', 'folder', or 'list'."},
                     "object_id": {"type": "string", "description": "ID of the space/folder/list. Obtain from the matching list endpoint (clickup_space_list, clickup_folder_list, or clickup_list_list)."},
-                    "private": {"type": "boolean", "description": "true = make the object private (only explicit members see it); false = make it public (visible to the whole workspace)."}
+                    "private": {"type": "boolean", "description": "true = make the object private (only explicit members see it); false = make it public (visible to the whole workspace). Omit to leave unchanged."},
+                    "entries": {
+                        "type": "array",
+                        "description": "Grant or revoke per-principal access. Each entry: {kind: 'user'|'group', id: string, permission_level?: integer}. permission_level enum: 1=read, 3=comment, 4=edit, 5=create; pass 0 to revoke. Maps directly to ClickUp's `entries` array per the v3 spec.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "kind": {"type": "string", "enum": ["user", "group"], "description": "Principal type."},
+                                "id": {"type": "string", "description": "User ID (for kind='user') or user-group ID (for kind='group')."},
+                                "permission_level": {"type": "integer", "description": "1=read, 3=comment, 4=edit, 5=create. Pass 0 to revoke. Defaults to read (1) if omitted on a grant."}
+                            },
+                            "required": ["kind", "id"]
+                        }
+                    }
                 },
                 "required": ["object_type", "object_id"]
             }
@@ -5001,19 +5028,54 @@ async fn dispatch_tool(
 
         "clickup_audit_log_query" => {
             let team_id = resolve_workspace(args)?;
-            let event_type = args
-                .get("type")
+            let applicability = args
+                .get("applicability")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: type")?;
-            let mut body = json!({"type": event_type});
-            if let Some(user_id) = args.get("user_id").and_then(|v| v.as_i64()) {
-                body["user_id"] = json!(user_id);
+                .ok_or("Missing required parameter: applicability")?;
+
+            // ClickUp's audit-log body per the v3 OpenAPI spec:
+            //   { applicability, filter?: {...}, pagination?: {...} }
+            // The previous implementation invented `{type, user_id, date_filter}`,
+            // which the endpoint does not recognise.
+            let mut body = json!({"applicability": applicability});
+
+            let mut filter = serde_json::Map::new();
+            if let Some(t) = args.get("event_type").and_then(|v| v.as_str()) {
+                filter.insert("eventType".into(), json!(t));
             }
-            if let Some(start_date) = args.get("start_date").and_then(|v| v.as_i64()) {
-                body["date_filter"] = json!({"start_date": start_date, "end_date": args.get("end_date").and_then(|v| v.as_i64()).unwrap_or(i64::MAX)});
-            } else if let Some(end_date) = args.get("end_date").and_then(|v| v.as_i64()) {
-                body["date_filter"] = json!({"end_date": end_date});
+            if let Some(s) = args.get("event_status").and_then(|v| v.as_str()) {
+                filter.insert("eventStatus".into(), json!(s));
             }
+            if let Some(ids) = args.get("user_id").and_then(|v| v.as_array()) {
+                filter.insert("userId".into(), Value::Array(ids.clone()));
+            }
+            if let Some(emails) = args.get("user_email").and_then(|v| v.as_array()) {
+                filter.insert("userEmail".into(), Value::Array(emails.clone()));
+            }
+            if let Some(t) = args.get("start_time").and_then(|v| v.as_i64()) {
+                filter.insert("startTime".into(), json!(t));
+            }
+            if let Some(t) = args.get("end_time").and_then(|v| v.as_i64()) {
+                filter.insert("endTime".into(), json!(t));
+            }
+            if !filter.is_empty() {
+                body["filter"] = Value::Object(filter);
+            }
+
+            let mut pagination = serde_json::Map::new();
+            if let Some(n) = args.get("page_rows").and_then(|v| v.as_i64()) {
+                pagination.insert("pageRows".into(), json!(n));
+            }
+            if let Some(t) = args.get("page_timestamp").and_then(|v| v.as_i64()) {
+                pagination.insert("pageTimestamp".into(), json!(t));
+            }
+            if let Some(d) = args.get("page_direction").and_then(|v| v.as_str()) {
+                pagination.insert("pageDirection".into(), json!(d));
+            }
+            if !pagination.is_empty() {
+                body["pagination"] = Value::Object(pagination);
+            }
+
             let resp = client
                 .post(&format!("/v3/workspaces/{}/auditlogs", team_id), &body)
                 .await
@@ -5034,6 +5096,35 @@ async fn dispatch_tool(
             let mut body = json!({});
             if let Some(private) = args.get("private").and_then(|v| v.as_bool()) {
                 body["private"] = json!(private);
+            }
+            if let Some(entries) = args.get("entries").and_then(|v| v.as_array()) {
+                let mut normalized: Vec<Value> = Vec::with_capacity(entries.len());
+                for (i, entry) in entries.iter().enumerate() {
+                    let kind = entry
+                        .get("kind")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| format!("entries[{}] missing required field 'kind'", i))?;
+                    if kind != "user" && kind != "group" {
+                        return Err(format!(
+                            "entries[{}] kind must be 'user' or 'group' (got '{}')",
+                            i, kind
+                        ));
+                    }
+                    let id = entry
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| format!("entries[{}] missing required field 'id'", i))?;
+                    let mut out = serde_json::Map::new();
+                    out.insert("kind".into(), json!(kind));
+                    out.insert("id".into(), json!(id));
+                    if let Some(level) = entry.get("permission_level").and_then(|v| v.as_i64()) {
+                        out.insert("permission_level".into(), json!(level));
+                    }
+                    normalized.push(Value::Object(out));
+                }
+                if !normalized.is_empty() {
+                    body["entries"] = Value::Array(normalized);
+                }
             }
             client
                 .patch(
