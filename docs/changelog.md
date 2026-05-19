@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `chat channel-list`, `chat message-list`, and `chat reply-list` CLI commands now read the v3 `data` envelope first and fall back to the older `channels`/`messages`/`replies` keys for compatibility (#39). Before this fix the commands consistently returned empty results because the v3 endpoints return their list under `data` — the matching MCP tools were already fixed in 0.10.0 but the CLI parity was missed.
+
 ## [0.10.0] - 2026-05-18
 
 ### Changed
