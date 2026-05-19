@@ -7,7 +7,7 @@ permalink: /mcp/
 
 # MCP Server
 
-clickup-cli includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server, allowing LLMs to interact with ClickUp through structured tool calls instead of shell commands.
+The `clickup-cli` CLI (or `clkup` for short) includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server, allowing LLMs to interact with ClickUp through structured tool calls instead of shell commands.
 
 **143 tools** covering 100% of the ClickUp API — every endpoint available via CLI is also available as an MCP tool.
 
@@ -21,7 +21,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 {
   "mcpServers": {
     "clickup": {
-      "command": "clickup",
+      "command": "clickup-cli",
       "args": ["mcp", "serve"]
     }
   }
@@ -36,7 +36,7 @@ Add to your Cursor MCP settings:
 {
   "mcpServers": {
     "clickup": {
-      "command": "clickup",
+      "command": "clickup-cli",
       "args": ["mcp", "serve"]
     }
   }
@@ -51,7 +51,7 @@ Add `.mcp.json` to your project root:
 {
   "mcpServers": {
     "clickup-cli": {
-      "command": "/opt/homebrew/bin/clickup",
+      "command": "/opt/homebrew/bin/clickup-cli",
       "args": ["mcp", "serve"]
     }
   }
@@ -61,10 +61,10 @@ Add `.mcp.json` to your project root:
 Or generate it automatically:
 
 ```bash
-clickup agent-config init --mcp
+clickup-cli agent-config init --mcp
 ```
 
-**Note:** Use the full path to `clickup` (run `which clickup` to find it). Use `clickup-cli` as the server name to avoid conflicts with other ClickUp MCP integrations.
+**Note:** Use the full path to `clickup-cli` (run `which clickup-cli` to find it). Use `clickup-cli` as the server name to avoid conflicts with other ClickUp MCP integrations.
 
 ### Docker
 
@@ -104,17 +104,17 @@ Use in `.mcp.json`:
 
 ### Prerequisites
 
-Run `clickup setup --token pk_your_token` first, or create a project-level `.clickup.toml`:
+Run `clickup-cli setup --token pk_your_token` first, or create a project-level `.clickup.toml`:
 
 ```bash
-clickup agent-config init --token pk_your_token --workspace 12345 --mcp
+clickup-cli agent-config init --token pk_your_token --workspace 12345 --mcp
 ```
 
 This creates both `.clickup.toml` (auth config) and `.mcp.json` (MCP server config) in one command.
 
 ### Limiting MCP tools
 
-By default `clickup mcp serve` exposes all 143 tools. You can restrict this at startup to shrink the LLM's context and enforce access control. The server also logs the active filter to stderr on startup (e.g. `MCP: profile=read, exposing 52/143 tools`), so you can verify the configuration at a glance. Flags and matching env vars:
+By default `clickup-cli mcp serve` exposes all 143 tools. You can restrict this at startup to shrink the LLM's context and enforce access control. The server also logs the active filter to stderr on startup (e.g. `MCP: profile=read, exposing 52/143 tools`), so you can verify the configuration at a glance. Flags and matching env vars:
 
 | Flag | Env var | Purpose |
 | --- | --- | --- |
@@ -131,7 +131,7 @@ By default `clickup mcp serve` exposes all 143 tools. You can restrict this at s
 {
   "mcpServers": {
     "clickup": {
-      "command": "clickup",
+      "command": "clickup-cli",
       "args": ["mcp", "serve", "--read-only"]
     }
   }
@@ -144,7 +144,7 @@ Task-focused agent (task + comment + time groups only):
 {
   "mcpServers": {
     "clickup": {
-      "command": "clickup",
+      "command": "clickup-cli",
       "args": ["mcp", "serve", "--groups", "task,comment,time"]
     }
   }
@@ -157,7 +157,7 @@ Filtered tools are rejected at `tools/call` as well as hidden from `tools/list`,
 
 ClickUp ships [its own MCP server](https://developer.clickup.com/docs/connect-an-ai-assistant-to-clickups-mcp-server). Both are valid, aimed at different use cases.
 
-| | `clickup mcp serve` (this project) | ClickUp official MCP |
+| | `clickup-cli mcp serve` (this project) | ClickUp official MCP |
 | --- | --- | --- |
 | Auth | Personal API token | OAuth only |
 | Hosting | Local (stdio) | ClickUp-hosted (HTTPS) |
@@ -166,7 +166,7 @@ ClickUp ships [its own MCP server](https://developer.clickup.com/docs/connect-an
 | Output | Token-optimized (~98% smaller than raw JSON) | Not specified |
 | Filtering | `--profile read/safe/all` + group/tool allowlist/denylist | — |
 | Offline / air-gapped | ✅ | ❌ |
-| Setup | `clickup mcp serve` (or via .mcp.json) | OAuth flow |
+| Setup | `clickup-cli mcp serve` (or via .mcp.json) | OAuth flow |
 
 **Pick this project when** you want local execution, personal-token auth, complete API coverage, and the ability to shape a read-only or task-focused agent via the filter flags.
 
@@ -211,7 +211,7 @@ All tool names are prefixed with `clickup_` (e.g., `clickup_task_list`).
 The MCP server uses JSON-RPC 2.0 over stdio. It reads requests from stdin and writes responses to stdout. The server uses the same HTTP client and authentication as the CLI commands, and returns **token-efficient compact responses** — the same field flattening as the CLI's table output, but as JSON. Status objects, priority objects, assignee arrays, and timestamps are all flattened to simple values.
 
 ```
-LLM ↔ JSON-RPC (stdio) ↔ clickup mcp serve ↔ ClickUp API
+LLM ↔ JSON-RPC (stdio) ↔ clickup-cli mcp serve ↔ ClickUp API
                                 ↓
                         Compact JSON response
                    (flattened, essential fields only)
@@ -222,7 +222,7 @@ LLM ↔ JSON-RPC (stdio) ↔ clickup mcp serve ↔ ClickUp API
 | | CLI Mode (recommended) | MCP Mode |
 |---|---|---|
 | **Setup cost** | ~1,000 tokens (once) | 143 tool schemas loaded into context |
-| **Setup** | `clickup agent-config inject` | Add to MCP server config |
+| **Setup** | `clickup-cli agent-config inject` | Add to MCP server config |
 | **Output** | Token-efficient tables (default) | Token-efficient compact JSON |
 | **Integration** | Shell commands via agent | Native tool calls |
 | **Coverage** | All ~130 endpoints | All ~130 endpoints (143 tools) |

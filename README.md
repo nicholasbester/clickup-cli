@@ -33,7 +33,7 @@ Reduction:                          ~98%
 
 The CLI flattens nested objects, selects only essential fields, and renders compact tables. Agents get the information they need without drowning in JSON. When you need the full response, `--output json` is always available.
 
-Beyond token efficiency, clickup-cli gives AI agents a simple, predictable interface to ClickUp: `clickup <resource> <action> [ID] [flags]`. No SDK, no auth boilerplate, no JSON parsing — just shell commands with structured output.
+Beyond token efficiency, the `clickup-cli` CLI (or `clkup` for short) gives AI agents a simple, predictable interface to ClickUp: `clickup-cli <resource> <action> [ID] [flags]`. No SDK, no auth boilerplate, no JSON parsing — just shell commands with structured output.
 
 ## Install
 
@@ -64,26 +64,26 @@ Download the latest release for your platform:
 ```bash
 # macOS Apple Silicon (M1/M2/M3/M4)
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-macos-arm64.tar.gz | tar xz
-sudo mv clickup /usr/local/bin/
+sudo mv clickup-cli clkup /usr/local/bin/
 
 # macOS Intel
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-macos-x86_64.tar.gz | tar xz
-sudo mv clickup /usr/local/bin/
+sudo mv clickup-cli clkup /usr/local/bin/
 
 # Linux x86_64
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-linux-x86_64.tar.gz | tar xz
-sudo mv clickup /usr/local/bin/
+sudo mv clickup-cli clkup /usr/local/bin/
 
 # Linux ARM64
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-linux-arm64.tar.gz | tar xz
-sudo mv clickup /usr/local/bin/
+sudo mv clickup-cli clkup /usr/local/bin/
 ```
 
 **Alpine / musl Linux:**
 
 ```sh
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-linux-x86_64-musl.tar.gz | tar xz
-mv clickup /usr/local/bin/
+mv clickup-cli clkup /usr/local/bin/
 ```
 
 ### Arch Linux (AUR)
@@ -98,7 +98,7 @@ paru -S clickup-cli-bin
 
 ### Windows
 
-Download `clickup-windows-x86_64.zip` from the [latest release](https://github.com/nicholasbester/clickup-cli/releases/latest), extract it, and add `clickup.exe` to your PATH.
+Download `clickup-windows-x86_64.zip` from the [latest release](https://github.com/nicholasbester/clickup-cli/releases/latest), extract it, and add `clickup-cli.exe` (and optionally `clkup.exe`) to your PATH.
 
 ### From crates.io (any platform)
 
@@ -123,86 +123,97 @@ cd clickup-cli
 cargo install --path .
 ```
 
+### Two binaries
+
+Every install method ships **two** binaries with identical behaviour:
+
+- `clickup-cli` — canonical name (use this in scripts, CI, MCP configs)
+- `clkup` — short alias, handy for daily interactive typing
+
+Pick whichever you prefer; both accept the same flags and subcommands.
+
 ### Verify installation
 
 ```bash
-clickup --version
+clickup-cli --version
+# or
+clkup --version
 ```
 
 ## Quick Start
 
 ```bash
 # Configure your API token
-clickup setup
+clickup-cli setup
 
 # Or non-interactive
-clickup setup --token pk_your_token_here
+clickup-cli setup --token pk_your_token_here
 
 # Verify
-clickup auth whoami
+clickup-cli auth whoami
 ```
 
 ## Usage Examples
 
 ```bash
 # Hierarchy navigation
-clickup workspace list
-clickup space list
-clickup folder list --space 12345
-clickup list list --folder 67890
+clickup-cli workspace list
+clickup-cli space list
+clickup-cli folder list --space 12345
+clickup-cli list list --folder 67890
 
 # Task management
-clickup task list --list 12345
-clickup task create --list 12345 --name "My Task" --priority 3
-clickup task get abc123
-clickup task update abc123 --status "in progress"
-clickup task search --status "in progress" --assignee 44106202
+clickup-cli task list --list 12345
+clickup-cli task create --list 12345 --name "My Task" --priority 3
+clickup-cli task get abc123
+clickup-cli task update abc123 --status "in progress"
+clickup-cli task search --status "in progress" --assignee 44106202
 
 # Comments and collaboration
-clickup comment list --task abc123
-clickup comment create --task abc123 --text "Looking good!"
-clickup comment reply COMMENT_ID --text "Thanks!"
+clickup-cli comment list --task abc123
+clickup-cli comment create --task abc123 --text "Looking good!"
+clickup-cli comment reply COMMENT_ID --text "Thanks!"
 
 # Time tracking
-clickup time start --task abc123 --description "Working on feature"
-clickup time stop
-clickup time list --start-date 2026-03-01 --end-date 2026-03-31
+clickup-cli time start --task abc123 --description "Working on feature"
+clickup-cli time stop
+clickup-cli time list --start-date 2026-03-01 --end-date 2026-03-31
 
 # Goals and views
-clickup goal list
-clickup view list --space 12345
-clickup view tasks VIEW_ID
+clickup-cli goal list
+clickup-cli view list --space 12345
+clickup-cli view tasks VIEW_ID
 
 # Tags and custom fields
-clickup tag list --space 12345
-clickup field list --list 12345
-clickup field set FIELD_ID --value "some value" TASK_ID
+clickup-cli tag list --space 12345
+clickup-cli field list --list 12345
+clickup-cli field set FIELD_ID --value "some value" TASK_ID
 
 # Chat (v3)
-clickup chat channel-list
-clickup chat message-send --channel CHAN_ID --text "Hello team"
+clickup-cli chat channel-list
+clickup-cli chat message-send --channel CHAN_ID --text "Hello team"
 
 # Docs (v3)
-clickup doc list
-clickup doc get DOC_ID
+clickup-cli doc list
+clickup-cli doc get DOC_ID
 
 # Output modes
-clickup task list --list 12345 --output json        # Full JSON
-clickup task list --list 12345 --output json-compact # Default fields as JSON
-clickup task list --list 12345 --output csv          # CSV
-clickup task list --list 12345 -q                    # IDs only
-clickup task list --list 12345 --fields id,name,status  # Custom fields
+clickup-cli task list --list 12345 --output json        # Full JSON
+clickup-cli task list --list 12345 --output json-compact # Default fields as JSON
+clickup-cli task list --list 12345 --output csv          # CSV
+clickup-cli task list --list 12345 -q                    # IDs only
+clickup-cli task list --list 12345 --fields id,name,status  # Custom fields
 
 # Auto-detect task ID from git branch (on a branch like feat/CU-abc123-foo)
-clickup task get                                     # Resolves to abc123 from the branch
-clickup task update --status "in progress"
-clickup comment create --text "Looking good!"
-clickup field set FIELD_ID --value "some value"
+clickup-cli task get                                     # Resolves to abc123 from the branch
+clickup-cli task update --status "in progress"
+clickup-cli comment create --text "Looking good!"
+clickup-cli field set FIELD_ID --value "some value"
 ```
 
 ### Auto-detect task ID from git branch
 
-When a git-tracked branch follows a common naming convention, clickup-cli resolves the task ID automatically:
+When a git-tracked branch follows a common naming convention, `clickup-cli` resolves the task ID automatically:
 
 - ClickUp default IDs — `feat/CU-abc123-foo` → `abc123`
 - Custom task IDs — `PROJ-42-add-login` → `PROJ-42` (auto-injects `custom_task_ids=true&team_id=<ws>`)
@@ -266,9 +277,9 @@ Two ways to connect AI agents to ClickUp:
 The CLI approach is **the most token-efficient way** to give an agent ClickUp access. Injecting the command reference costs ~1,000 tokens once, and every command returns compact table output (~150 tokens for 5 tasks). There are no tool schemas consuming context. Works with any LLM/agent framework.
 
 ```bash
-clickup agent-config inject            # Auto-detects: CLAUDE.md, agent.md, .cursorrules, etc.
-clickup agent-config inject AGENT.md   # Or specify any file explicitly
-clickup agent-config show              # Preview the block
+clickup-cli agent-config inject            # Auto-detects: CLAUDE.md, agent.md, .cursorrules, etc.
+clickup-cli agent-config inject AGENT.md   # Or specify any file explicitly
+clickup-cli agent-config show              # Preview the block
 ```
 
 Auto-detection checks for existing files in order: `CLAUDE.md`, `agent.md`, `AGENT.md`, `.cursorrules`, `.github/copilot-instructions.md`. Falls back to creating `CLAUDE.md` if none exist.
@@ -282,7 +293,7 @@ For Claude Desktop, Cursor, and other MCP-capable tools that prefer native tool 
 Generate the MCP config automatically:
 
 ```bash
-clickup agent-config init --mcp
+clickup-cli agent-config init --mcp
 ```
 
 Or add `.mcp.json` to your project root manually:
@@ -291,7 +302,7 @@ Or add `.mcp.json` to your project root manually:
 {
   "mcpServers": {
     "clickup-cli": {
-      "command": "/opt/homebrew/bin/clickup",
+      "command": "/opt/homebrew/bin/clickup-cli",
       "args": ["mcp", "serve"]
     }
   }
@@ -302,7 +313,7 @@ This exposes 143 tools covering 100% of the ClickUp API as native tool calls wit
 
 ### Limiting MCP tools
 
-By default `clickup mcp serve` exposes all 143 tools. You can restrict this at startup to shrink the LLM's context and enforce access control. Flags and matching env vars:
+By default `clickup-cli mcp serve` exposes all 143 tools. You can restrict this at startup to shrink the LLM's context and enforce access control. Flags and matching env vars:
 
 | Flag | Env var | Purpose |
 | --- | --- | --- |
@@ -319,7 +330,7 @@ By default `clickup mcp serve` exposes all 143 tools. You can restrict this at s
 {
   "mcpServers": {
     "clickup": {
-      "command": "clickup",
+      "command": "clickup-cli",
       "args": ["mcp", "serve", "--read-only"]
     }
   }
@@ -332,7 +343,7 @@ Task-focused agent (task + comment + time groups only):
 {
   "mcpServers": {
     "clickup": {
-      "command": "clickup",
+      "command": "clickup-cli",
       "args": ["mcp", "serve", "--groups", "task,comment,time"]
     }
   }
@@ -352,7 +363,7 @@ Filtered tools are rejected at `tools/call` as well as hidden from `tools/list`,
 
 Create a project-level config:
 ```bash
-clickup agent-config init --token pk_xxx --workspace 12345
+clickup-cli agent-config init --token pk_xxx --workspace 12345
 ```
 
 This creates `.clickup.toml` in the current directory. Add it to `.gitignore` if it contains a token. Project config takes priority over global config.
@@ -374,7 +385,7 @@ This creates `.clickup.toml` in the current directory. Add it to `.gitignore` if
 ### Check Current Config
 
 ```bash
-clickup status
+clickup-cli status
 ```
 
 ```
@@ -389,16 +400,16 @@ Workspace: 1234567
 
 ```bash
 # Bash
-clickup completions bash > ~/.bash_completion.d/clickup
+clickup-cli completions bash > ~/.bash_completion.d/clickup-cli
 
 # Zsh
-clickup completions zsh > ~/.zfunc/_clickup
+clickup-cli completions zsh > ~/.zfunc/_clickup-cli
 
 # Fish
-clickup completions fish > ~/.config/fish/completions/clickup.fish
+clickup-cli completions fish > ~/.config/fish/completions/clickup-cli.fish
 
 # PowerShell
-clickup completions powershell > clickup.ps1
+clickup-cli completions powershell > clickup-cli.ps1
 ```
 
 ## Output Modes

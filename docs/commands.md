@@ -7,7 +7,7 @@ permalink: /commands/
 
 # Command Reference
 
-Pattern: `clickup <resource> <action> [ID] [flags]`
+Pattern: `clickup-cli <resource> <action> [ID] [flags]` (or `clkup` for short)
 
 ## Global Flags
 
@@ -32,10 +32,10 @@ Configure API token and default workspace.
 
 ```bash
 # Interactive
-clickup setup
+clickup-cli setup
 
 # Non-interactive
-clickup setup --token pk_your_token_here
+clickup-cli setup --token pk_your_token_here
 ```
 
 ```
@@ -51,8 +51,8 @@ Config saved to ~/.config/clickup-cli/config.toml
 ## auth
 
 ```bash
-clickup auth whoami    # Show current user
-clickup auth check     # Validate token (exit code only)
+clickup-cli auth whoami    # Show current user
+clickup-cli auth check     # Validate token (exit code only)
 ```
 
 ```
@@ -68,9 +68,9 @@ clickup auth check     # Validate token (exit code only)
 ## workspace
 
 ```bash
-clickup workspace list     # List workspaces
-clickup workspace seats    # Show seat usage
-clickup workspace plan     # Show current plan
+clickup-cli workspace list     # List workspaces
+clickup-cli workspace seats    # Show seat usage
+clickup-cli workspace plan     # Show current plan
 ```
 
 ```
@@ -86,11 +86,11 @@ clickup workspace plan     # Show current plan
 ## space
 
 ```bash
-clickup space list [--archived]
-clickup space get <ID>
-clickup space create --name NAME [--private] [--multiple-assignees]
-clickup space update <ID> [--name NAME] [--color HEX]
-clickup space delete <ID>
+clickup-cli space list [--archived]
+clickup-cli space get <ID>
+clickup-cli space create --name NAME [--private] [--multiple-assignees]
+clickup-cli space update <ID> [--name NAME] [--color HEX]
+clickup-cli space delete <ID>
 ```
 
 ```
@@ -108,11 +108,11 @@ clickup space delete <ID>
 ## folder
 
 ```bash
-clickup folder list --space <ID> [--archived]
-clickup folder get <ID>
-clickup folder create --space <ID> --name NAME
-clickup folder update <ID> --name NAME
-clickup folder delete <ID>
+clickup-cli folder list --space <ID> [--archived]
+clickup-cli folder get <ID>
+clickup-cli folder create --space <ID> --name NAME
+clickup-cli folder update <ID> --name NAME
+clickup-cli folder delete <ID>
 ```
 
 ```
@@ -130,15 +130,15 @@ clickup folder delete <ID>
 ## list
 
 ```bash
-clickup list list --folder <ID> [--archived]
-clickup list list --space <ID> [--archived]    # folderless lists
-clickup list get <ID>
-clickup list create --folder <ID> --name NAME [--content TEXT] [--priority N] [--due-date DATE]
-clickup list create --space <ID> --name NAME   # folderless
-clickup list update <ID> [--name NAME] [--content TEXT]
-clickup list delete <ID>
-clickup list add-task <LIST_ID> <TASK_ID>
-clickup list remove-task <LIST_ID> <TASK_ID>
+clickup-cli list list --folder <ID> [--archived]
+clickup-cli list list --space <ID> [--archived]    # folderless lists
+clickup-cli list get <ID>
+clickup-cli list create --folder <ID> --name NAME [--content TEXT] [--priority N] [--due-date DATE]
+clickup-cli list create --space <ID> --name NAME   # folderless
+clickup-cli list update <ID> [--name NAME] [--content TEXT]
+clickup-cli list delete <ID>
+clickup-cli list add-task <LIST_ID> <TASK_ID>
+clickup-cli list remove-task <LIST_ID> <TASK_ID>
 ```
 
 ```
@@ -156,28 +156,28 @@ clickup list remove-task <LIST_ID> <TASK_ID>
 
 ```bash
 # List and search
-clickup task list --list <ID> [--status S] [--assignee ID] [--tag T] [--include-closed] [--order-by field] [--reverse]
-clickup task search [--space ID] [--folder ID] [--list ID] [--status S] [--assignee ID] [--tag T]
+clickup-cli task list --list <ID> [--status S] [--assignee ID] [--tag T] [--include-closed] [--order-by field] [--reverse]
+clickup-cli task search [--space ID] [--folder ID] [--list ID] [--status S] [--assignee ID] [--tag T]
 
 # CRUD
-clickup task get <ID> [--subtasks] [--custom-task-id]
-clickup task create --list <ID> --name NAME [--description TEXT] [--status S] [--priority 1-4] [--assignee ID] [--tag NAME] [--due-date DATE] [--parent TASK_ID]
-clickup task update <ID> [--name X] [--status X] [--priority N] [--add-assignee ID] [--rem-assignee ID] [--description TEXT]
-clickup task delete <ID>
+clickup-cli task get <ID> [--subtasks] [--custom-task-id]
+clickup-cli task create --list <ID> --name NAME [--description TEXT] [--status S] [--priority 1-4] [--assignee ID] [--tag NAME] [--due-date DATE] [--parent TASK_ID]
+clickup-cli task update <ID> [--name X] [--status X] [--priority N] [--add-assignee ID] [--rem-assignee ID] [--description TEXT]
+clickup-cli task delete <ID>
 
 # Relationships and tags
-clickup task add-dep <ID> --depends-on <OTHER_ID>
-clickup task remove-dep <ID> --depends-on <OTHER_ID>
-clickup task link <ID> <TARGET_ID>
-clickup task unlink <ID> <TARGET_ID>
-clickup task add-tag <ID> <TAG_NAME>
-clickup task remove-tag <ID> <TAG_NAME>
+clickup-cli task add-dep <ID> --depends-on <OTHER_ID>
+clickup-cli task remove-dep <ID> --depends-on <OTHER_ID>
+clickup-cli task link <ID> <TARGET_ID>
+clickup-cli task unlink <ID> <TARGET_ID>
+clickup-cli task add-tag <ID> <TAG_NAME>
+clickup-cli task remove-tag <ID> <TAG_NAME>
 
 # Time and estimates
-clickup task time-in-status <ID>...
-clickup task move <ID> --list <LIST_ID>
-clickup task set-estimate <ID> --assignee USER_ID --time MS
-clickup task replace-estimates <ID> --assignee USER_ID --time MS
+clickup-cli task time-in-status <ID>...
+clickup-cli task move <ID> --list <LIST_ID>
+clickup-cli task set-estimate <ID> --assignee USER_ID --time MS
+clickup-cli task replace-estimates <ID> --assignee USER_ID --time MS
 ```
 
 ```
@@ -197,12 +197,12 @@ Priority values: 1=Urgent, 2=High, 3=Normal, 4=Low. Dates: YYYY-MM-DD format.
 ## checklist
 
 ```bash
-clickup checklist create --task <ID> --name NAME
-clickup checklist update <ID> [--name NAME] [--position N]
-clickup checklist delete <ID>
-clickup checklist add-item <ID> --name NAME [--assignee USER_ID]
-clickup checklist update-item <ID> <ITEM_ID> [--name NAME] [--resolved] [--assignee USER_ID]
-clickup checklist delete-item <ID> <ITEM_ID>
+clickup-cli checklist create --task <ID> --name NAME
+clickup-cli checklist update <ID> [--name NAME] [--position N]
+clickup-cli checklist delete <ID>
+clickup-cli checklist add-item <ID> --name NAME [--assignee USER_ID]
+clickup-cli checklist update-item <ID> <ITEM_ID> [--name NAME] [--resolved] [--assignee USER_ID]
+clickup-cli checklist delete-item <ID> <ITEM_ID>
 ```
 
 ---
@@ -210,14 +210,14 @@ clickup checklist delete-item <ID> <ITEM_ID>
 ## comment
 
 ```bash
-clickup comment list --task <ID>          # also --list, --view
-clickup comment create --task <ID> --text TEXT [--assignee ID] [--notify-all]
-clickup comment create --list <ID> --text TEXT
-clickup comment create --view <ID> --text TEXT
-clickup comment update <ID> --text TEXT [--resolved] [--assignee ID]
-clickup comment delete <ID>
-clickup comment replies <ID>              # list threaded replies
-clickup comment reply <ID> --text TEXT [--assignee ID]
+clickup-cli comment list --task <ID>          # also --list, --view
+clickup-cli comment create --task <ID> --text TEXT [--assignee ID] [--notify-all]
+clickup-cli comment create --list <ID> --text TEXT
+clickup-cli comment create --view <ID> --text TEXT
+clickup-cli comment update <ID> --text TEXT [--resolved] [--assignee ID]
+clickup-cli comment delete <ID>
+clickup-cli comment replies <ID>              # list threaded replies
+clickup-cli comment reply <ID> --text TEXT [--assignee ID]
 ```
 
 ---
@@ -225,10 +225,10 @@ clickup comment reply <ID> --text TEXT [--assignee ID]
 ## tag
 
 ```bash
-clickup tag list --space <ID>
-clickup tag create --space <ID> --name NAME [--fg-color HEX] [--bg-color HEX]
-clickup tag update --space <ID> --tag NAME [--name NEW_NAME] [--fg-color HEX] [--bg-color HEX]
-clickup tag delete --space <ID> --tag NAME
+clickup-cli tag list --space <ID>
+clickup-cli tag create --space <ID> --name NAME [--fg-color HEX] [--bg-color HEX]
+clickup-cli tag update --space <ID> --tag NAME [--name NEW_NAME] [--fg-color HEX] [--bg-color HEX]
+clickup-cli tag delete --space <ID> --tag NAME
 ```
 
 ```
@@ -248,9 +248,9 @@ clickup tag delete --space <ID> --tag NAME
 Custom fields on tasks.
 
 ```bash
-clickup field list --list <ID>            # also --folder, --space, --workspace-level
-clickup field set <FIELD_ID> --value VALUE [TASK_ID]
-clickup field unset <FIELD_ID> [TASK_ID]
+clickup-cli field list --list <ID>            # also --folder, --space, --workspace-level
+clickup-cli field set <FIELD_ID> --value VALUE [TASK_ID]
+clickup-cli field unset <FIELD_ID> [TASK_ID]
 ```
 
 Value can be a string, number, or JSON for complex field types. For `drop_down`, use the option ID from the field's `type_config.options`; for `labels`, pass a JSON array of option IDs.
@@ -260,7 +260,7 @@ Value can be a string, number, or JSON for complex field types. For `drop_down`,
 ## task-type
 
 ```bash
-clickup task-type list
+clickup-cli task-type list
 ```
 
 ```
@@ -278,8 +278,8 @@ clickup task-type list
 ## attachment
 
 ```bash
-clickup attachment list --task <ID>
-clickup attachment upload --task <ID> <FILE_PATH>
+clickup-cli attachment list --task <ID>
+clickup-cli attachment upload --task <ID> <FILE_PATH>
 ```
 
 ---
@@ -290,25 +290,25 @@ Time tracking with start/stop timer support.
 
 ```bash
 # Timer
-clickup time start [--task ID] [--description TEXT] [--billable]
-clickup time stop
+clickup-cli time start [--task ID] [--description TEXT] [--billable]
+clickup-cli time stop
 
 # CRUD
-clickup time list [--start-date DATE] [--end-date DATE] [--assignee ID] [--task ID]
-clickup time get <ID>
-clickup time current
-clickup time create --start DATE --duration MS [--task ID] [--description TEXT] [--billable]
-clickup time update <ID> [--start DATE] [--end DATE] [--description TEXT] [--billable]
-clickup time delete <ID>
+clickup-cli time list [--start-date DATE] [--end-date DATE] [--assignee ID] [--task ID]
+clickup-cli time get <ID>
+clickup-cli time current
+clickup-cli time create --start DATE --duration MS [--task ID] [--description TEXT] [--billable]
+clickup-cli time update <ID> [--start DATE] [--end DATE] [--description TEXT] [--billable]
+clickup-cli time delete <ID>
 
 # Tags
-clickup time tags
-clickup time add-tags --entry-id ID --tag NAME [--tag NAME...]
-clickup time remove-tags --entry-id ID --tag NAME
-clickup time rename-tag --name OLD --new-name NEW
+clickup-cli time tags
+clickup-cli time add-tags --entry-id ID --tag NAME [--tag NAME...]
+clickup-cli time remove-tags --entry-id ID --tag NAME
+clickup-cli time rename-tag --name OLD --new-name NEW
 
 # History
-clickup time history <ID>
+clickup-cli time history <ID>
 ```
 
 ---
@@ -316,16 +316,16 @@ clickup time history <ID>
 ## goal
 
 ```bash
-clickup goal list [--include-completed]
-clickup goal get <ID>
-clickup goal create --name NAME --due-date DATE --description TEXT [--color HEX] [--owner ID]
-clickup goal update <ID> [--name NAME] [--due-date DATE] [--add-owner ID] [--rem-owner ID]
-clickup goal delete <ID>
+clickup-cli goal list [--include-completed]
+clickup-cli goal get <ID>
+clickup-cli goal create --name NAME --due-date DATE --description TEXT [--color HEX] [--owner ID]
+clickup-cli goal update <ID> [--name NAME] [--due-date DATE] [--add-owner ID] [--rem-owner ID]
+clickup-cli goal delete <ID>
 
 # Key Results
-clickup goal add-kr <GOAL_ID> --name NAME --type TYPE --steps-start N --steps-end N [--unit UNIT] [--owner ID]
-clickup goal update-kr <KR_ID> --steps-current N [--note TEXT]
-clickup goal delete-kr <KR_ID>
+clickup-cli goal add-kr <GOAL_ID> --name NAME --type TYPE --steps-start N --steps-end N [--unit UNIT] [--owner ID]
+clickup-cli goal update-kr <KR_ID> --steps-current N [--note TEXT]
+clickup-cli goal delete-kr <KR_ID>
 ```
 
 Key result types: `number`, `currency`, `boolean`, `percentage`, `automatic`
@@ -335,12 +335,12 @@ Key result types: `number`, `currency`, `boolean`, `percentage`, `automatic`
 ## view
 
 ```bash
-clickup view list --workspace-level       # also --space, --folder, --list
-clickup view get <ID>
-clickup view create --name NAME --type TYPE --space <ID>   # also --folder, --list, --workspace-level
-clickup view update <ID> [--name NAME]
-clickup view delete <ID>
-clickup view tasks <ID> [--page N]
+clickup-cli view list --workspace-level       # also --space, --folder, --list
+clickup-cli view get <ID>
+clickup-cli view create --name NAME --type TYPE --space <ID>   # also --folder, --list, --workspace-level
+clickup-cli view update <ID> [--name NAME]
+clickup-cli view delete <ID>
+clickup-cli view tasks <ID> [--page N]
 ```
 
 View types: `list`, `board`, `calendar`, `gantt`, `activity`, `map`, `workload`, `table`
@@ -350,8 +350,8 @@ View types: `list`, `board`, `calendar`, `gantt`, `activity`, `map`, `workload`,
 ## member
 
 ```bash
-clickup member list --task <ID>
-clickup member list --list <ID>
+clickup-cli member list --task <ID>
+clickup-cli member list --list <ID>
 ```
 
 ---
@@ -359,10 +359,10 @@ clickup member list --list <ID>
 ## user
 
 ```bash
-clickup user invite --email EMAIL [--admin] [--custom-role-id ID]
-clickup user get <ID>
-clickup user update <ID> [--username NAME] [--admin] [--custom-role-id ID]
-clickup user remove <ID>
+clickup-cli user invite --email EMAIL [--admin] [--custom-role-id ID]
+clickup-cli user get <ID>
+clickup-cli user update <ID> [--username NAME] [--admin] [--custom-role-id ID]
+clickup-cli user remove <ID>
 ```
 
 ---
@@ -371,28 +371,28 @@ clickup user remove <ID>
 
 ```bash
 # Channels
-clickup chat channel-list [--include-closed]
-clickup chat channel-create --name NAME [--visibility PUBLIC|PRIVATE]
-clickup chat channel-get <ID>
-clickup chat channel-update <ID> [--name NAME] [--topic TEXT]
-clickup chat channel-delete <ID>
-clickup chat channel-followers <ID>
-clickup chat channel-members <ID>
-clickup chat dm <USER_ID> [USER_ID...]
+clickup-cli chat channel-list [--include-closed]
+clickup-cli chat channel-create --name NAME [--visibility PUBLIC|PRIVATE]
+clickup-cli chat channel-get <ID>
+clickup-cli chat channel-update <ID> [--name NAME] [--topic TEXT]
+clickup-cli chat channel-delete <ID>
+clickup-cli chat channel-followers <ID>
+clickup-cli chat channel-members <ID>
+clickup-cli chat dm <USER_ID> [USER_ID...]
 
 # Messages
-clickup chat message-list --channel <ID>
-clickup chat message-send --channel <ID> --text TEXT [--type message|post]
-clickup chat message-update <ID> --text TEXT
-clickup chat message-delete <ID>
+clickup-cli chat message-list --channel <ID>
+clickup-cli chat message-send --channel <ID> --text TEXT [--type message|post]
+clickup-cli chat message-update <ID> --text TEXT
+clickup-cli chat message-delete <ID>
 
 # Reactions and replies
-clickup chat reaction-list <MSG_ID>
-clickup chat reaction-add <MSG_ID> --emoji NAME
-clickup chat reaction-remove <MSG_ID> <EMOJI>
-clickup chat reply-list <MSG_ID>
-clickup chat reply-send <MSG_ID> --text TEXT
-clickup chat tagged-users <MSG_ID>
+clickup-cli chat reaction-list <MSG_ID>
+clickup-cli chat reaction-add <MSG_ID> --emoji NAME
+clickup-cli chat reaction-remove <MSG_ID> <EMOJI>
+clickup-cli chat reply-list <MSG_ID>
+clickup-cli chat reply-send <MSG_ID> --text TEXT
+clickup-cli chat tagged-users <MSG_ID>
 ```
 
 ---
@@ -400,13 +400,13 @@ clickup chat tagged-users <MSG_ID>
 ## doc (v3)
 
 ```bash
-clickup doc list [--creator ID] [--archived]
-clickup doc create --name NAME [--visibility PUBLIC|PRIVATE|PERSONAL] [--parent-type TYPE --parent-id ID]
-clickup doc get <ID>
-clickup doc pages <ID> [--content] [--max-depth N]
-clickup doc add-page <DOC_ID> --name NAME [--parent-page ID] [--content TEXT]
-clickup doc page <DOC_ID> <PAGE_ID>
-clickup doc edit-page <DOC_ID> <PAGE_ID> --content TEXT [--mode replace|append|prepend]
+clickup-cli doc list [--creator ID] [--archived]
+clickup-cli doc create --name NAME [--visibility PUBLIC|PRIVATE|PERSONAL] [--parent-type TYPE --parent-id ID]
+clickup-cli doc get <ID>
+clickup-cli doc pages <ID> [--content] [--max-depth N]
+clickup-cli doc add-page <DOC_ID> --name NAME [--parent-page ID] [--content TEXT]
+clickup-cli doc page <DOC_ID> <PAGE_ID>
+clickup-cli doc edit-page <DOC_ID> <PAGE_ID> --content TEXT [--mode replace|append|prepend]
 ```
 
 ---
@@ -414,10 +414,10 @@ clickup doc edit-page <DOC_ID> <PAGE_ID> --content TEXT [--mode replace|append|p
 ## webhook
 
 ```bash
-clickup webhook list
-clickup webhook create --endpoint URL --event EVENT [--event EVENT...] [--space ID | --folder ID | --list ID | --task ID]
-clickup webhook update <ID> --endpoint URL --event EVENT --status active
-clickup webhook delete <ID>
+clickup-cli webhook list
+clickup-cli webhook create --endpoint URL --event EVENT [--event EVENT...] [--space ID | --folder ID | --list ID | --task ID]
+clickup-cli webhook update <ID> --endpoint URL --event EVENT --status active
+clickup-cli webhook delete <ID>
 ```
 
 Events: `taskCreated`, `taskUpdated`, `taskDeleted`, `taskStatusUpdated`, `taskCommentPosted`, `taskCommentUpdated`, and more.
@@ -427,11 +427,11 @@ Events: `taskCreated`, `taskUpdated`, `taskDeleted`, `taskStatusUpdated`, `taskC
 ## template
 
 ```bash
-clickup template list [--page N]
-clickup template apply-task <TEMPLATE_ID> --list <ID> --name NAME
-clickup template apply-list <TEMPLATE_ID> --folder <ID> --name NAME
-clickup template apply-list <TEMPLATE_ID> --space <ID> --name NAME
-clickup template apply-folder <TEMPLATE_ID> --space <ID> --name NAME
+clickup-cli template list [--page N]
+clickup-cli template apply-task <TEMPLATE_ID> --list <ID> --name NAME
+clickup-cli template apply-list <TEMPLATE_ID> --folder <ID> --name NAME
+clickup-cli template apply-list <TEMPLATE_ID> --space <ID> --name NAME
+clickup-cli template apply-folder <TEMPLATE_ID> --space <ID> --name NAME
 ```
 
 ---
@@ -439,18 +439,18 @@ clickup template apply-folder <TEMPLATE_ID> --space <ID> --name NAME
 ## guest (Enterprise)
 
 ```bash
-clickup guest invite --email EMAIL [--can-edit-tags] [--can-see-time-spent] [--can-create-views] [--custom-role-id ID]
-clickup guest get <ID>
-clickup guest update <ID> [--can-edit-tags] [--can-see-time-spent] [--can-create-views]
-clickup guest remove <ID>
+clickup-cli guest invite --email EMAIL [--can-edit-tags] [--can-see-time-spent] [--can-create-views] [--custom-role-id ID]
+clickup-cli guest get <ID>
+clickup-cli guest update <ID> [--can-edit-tags] [--can-see-time-spent] [--can-create-views]
+clickup-cli guest remove <ID>
 
 # Share/unshare resources with guests
-clickup guest share-task <TASK_ID> <GUEST_ID> --permission read|comment|edit|create
-clickup guest unshare-task <TASK_ID> <GUEST_ID>
-clickup guest share-list <LIST_ID> <GUEST_ID> --permission LEVEL
-clickup guest unshare-list <LIST_ID> <GUEST_ID>
-clickup guest share-folder <FOLDER_ID> <GUEST_ID> --permission LEVEL
-clickup guest unshare-folder <FOLDER_ID> <GUEST_ID>
+clickup-cli guest share-task <TASK_ID> <GUEST_ID> --permission read|comment|edit|create
+clickup-cli guest unshare-task <TASK_ID> <GUEST_ID>
+clickup-cli guest share-list <LIST_ID> <GUEST_ID> --permission LEVEL
+clickup-cli guest unshare-list <LIST_ID> <GUEST_ID>
+clickup-cli guest share-folder <FOLDER_ID> <GUEST_ID> --permission LEVEL
+clickup-cli guest unshare-folder <FOLDER_ID> <GUEST_ID>
 ```
 
 ---
@@ -458,10 +458,10 @@ clickup guest unshare-folder <FOLDER_ID> <GUEST_ID>
 ## group
 
 ```bash
-clickup group list
-clickup group create --name NAME --member ID [--member ID...]
-clickup group update <ID> [--name NAME] [--add-member ID] [--rem-member ID]
-clickup group delete <ID>
+clickup-cli group list
+clickup-cli group create --name NAME --member ID [--member ID...]
+clickup-cli group update <ID> [--name NAME] [--add-member ID] [--rem-member ID]
+clickup-cli group delete <ID>
 ```
 
 ---
@@ -469,7 +469,7 @@ clickup group delete <ID>
 ## role (Enterprise)
 
 ```bash
-clickup role list
+clickup-cli role list
 ```
 
 ---
@@ -477,7 +477,7 @@ clickup role list
 ## shared
 
 ```bash
-clickup shared list    # Tasks, lists, and folders shared with you
+clickup-cli shared list    # Tasks, lists, and folders shared with you
 ```
 
 ---
@@ -485,7 +485,7 @@ clickup shared list    # Tasks, lists, and folders shared with you
 ## audit-log (Enterprise, v3)
 
 ```bash
-clickup audit-log query --type TYPE [--user-id ID] [--start-date DATE] [--end-date DATE]
+clickup-cli audit-log query --type TYPE [--user-id ID] [--start-date DATE] [--end-date DATE]
 ```
 
 Types: `AUTH`, `CUSTOM_FIELDS`, `HIERARCHY`, `USER`, `AGENT`, `OTHER`
@@ -495,7 +495,7 @@ Types: `AUTH`, `CUSTOM_FIELDS`, `HIERARCHY`, `USER`, `AGENT`, `OTHER`
 ## acl (Enterprise, v3)
 
 ```bash
-clickup acl update <OBJECT_TYPE> <OBJECT_ID> [--private] [--grant-user ID --permission LEVEL] [--revoke-user ID] [--body JSON]
+clickup-cli acl update <OBJECT_TYPE> <OBJECT_ID> [--private] [--grant-user ID --permission LEVEL] [--revoke-user ID] [--body JSON]
 ```
 
 ---
@@ -505,9 +505,9 @@ clickup acl update <OBJECT_TYPE> <OBJECT_ID> [--private] [--grant-user ID --perm
 Generate compressed CLI reference for AI agent configs.
 
 ```bash
-clickup agent-config show              # Print to stdout
-clickup agent-config inject            # Inject into CLAUDE.md
-clickup agent-config inject path/to/AGENT.md   # Inject into specific file
+clickup-cli agent-config show              # Print to stdout
+clickup-cli agent-config inject            # Inject into CLAUDE.md
+clickup-cli agent-config inject path/to/AGENT.md   # Inject into specific file
 ```
 
 The injected block is delimited with `<!-- clickup-cli:begin -->...<!-- clickup-cli:end -->` and can be updated in place by re-running the command.
@@ -554,7 +554,7 @@ def456
 Show current configuration.
 
 ```bash
-clickup status
+clickup-cli status
 ```
 
 ```
@@ -572,10 +572,10 @@ Workspace: 1234567
 Generate shell completions.
 
 ```bash
-clickup completions bash       # Bash
-clickup completions zsh        # Zsh
-clickup completions fish       # Fish
-clickup completions powershell # PowerShell
+clickup-cli completions bash       # Bash
+clickup-cli completions zsh        # Zsh
+clickup-cli completions fish       # Fish
+clickup-cli completions powershell # PowerShell
 ```
 
 See [Installation](install) for setup instructions.
@@ -587,7 +587,7 @@ See [Installation](install) for setup instructions.
 Start the MCP server for native LLM tool integration. See [MCP Server](mcp) for full documentation.
 
 ```bash
-clickup mcp serve
+clickup-cli mcp serve
 ```
 
 ---

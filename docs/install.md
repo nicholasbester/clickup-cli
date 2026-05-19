@@ -7,6 +7,15 @@ permalink: /install/
 
 # Installation
 
+## Migration from 0.10.x
+
+The `clickup` binary was **removed in 0.11.0**. Installs now ship two binaries instead:
+
+- `clickup-cli` — canonical name (use this in MCP configs, scripts, and CI)
+- `clkup` — short alias with identical behaviour, useful for daily typing
+
+If you're upgrading, run `s/clickup /clickup-cli /` in your MCP configs (`.mcp.json`, `claude_desktop_config.json`) and any shell aliases. Or swap to the shorter `clkup` if you prefer.
+
 ## npm (any platform with Node.js)
 
 ```bash
@@ -29,19 +38,19 @@ Works on Linux too — the tap ships native x86_64 and arm64 Linux binaries.
 ```bash
 # macOS Apple Silicon (M1/M2/M3/M4)
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-macos-arm64.tar.gz | tar xz
-sudo mv clickup /usr/local/bin/
+sudo mv clickup-cli clkup /usr/local/bin/
 
 # macOS Intel
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-macos-x86_64.tar.gz | tar xz
-sudo mv clickup /usr/local/bin/
+sudo mv clickup-cli clkup /usr/local/bin/
 
 # Linux x86_64
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-linux-x86_64.tar.gz | tar xz
-sudo mv clickup /usr/local/bin/
+sudo mv clickup-cli clkup /usr/local/bin/
 
 # Linux ARM64
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-linux-arm64.tar.gz | tar xz
-sudo mv clickup /usr/local/bin/
+sudo mv clickup-cli clkup /usr/local/bin/
 ```
 
 ### Alpine / musl Linux
@@ -50,8 +59,8 @@ For Alpine-based containers (LibreChat, distroless-ish images, minimal Docker la
 
 ```sh
 curl -L https://github.com/nicholasbester/clickup-cli/releases/latest/download/clickup-linux-x86_64-musl.tar.gz | tar xz
-mv clickup /usr/local/bin/
-clickup --version       # Should show: clickup {{ site.version }}
+mv clickup-cli clkup /usr/local/bin/
+clickup-cli --version       # Should show: clickup-cli {{ site.version }}
 ```
 
 Or inside a Dockerfile:
@@ -75,7 +84,7 @@ paru -S clickup-cli-bin
 
 ## Windows
 
-Download `clickup-windows-x86_64.zip` from the [latest release](https://github.com/nicholasbester/clickup-cli/releases/latest), extract, and add `clickup.exe` to your PATH.
+Download `clickup-windows-x86_64.zip` from the [latest release](https://github.com/nicholasbester/clickup-cli/releases/latest), extract, and add `clickup-cli.exe` (and optionally `clkup.exe`) to your PATH.
 
 ## From crates.io
 
@@ -93,16 +102,25 @@ cd clickup-cli
 cargo install --path .
 ```
 
+## Two binaries
+
+Every install method (npm, Homebrew, Cargo, AUR, prebuilt tarballs, Docker) ships **two binaries** with identical behaviour:
+
+- `clickup-cli` — canonical name (use this in scripts, CI, and MCP configs)
+- `clkup` — short alias, handy for daily interactive typing
+
+Pick whichever you prefer; both accept the same flags and subcommands. The rest of these docs use `clickup-cli` for clarity, but `clkup` is fully interchangeable.
+
 ## Setup
 
 Get a personal API token from ClickUp: **Settings > Apps > API Token**
 
 ```bash
 # Interactive
-clickup setup
+clickup-cli setup
 
 # Non-interactive (for CI/scripts/agents)
-clickup setup --token pk_your_token_here
+clickup-cli setup --token pk_your_token_here
 ```
 
 Config is saved to `~/.config/clickup-cli/config.toml`.
@@ -110,25 +128,25 @@ Config is saved to `~/.config/clickup-cli/config.toml`.
 ## Verify
 
 ```bash
-clickup --version       # Should show: clickup {{ site.version }}
-clickup auth whoami
-clickup status          # Show config, token (masked), workspace
+clickup-cli --version       # Should show: clickup-cli {{ site.version }}
+clickup-cli auth whoami
+clickup-cli status          # Show config, token (masked), workspace
 ```
 
 ## Shell Completions
 
 ```bash
 # Bash
-clickup completions bash > ~/.bash_completion.d/clickup
+clickup-cli completions bash > ~/.bash_completion.d/clickup-cli
 
 # Zsh (add ~/.zfunc to fpath in .zshrc first)
-clickup completions zsh > ~/.zfunc/_clickup
+clickup-cli completions zsh > ~/.zfunc/_clickup-cli
 
 # Fish
-clickup completions fish > ~/.config/fish/completions/clickup.fish
+clickup-cli completions fish > ~/.config/fish/completions/clickup-cli.fish
 
 # PowerShell
-clickup completions powershell > clickup.ps1
+clickup-cli completions powershell > clickup-cli.ps1
 ```
 
 ## Project-Level Config
@@ -136,7 +154,7 @@ clickup completions powershell > clickup.ps1
 For per-project settings (different workspace, different token), create a `.clickup.toml` in the project root:
 
 ```bash
-clickup agent-config init --token pk_xxx --workspace 12345
+clickup-cli agent-config init --token pk_xxx --workspace 12345
 ```
 
 This creates:
@@ -171,10 +189,10 @@ For CI/CD and scripting:
 The CLI is LLM-agnostic. Inject the command reference into whichever agent instruction file your project uses:
 
 ```bash
-clickup agent-config inject              # Auto-detects existing file
-clickup agent-config inject CLAUDE.md    # Claude Code
-clickup agent-config inject agent.md     # Generic
-clickup agent-config inject .cursorrules # Cursor
+clickup-cli agent-config inject              # Auto-detects existing file
+clickup-cli agent-config inject CLAUDE.md    # Claude Code
+clickup-cli agent-config inject agent.md     # Generic
+clickup-cli agent-config inject .cursorrules # Cursor
 ```
 
 Auto-detection checks: `CLAUDE.md`, `agent.md`, `AGENT.md`, `.cursorrules`, `.github/copilot-instructions.md`

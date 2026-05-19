@@ -2,7 +2,7 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 
 fn clickup() -> Command {
-    Command::cargo_bin("clickup").unwrap()
+    Command::cargo_bin("clickup-cli").unwrap()
 }
 
 #[test]
@@ -21,7 +21,7 @@ fn test_version() {
         .assert()
         .success()
         .stdout(predicate::str::contains(format!(
-            "clickup {}",
+            "clickup-cli {}",
             env!("CARGO_PKG_VERSION")
         )));
 }

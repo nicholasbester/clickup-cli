@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING — binary rename (#39):** the shipped binary is no longer named `clickup`. The previous name collided with the official ClickUp desktop app on Linux, which installs a `clickup` binary on `PATH`. From 0.11.0 onwards two binaries ship from the same code:
+  - **`clickup-cli`** — the canonical name. Matches the crate name (`cargo install clickup-cli`) and the AUR package (`clickup-cli-bin`). All documentation and help text reference this name.
+  - **`clkup`** — a short alias for daily ergonomics (5 chars, no hyphen, no collision with the desktop app). Identical behaviour to `clickup-cli`.
+  - The previous `clickup` binary is **removed**, not aliased. Existing users must migrate.
+
+  Migration:
+  - **MCP configs** (Claude Desktop, Cursor, Codex, etc.): replace `"command": "clickup"` with `"command": "clickup-cli"` (or `"clkup"`) in `claude_desktop_config.json` / `.mcp.json` / equivalent.
+  - **Shell aliases & scripts**: replace `clickup ` invocations with `clickup-cli ` (or `clkup `). A one-shot rewrite: `sed -i 's/\bclickup /clickup-cli /g' your-script.sh` (review the diff — don't blindly replace if you reference the ClickUp brand name in prose).
+  - **Shell completions**: regenerate via `clickup-cli completions <shell> > /path/to/completion`. Old completion files keyed off the `clickup` binary name still source-load but won't fire on the new binaries until regenerated.
+  - **Injected agent-config blocks** (`clickup agent-config inject`): re-run `clickup-cli agent-config inject` to refresh the CLI reference baked into your CLAUDE.md / .cursorrules / equivalent. The injection markers (`<!-- clickup-cli:begin -->` / `<!-- clickup-cli:end -->`) are unchanged, so the re-inject is a clean in-place update.
+
+  Why a hard break: keeping `clickup` alongside `clickup-cli` would defeat the rename — the collision with the desktop app would persist. Pre-1.0 semver allows the break.
+
 ### Fixed
 - `chat channel-list`, `chat message-list`, and `chat reply-list` CLI commands now read the v3 `data` envelope first and fall back to the older `channels`/`messages`/`replies` keys for compatibility (#39). Before this fix the commands consistently returned empty results because the v3 endpoints return their list under `data` — the matching MCP tools were already fixed in 0.10.0 but the CLI parity was missed.
 

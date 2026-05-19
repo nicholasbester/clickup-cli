@@ -1,6 +1,6 @@
 [package]
 name = "clickup-cli"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2021"
 rust-version = "1.88"
 description = "CLI for the ClickUp API, optimized for AI agents"
@@ -11,8 +11,17 @@ keywords = ["clickup", "cli", "api", "ai-agents", "productivity"]
 categories = ["command-line-utilities"]
 readme = "README.md"
 
+# Two binary names ship from the same entry point:
+#   * `clickup-cli` — canonical name, matches the crate and AUR package.
+#   * `clkup`      — short alias for daily ergonomics (5 chars, no hyphen).
+# The previous `clickup` binary was dropped in 0.11.0 to clear a name
+# collision with the official ClickUp desktop app on Linux.
 [[bin]]
-name = "clickup"
+name = "clickup-cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "clkup"
 path = "src/main.rs"
 
 [dependencies]
