@@ -64,14 +64,14 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.name }}.tar.gz clickup
+          tar czf ../../../${{ matrix.name }}.tar.gz clickup-cli clkup
           cd ../../..
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ../../../${{ matrix.name }}.zip clickup.exe
+          7z a ../../../${{ matrix.name }}.zip clickup-cli.exe clkup.exe
           cd ../../..
 
       - name: Upload artifact
@@ -100,8 +100,10 @@ jobs:
       - name: Smoke-test musl binary inside Alpine
         shell: alpine.sh {0}
         run: |
-          ./clickup --version
-          ./clickup mcp serve --help | grep -- '--profile'
+          ./clickup-cli --version
+          ./clickup-cli mcp serve --help | grep -- '--profile'
+          # Confirm the clkup short-alias binary is also packaged and works.
+          ./clkup --version
           echo "Alpine musl smoke test passed"
 
   release:
@@ -236,12 +238,13 @@ jobs:
             end
 
             def install
-              bin.install "clickup"
-              generate_completions_from_executable(bin/"clickup", "completions")
+              bin.install "clickup-cli", "clkup"
+              generate_completions_from_executable(bin/"clickup-cli", "completions")
             end
 
             test do
-              assert_match "clickup #{version}", shell_output("#{bin}/clickup --version")
+              assert_match "clickup-cli #{version}", shell_output("#{bin}/clickup-cli --version")
+              assert_match "clickup-cli #{version}", shell_output("#{bin}/clkup --version")
             end
           end
           FORMULA

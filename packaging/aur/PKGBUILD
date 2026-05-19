@@ -15,5 +15,6 @@ sha256sums_x86_64=('3297cd3d2bd4da72c37bc96286d4dc9331cbc8d27a787940776f135b0b71
 sha256sums_aarch64=('24249db2d473e7ab98d88c7d5f207f727d8bae35b407191eefff930b667365fe')
 
 package() {
-  install -Dm755 "${srcdir}/clickup" "${pkgdir}/usr/bin/clickup"
+  install -Dm755 "${srcdir}/clickup-cli" "${pkgdir}/usr/bin/clickup-cli"
+  install -Dm755 "${srcdir}/clkup" "${pkgdir}/usr/bin/clkup"
 }

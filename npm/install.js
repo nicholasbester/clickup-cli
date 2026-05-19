@@ -51,6 +51,14 @@ function download(url) {
   });
 }
 
+// Binary names shipped from 0.11.0 onwards. `clickup-cli` is canonical;
+// `clkup` is the short alias. Both are included in every release tarball.
+const BIN_NAMES = ["clickup-cli", "clkup"];
+
+function binFile(name) {
+  return process.platform === "win32" ? `${name}.exe` : name;
+}
+
 function tryGenerateCompletions(binPath) {
   // Shell completions only make sense for global installs. Skip local
   // installs (the CLI isn't on PATH anyway) and Windows (no uniform
@@ -68,13 +76,13 @@ function tryGenerateCompletions(binPath) {
     const compDir = path.join(__dirname, "completions");
     fs.mkdirSync(compDir, { recursive: true });
     const ext = shell === "fish" ? "fish" : shell;
-    const compFile = path.join(compDir, `clickup.${ext}`);
+    const compFile = path.join(compDir, `clickup-cli.${ext}`);
     fs.writeFileSync(compFile, output);
 
     const instructions = {
       bash: `source ${compFile}   # add this to ~/.bashrc to persist`,
       zsh: `source ${compFile}   # add this to ~/.zshrc to persist`,
-      fish: `ln -sf ${compFile} ~/.config/fish/completions/clickup.fish   # load on next shell`,
+      fish: `ln -sf ${compFile} ~/.config/fish/completions/clickup-cli.fish   # load on next shell`,
     };
 
     console.log(`\nShell completions (${shell}) written to ${compFile}`);
@@ -86,11 +94,10 @@ function tryGenerateCompletions(binPath) {
 
 async function main() {
   const binDir = path.join(__dirname, "bin");
-  const binName = process.platform === "win32" ? "clickup.exe" : "clickup";
-  const binPath = path.join(binDir, binName);
+  const primaryBin = path.join(binDir, binFile(BIN_NAMES[0]));
 
-  // Skip if binary already exists
-  if (fs.existsSync(binPath)) {
+  // Skip if the primary binary already exists (e.g. previous install).
+  if (fs.existsSync(primaryBin)) {
     return;
   }
 
@@ -116,11 +123,14 @@ async function main() {
     fs.unlinkSync(tmpFile);
 
     if (process.platform !== "win32") {
-      fs.chmodSync(binPath, 0o755);
+      for (const name of BIN_NAMES) {
+        const p = path.join(binDir, binFile(name));
+        if (fs.existsSync(p)) fs.chmodSync(p, 0o755);
+      }
     }
 
-    console.log(`clickup-cli v${VERSION} installed successfully`);
-    tryGenerateCompletions(binPath);
+    console.log(`clickup-cli v${VERSION} installed successfully (binaries: ${BIN_NAMES.join(", ")})`);
+    tryGenerateCompletions(primaryBin);
   } catch (err) {
     console.error(`Failed to install clickup-cli: ${err.message}`);
     console.error(

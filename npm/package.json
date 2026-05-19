@@ -1,6 +1,6 @@
 {
   "name": "@nick.bester/clickup-cli",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "CLI for the ClickUp API, optimized for AI agents",
   "license": "Apache-2.0",
   "author": "Nick Bester <1872093+nicholasbester@users.noreply.github.com> (https://github.com/nicholasbester)",
@@ -18,7 +18,8 @@
     "productivity"
   ],
   "bin": {
-    "clickup": "bin/clickup"
+    "clickup-cli": "bin/clickup-cli",
+    "clkup": "bin/clkup"
   },
   "scripts": {
     "postinstall": "node install.js"
