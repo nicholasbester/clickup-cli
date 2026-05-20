@@ -206,6 +206,43 @@ ClickUp ships [its own MCP server](https://developer.clickup.com/docs/connect-an
 
 All tool names are prefixed with `clickup_` (e.g., `clickup_task_list`).
 
+## Pagination
+
+Tools backed by paginated ClickUp endpoints expose pagination controls. Eight tools currently support pagination:
+
+| Tool | Style | Pagination args |
+|---|---|---|
+| `clickup_task_list` | page-based (v2) | `page`, `limit`, `all` |
+| `clickup_task_search` | page-based (v2) | `page`, `limit`, `all` |
+| `clickup_view_tasks` | page-based (v2) | `page`, `limit`, `all` |
+| `clickup_template_list` | page-based (v2) | `page`, `limit`, `all` |
+| `clickup_doc_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
+| `clickup_chat_channel_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
+| `clickup_chat_message_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
+| `clickup_chat_reply_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
+
+The contract is **opt-in and non-breaking**:
+
+- **No pagination args passed.** The tool's response is identical to the pre-pagination shape — a bare compact array. Existing clients see no change.
+- **Any pagination arg passed.** The response becomes an envelope:
+
+  ```json
+  {
+    "items": [ /* compact items, same shape as before */ ],
+    "pagination": {
+      "style": "page",        // or "cursor"
+      "page": 0,              // page-style only
+      "last_page": false,     // page-style only
+      "next_cursor": "...",   // cursor-style only, omitted when exhausted
+      "has_more": true,
+      "returned": 42,
+      "all": false
+    }
+  }
+  ```
+
+With `all=true` the server walks pages until `last_page=true` (page-style), `next_cursor` is null (cursor-style), or `limit` is reached. A hard cap of 100 pages prevents runaway loops on misbehaving endpoints.
+
 ## How It Works
 
 The MCP server uses JSON-RPC 2.0 over stdio. It reads requests from stdin and writes responses to stdout. The server uses the same HTTP client and authentication as the CLI commands, and returns **token-efficient compact responses** — the same field flattening as the CLI's table output, but as JSON. Status objects, priority objects, assignee arrays, and timestamps are all flattened to simple values.

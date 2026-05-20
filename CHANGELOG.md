@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- MCP pagination support across the 8 tools whose underlying ClickUp endpoint is paginated (#14). Page-based (v2): `clickup_task_list`, `clickup_task_search`, `clickup_view_tasks`, `clickup_template_list` accept optional `page` / `limit` / `all`. Cursor-based (v3): `clickup_doc_list`, `clickup_chat_channel_list`, `clickup_chat_message_list`, `clickup_chat_reply_list` accept optional `cursor` / `limit` / `all`. The contract is **opt-in and non-breaking**: when no pagination arg is passed, the response is unchanged — a bare compact array, same shape existing MCP clients see today. When ANY pagination arg is passed, the response becomes `{"items": [...], "pagination": {style, page|next_cursor, has_more, returned, last_page, all}}`. With `all=true` the helper walks pages until ClickUp reports `last_page=true` / `next_cursor=null` or `limit` is reached (hard-capped at 100 pages to prevent runaway loops). Introduces `crate::mcp::pagination` with `PageArgs`, `CursorArgs`, `page_dispatch`, and `cursor_dispatch` helpers backed by wiremock-driven tests. Start/start_id-based tools (`clickup_comment_list`, `clickup_comment_replies`) and body-pagination tools (`clickup_audit_log_query`) are deliberately out of scope for this pass — their endpoints use distinct pagination shapes that warrant separate helpers, tracked as a follow-up.
+
 ## [0.11.0] - 2026-05-19
 
 ### Changed
