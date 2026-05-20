@@ -136,9 +136,12 @@ impl ClickUpClient {
                     if body_text.is_empty() {
                         format!("HTTP {}", status)
                     } else {
-                        // Limit body size in error message
-                        let truncated = if body_text.len() > 200 {
-                            format!("{}...", &body_text[..200])
+                        // Limit body size in error message. Slice by chars,
+                        // not bytes, so a multibyte UTF-8 codepoint at the
+                        // 200-byte boundary can't panic this branch.
+                        let truncated = if body_text.chars().count() > 200 {
+                            let head: String = body_text.chars().take(200).collect();
+                            format!("{}...", head)
                         } else {
                             body_text
                         };

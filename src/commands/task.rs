@@ -204,7 +204,13 @@ pub enum TaskCommands {
         #[arg(long)]
         id: Option<String>,
     },
-    /// Replace all per-user time estimates on a task (v3)
+    /// Replace all per-user time estimates on a task (v3).
+    ///
+    /// Requires a Business+ plan: the underlying v3
+    /// `time_estimates_by_user` endpoint is gated to Business and Enterprise
+    /// workspaces. On Free/Unlimited plans the request returns HTTP 400.
+    /// Use `task set-estimate` (without `--assignee`) for the v2 task-level
+    /// `time_estimate` field, which works on every plan.
     #[command(name = "replace-estimates")]
     ReplaceEstimates {
         /// Per-user estimate in the form ASSIGNEE:MS (repeat for each user).
@@ -648,7 +654,16 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 let body = serde_json::json!({
                     "time_estimate": time
                 });
-                client.put(&format!("/v2/task/{}", task.id), &body).await?
+                let path = if task.is_custom {
+                    let ws_id = resolve_workspace(cli)?;
+                    format!(
+                        "/v2/task/{}?custom_task_ids=true&team_id={}",
+                        task.id, ws_id
+                    )
+                } else {
+                    format!("/v2/task/{}", task.id)
+                };
+                client.put(&path, &body).await?
             };
             output.print_single(&resp, TASK_FIELDS, "id");
             Ok(())

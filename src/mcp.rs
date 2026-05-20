@@ -4235,10 +4235,9 @@ async fn dispatch_tool(
         }
 
         "clickup_task_set_estimate" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            // Resolve once so the message + URL both see the normalised id and
+            // any custom-task-id query fragment lands on the v2 path.
+            let (task_id, custom_query) = resolve_task(args, "task_id")?;
             let user_id = args.get("user_id").and_then(|v| v.as_i64());
             let time_estimate = args
                 .get("time_estimate")
@@ -4260,10 +4259,11 @@ async fn dispatch_tool(
                     .map_err(|e| e.to_string())?;
             } else {
                 let body = json!({"time_estimate": time_estimate});
-                client
-                    .put(&format!("/v2/task/{}", task_id), &body)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let path = match custom_query {
+                    Some(q) => format!("/v2/task/{}?{}", task_id, q),
+                    None => format!("/v2/task/{}", task_id),
+                };
+                client.put(&path, &body).await.map_err(|e| e.to_string())?;
             }
             Ok(json!({"message": format!("Time estimate set for task {}", task_id)}))
         }
