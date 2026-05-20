@@ -113,6 +113,12 @@ pub enum TimeCommands {
         /// New tag name
         #[arg(long)]
         new_name: String,
+        /// New background colour as a hex string (required by ClickUp's spec, e.g. #000000)
+        #[arg(long)]
+        tag_bg: String,
+        /// New foreground colour as a hex string (required by ClickUp's spec, e.g. #FFFFFF)
+        #[arg(long)]
+        tag_fg: String,
     },
     /// Get history for a time entry
     History {
@@ -355,10 +361,19 @@ pub async fn execute(command: TimeCommands, cli: &Cli) -> Result<(), CliError> {
             output.print_message("Tags removed");
             Ok(())
         }
-        TimeCommands::RenameTag { name, new_name } => {
+        TimeCommands::RenameTag {
+            name,
+            new_name,
+            tag_bg,
+            tag_fg,
+        } => {
+            // ClickUp's spec for PUT /v2/team/{ws}/time_entries/tags marks
+            // tag_bg and tag_fg as required even on a pure rename.
             let body = serde_json::json!({
                 "name": name,
                 "new_name": new_name,
+                "tag_bg": tag_bg,
+                "tag_fg": tag_fg,
             });
             client
                 .put(&format!("/v2/team/{}/time_entries/tags", ws_id), &body)

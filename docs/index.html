@@ -105,14 +105,14 @@ permalink: /
 </div>
 
 <pre><code># Configure
-clickup setup --token pk_your_token_here
+clickup-cli setup --token pk_your_token_here
 
 # Verify
-clickup auth whoami
+clickup-cli auth whoami
 
 # Use
-clickup task list --list 12345
-clickup task create --list 12345 --name "My Task" --priority 3</code></pre>
+clickup-cli task list --list 12345
+clickup-cli task create --list 12345 --name "My Task" --priority 3</code></pre>
 
 <!-- AI Integration -->
 <p class="sec-num">AI Integration</p>
@@ -121,13 +121,13 @@ clickup task create --list 12345 --name "My Task" --priority 3</code></pre>
 <div class="card" style="border-left:3px solid var(--amber);margin-bottom:14px">
   <div class="card-title">CLI Mode (recommended)</div>
   <div class="card-desc">Most token-efficient. Inject a ~1,000 token command reference into your agent instructions. The agent runs CLI commands directly. Works with any LLM.</div>
-  <pre style="margin-top:12px"><code>clickup agent-config inject</code></pre>
+  <pre style="margin-top:12px"><code>clickup-cli agent-config inject</code></pre>
   <p style="font-size:11px;font-weight:300;color:var(--txm);margin:0">Auto-detects CLAUDE.md, agent.md, .cursorrules, .github/copilot-instructions.md</p>
 </div>
 <div class="card" style="border-left:3px solid var(--teal)">
   <div class="card-title">MCP Mode (143 tools)</div>
   <div class="card-desc">For Claude Desktop, Cursor, and tools that prefer native tool integration. 143 tools with compact responses.</div>
-  <pre style="margin-top:12px"><code>clickup agent-config init --mcp</code></pre>
+  <pre style="margin-top:12px"><code>clickup-cli agent-config init --mcp</code></pre>
   <p style="font-size:11px;font-weight:300;color:var(--txm);margin:0">Creates .mcp.json at project root with auto-detected binary path</p>
 </div>
 

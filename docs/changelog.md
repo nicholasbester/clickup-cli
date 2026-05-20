@@ -14,6 +14,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-19
+
+### Changed
+- **BREAKING — binary rename (#39):** the shipped binary is no longer named `clickup`. The previous name collided with the official ClickUp desktop app on Linux, which installs a `clickup` binary on `PATH`. From 0.11.0 onwards two binaries ship from the same code:
+  - **`clickup-cli`** — the canonical name. Matches the crate name (`cargo install clickup-cli`) and the AUR package (`clickup-cli-bin`). All documentation and help text reference this name.
+  - **`clkup`** — a short alias for daily ergonomics (5 chars, no hyphen, no collision with the desktop app). Identical behaviour to `clickup-cli`.
+  - The previous `clickup` binary is **removed**, not aliased. Existing users must migrate.
+
+  Migration:
+  - **MCP configs** (Claude Desktop, Cursor, Codex, etc.): replace `"command": "clickup"` with `"command": "clickup-cli"` (or `"clkup"`) in `claude_desktop_config.json` / `.mcp.json` / equivalent.
+  - **Shell aliases & scripts**: replace `clickup ` invocations with `clickup-cli ` (or `clkup `). A one-shot rewrite: `sed -i 's/\bclickup /clickup-cli /g' your-script.sh` (review the diff — don't blindly replace if you reference the ClickUp brand name in prose).
+  - **Shell completions**: regenerate via `clickup-cli completions <shell> > /path/to/completion`. Old completion files keyed off the `clickup` binary name still source-load but won't fire on the new binaries until regenerated.
+  - **Injected agent-config blocks** (`clickup agent-config inject`): re-run `clickup-cli agent-config inject` to refresh the CLI reference baked into your CLAUDE.md / .cursorrules / equivalent. The injection markers (`<!-- clickup-cli:begin -->` / `<!-- clickup-cli:end -->`) are unchanged, so the re-inject is a clean in-place update.
+
+  Why a hard break: keeping `clickup` alongside `clickup-cli` would defeat the rename — the collision with the desktop app would persist. Pre-1.0 semver allows the break.
+- **BREAKING:** `audit-log query` (CLI and `clickup_audit_log_query` MCP tool) request body reshaped to match ClickUp's v3 OpenAPI spec. Previous implementation invented `{type, user_id, date_filter:{start_date,end_date}}`, none of which the endpoint recognises. Correct shape is `{applicability, filter?:{...}, pagination?:{...}}` where the inner filter fields are `eventType`, `eventStatus`, `userId` (array), `userEmail` (array), `startTime`, `endTime`. CLI flags renamed: `--type` is gone, replaced by `--applicability` (required) plus optional `--event-type`. `--user-id` is now repeatable. New flags: `--event-status`, `--user-email`, `--start-time`, `--end-time`, `--page-rows`, `--page-timestamp`, `--page-direction`. No working caller exists because the previous body shape produced no useful response.
+- **BREAKING:** `acl update` (CLI and `clickup_acl_update` MCP tool) body reshaped to match the v3 spec. Previous implementation invented `{access_type, grant, revoke}` arrays; the endpoint accepts `{private?:bool, entries?:[{kind, id, permission_level?}]}`. CLI flags now: `--private true|false`, `--grant-user USER_ID[:LEVEL]` (repeatable), `--grant-group GROUP_ID[:LEVEL]` (repeatable), `--revoke-user USER_ID` (repeatable), `--revoke-group GROUP_ID` (repeatable). Permission level accepts `read|comment|edit|create` (mapped to spec's `1|3|4|5` integers). `--body` raw JSON escape hatch retained. MCP gains an `entries` array parameter (objects of `{kind, id, permission_level?}` with kind enum `user|group`) so MCP callers can grant/revoke access — previously only `private` was exposed on the MCP side. Same justification as audit-log.
+
+### Fixed
+- `chat channel-list`, `chat message-list`, and `chat reply-list` CLI commands now read the v3 `data` envelope first and fall back to the older `channels`/`messages`/`replies` keys for compatibility (#39). Before this fix the commands consistently returned empty results because the v3 endpoints return their list under `data` — the matching MCP tools were already fixed in 0.10.0 but the CLI parity was missed.
+
+## [0.10.0] - 2026-05-18
+
+### Changed
+- **BREAKING:** `task replace-estimates` (CLI and `clickup_task_replace_estimates` MCP tool) reworked to match ClickUp's spec and remove a data-loss footgun. The old shape `{time_estimates: [{user_id, time_estimate}]}` was wrong on three fronts: the body should be a bare array (no wrapper), the field names are `assignee` and `time` (not `user_id` / `time_estimate`), and accepting only one assignee meant the "replace" operation silently erased every other user's estimate. CLI: `--assignee` / `--time` removed, replaced by repeatable `--estimate ASSIGNEE:MS` (ASSIGNEE accepts a numeric user id or the literal `unassigned`); new `--body` raw JSON escape hatch. MCP: `user_id` / `time_estimate` scalars replaced by an `estimates` array of `{assignee, time}` objects.
+- **BREAKING:** `time rename-tag` (CLI and `clickup_time_rename_tag` MCP tool) now sends the required `tag_bg` and `tag_fg` hex-colour fields per ClickUp's spec. The endpoint marks them required even when the caller only wants to rename; previously omitting them likely 400'd or silently failed. CLI gains required `--tag-bg` and `--tag-fg` flags; MCP gains required `tag_bg` and `tag_fg` schema parameters. Callers who want to keep the existing colours should pass the current hex values.
+- CLI help and MCP tool descriptions corrected after an audit against ClickUp's official OpenAPI spec. No behaviour change; documentation only.
+  - `comment create`, `comment update`, `comment reply` (and the corresponding `clickup_comment_*` MCP tools) no longer claim markdown support. ClickUp's v2 comment API only accepts plain `comment_text` and renders neither markdown nor rich text; markdown syntax is stored verbatim. @mentions are still rendered.
+  - `clickup_doc_create` MCP `parent.type` cheat sheet corrected: the enum is 4=space, 5=folder, 6=list, 7=everything, 12=workspace. The previous text said 7=task, which is wrong.
+  - `clickup_webhook_delete` MCP description: the alternative-to-delete suggestion now points at `status='inactive'`. The previous text said `'suspended'`, which is not a value the API accepts.
+  - `clickup_audit_log_query` MCP `type` parameter description: corrected example enum values to ClickUp's actual categories (AUTH, HIERARCHY, USER, CUSTOM_FIELDS, AGENT, OTHER). The previous text invented `task_created`, `user_added`, `permission_changed`.
+  - `clickup_chat_channel_update` MCP `description` field no longer claims markdown support; ClickUp's chat-channel description field is plain text.
+
+### Fixed
+- MCP task-scoped tools now auto-detect custom task IDs (e.g. `PROJ-42`) and inject the required `?custom_task_ids=true&team_id=<ws>` query string. Affects `clickup_task_get`, `clickup_task_update`, `clickup_task_delete`, `clickup_task_add_tag`, `clickup_task_remove_tag`, `clickup_task_add_dep`, `clickup_task_remove_dep`, `clickup_task_link`, `clickup_task_unlink`, `clickup_field_set`, `clickup_field_unset`, `clickup_task_time_in_status`, `clickup_attachment_list`, `clickup_attachment_upload`, `clickup_comment_list`, `clickup_comment_create`, `clickup_checklist_create`. Previously the CLI commands handled custom IDs but the MCP equivalents always treated the value as an internal ClickUp ID and 404'd for custom-format IDs. The `CU-` prefix is also now transparently stripped on the MCP side, matching CLI behaviour. Schema parameter names are unchanged; detection is automatic based on ID format.
+- Chat v3 fixes after auditing against ClickUp's OpenAPI spec:
+  - `clickup_chat_message_send` MCP tool now sends the required `type` field (default `"message"`, configurable via a new optional `type` schema arg). ClickUp's v3 endpoint rejects message-send requests that omit `type`. The CLI was already sending it.
+  - `clickup_chat_dm` MCP tool reworked: previously sent `{user_id, content}`, which is not in the spec at all. The endpoint creates a DM channel (no message body) and takes `user_ids: [...]` per spec. New schema takes a `user_ids` array and returns the channel object; callers should follow with `clickup_chat_message_send` to post a message. CLI was already correct.
+  - `clickup_chat_message_list`, `clickup_chat_channel_list`, and `clickup_chat_reply_list` MCP tools now read the v3 `data` envelope first and fall back to the older `messages`/`channels`/`replies` keys for compatibility. Before this fix the MCP tools consistently returned empty arrays because the v3 endpoints return their list under `data`.
+  - `chat reaction-remove` CLI and `clickup_chat_reaction_remove` MCP tool now percent-encode the emoji segment in the request path. Sending a raw multi-byte emoji like `👍` previously produced a malformed URL.
+- `goal create` (CLI and `clickup_goal_create` MCP tool) now sends the required `multiple_owners` boolean field that ClickUp's spec requires on goal create. CLI sends false (only single `--owner` is supported via the flag). MCP derives the value from the size of the `owner_ids` array. Without this fix the goal-create endpoint rejected requests with `multiple_owners is required`.
+- `group create` CLI wire-level: body field is `members` (ClickUp's spec), the CLI was sending `member_ids`. Values must be integers, the CLI was sending strings. Parses `--member` values into integers and now bails clearly when a value is not numeric.
+- `group list` CLI: ClickUp's `GET /v2/group` endpoint requires `team_id` as a query parameter. The CLI omitted it and the request 400'd. Now passes the resolved workspace id automatically.
+- `group update` CLI: add/remove member arrays in the body are integers per spec, not strings. Now parsed and validated; non-numeric IDs produce a clear error before the request goes out.
+- `clickup_doc_edit_page` MCP tool now supports the `mode` parameter (`replace` / `append` / `prepend`) and forwards it to ClickUp as `content_edit_mode`. The CLI's `doc edit-page --mode` flag was already wired; the MCP equivalent silently dropped any mode value and always replaced. Invalid values now error out before the request.
+- `view create` (CLI and `clickup_view_create` MCP tool) now sends the seven required complex body fields (`grouping`, `divide`, `sorting`, `filters`, `columns`, `team_sidebar`, `settings`) populated with ClickUp's documented neutral defaults. The previous body sent only `{name, type}` which ClickUp's spec rejects (all seven are required). The resulting view can be customised in the ClickUp UI afterwards.
+- `task create --description` and `task update --description` (and the `clickup_task_create` / `clickup_task_update` MCP tools) now render markdown in the ClickUp UI (#22). The CLI was sending the plain-text `description` API field, which doesn't interpret markdown; switched to `markdown_content`, ClickUp's documented markdown-rendering field. Plain-text descriptions still display identically. User-facing flag and MCP schema parameter name (`description`) are unchanged.
+- `list create --content` and `list update --content` (and the `clickup_list_create` / `clickup_list_update` MCP tools) now render markdown in the ClickUp UI. Same root cause as the task-description bug above: the CLI was sending the plain-text `content` field, but ClickUp's docs explicitly say to use `markdown_content` to format a list description. CLI flag and MCP arg name (`content`) are unchanged.
+- `clickup_chat_reaction_add` MCP tool and `chat reaction-add` CLI: the request body field was `emoji`, ClickUp's OpenAPI spec names it `reaction`. The CLI/MCP input arg name remains `emoji`, only the wire field changed. Without this fix the endpoint returned `Reaction required`.
+- `clickup_tag_update` MCP tool sent `tag_fg` / `tag_bg` on the tag-update endpoint. ClickUp's update endpoint uses `fg_color` / `bg_color` (an inconsistency with the create endpoint, which still uses `tag_fg` / `tag_bg`). The CLI was already correct; the MCP tool now matches. Caller-facing arg names unchanged.
+- `task time-in-status` bulk mode comma-joined every task ID into a single `task_ids=` query parameter, which ClickUp treats as one unknown ID. Switched to repeated `task_ids=A&task_ids=B&...` query params per the OpenAPI spec.
+- `doc create --parent-type` sent the type as a string (`"SPACE"` etc.). ClickUp's spec requires an integer enum (4=space, 5=folder, 6=list, 7=everything, 12=workspace). CLI now accepts the string names case-insensitively (plus the raw integers) and translates to the integer enum. Help text expanded to list the new values (EVERYTHING, WORKSPACE).
+- `doc list --creator` sent `creator_id=` as the query param, ClickUp's docs name it `creator`. Filter was silently ignored before; now applies as documented.
+
 ## [0.9.1] - 2026-04-23
 
 ### Fixed
@@ -93,7 +147,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Release notes for 0.6.7 and earlier are auto-generated from commit history on the
 [GitHub Releases page](https://github.com/nicholasbester/clickup-cli/releases).
 
-[Unreleased]: https://github.com/nicholasbester/clickup-cli/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/nicholasbester/clickup-cli/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/nicholasbester/clickup-cli/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/nicholasbester/clickup-cli/compare/v0.8.1...v0.8.2

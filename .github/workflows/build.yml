@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -64,18 +64,18 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.name }}.tar.gz clickup
+          tar czf ../../../${{ matrix.name }}.tar.gz clickup-cli clkup
           cd ../../..
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ../../../${{ matrix.name }}.zip clickup.exe
+          7z a ../../../${{ matrix.name }}.zip clickup-cli.exe clkup.exe
           cd ../../..
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}.*
@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download musl artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: clickup-linux-x86_64-musl
 
@@ -100,8 +100,10 @@ jobs:
       - name: Smoke-test musl binary inside Alpine
         shell: alpine.sh {0}
         run: |
-          ./clickup --version
-          ./clickup mcp serve --help | grep -- '--profile'
+          ./clickup-cli --version
+          ./clickup-cli mcp serve --help | grep -- '--profile'
+          # Confirm the clkup short-alias binary is also packaged and works.
+          ./clkup --version
           echo "Alpine musl smoke test passed"
 
   release:
@@ -110,7 +112,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -131,13 +133,13 @@ jobs:
           fi
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
           path: artifacts
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
@@ -151,7 +153,7 @@ jobs:
 
       - name: Setup Node.js
         if: ${{ !contains(github.ref_name, '-') }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
@@ -172,7 +174,7 @@ jobs:
 
       - name: Setup Node.js (GitHub Packages)
         if: ${{ !contains(github.ref_name, '-') }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           registry-url: https://npm.pkg.github.com
@@ -236,12 +238,13 @@ jobs:
             end
 
             def install
-              bin.install "clickup"
-              generate_completions_from_executable(bin/"clickup", "completions")
+              bin.install "clickup-cli", "clkup"
+              generate_completions_from_executable(bin/"clickup-cli", "completions")
             end
 
             test do
-              assert_match "clickup #{version}", shell_output("#{bin}/clickup --version")
+              assert_match "clickup-cli #{version}", shell_output("#{bin}/clickup-cli --version")
+              assert_match "clickup-cli #{version}", shell_output("#{bin}/clkup --version")
             end
           end
           FORMULA

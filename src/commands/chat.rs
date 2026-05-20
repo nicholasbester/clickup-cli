@@ -165,8 +165,10 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
                 ""
             };
             let resp = client.get(&format!("{}/channels{}", base, query)).await?;
+            // v3 envelope wraps the list in "data"; older shape used "channels".
             let mut channels = resp
-                .get("channels")
+                .get("data")
+                .or_else(|| resp.get("channels"))
                 .and_then(|v| v.as_array())
                 .cloned()
                 .unwrap_or_default();
@@ -238,14 +240,14 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             let resp = client
                 .get(&format!("{}/channels/{}/messages", base, channel))
                 .await?;
+            // v3 envelope wraps the list in "data"; older shape used "messages",
+            // and some endpoints return a bare array.
             let mut messages = resp
-                .get("messages")
+                .get("data")
+                .or_else(|| resp.get("messages"))
                 .and_then(|v| v.as_array())
                 .cloned()
-                .unwrap_or_else(|| {
-                    // Response may be an array directly
-                    resp.as_array().cloned().unwrap_or_default()
-                });
+                .unwrap_or_else(|| resp.as_array().cloned().unwrap_or_default());
             if let Some(limit) = cli.limit {
                 messages.truncate(limit);
             }
@@ -285,7 +287,7 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::ReactionAdd { msg_id, emoji } => {
-            let body = serde_json::json!({ "emoji": emoji });
+            let body = serde_json::json!({ "reaction": emoji });
             let resp = client
                 .post(&format!("{}/messages/{}/reactions", base, msg_id), &body)
                 .await?;
@@ -293,8 +295,22 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::ReactionRemove { msg_id, emoji } => {
+            // Emoji like 👍 contain bytes outside the URL path's unreserved set;
+            // percent-encode the segment so the request is well-formed.
+            let encoded: String = emoji
+                .bytes()
+                .flat_map(|byte| match byte {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                        vec![byte as char]
+                    }
+                    _ => format!("%{:02X}", byte).chars().collect(),
+                })
+                .collect();
             client
-                .delete(&format!("{}/messages/{}/reactions/{}", base, msg_id, emoji))
+                .delete(&format!(
+                    "{}/messages/{}/reactions/{}",
+                    base, msg_id, encoded
+                ))
                 .await?;
             output.print_message(&format!(
                 "Reaction '{}' removed from message {}",
@@ -306,8 +322,11 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             let resp = client
                 .get(&format!("{}/messages/{}/replies", base, msg_id))
                 .await?;
+            // v3 envelope wraps the list in "data"; older shape used "replies",
+            // and some endpoints return a bare array.
             let mut replies = resp
-                .get("replies")
+                .get("data")
+                .or_else(|| resp.get("replies"))
                 .and_then(|v| v.as_array())
                 .cloned()
                 .unwrap_or_else(|| resp.as_array().cloned().unwrap_or_default());

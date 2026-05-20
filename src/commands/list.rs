@@ -133,7 +133,7 @@ pub async fn execute(command: ListCommands, cli: &Cli) -> Result<(), CliError> {
             };
             let mut body = serde_json::json!({ "name": name });
             if let Some(c) = content {
-                body["content"] = serde_json::Value::String(c);
+                body["markdown_content"] = serde_json::Value::String(c);
             }
             if let Some(p) = priority {
                 body["priority"] = serde_json::json!(p);
@@ -151,7 +151,7 @@ pub async fn execute(command: ListCommands, cli: &Cli) -> Result<(), CliError> {
                 body.insert("name".into(), serde_json::Value::String(n));
             }
             if let Some(c) = content {
-                body.insert("content".into(), serde_json::Value::String(c));
+                body.insert("markdown_content".into(), serde_json::Value::String(c));
             }
             let resp = client
                 .put(

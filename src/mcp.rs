@@ -1,6 +1,7 @@
 use crate::client::ClickUpClient;
 use crate::config::Config;
-use crate::output::compact_items;
+use crate::git;
+use crate::output::{compact_items, flatten_value};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -23,6 +24,126 @@ fn tool_result(text: String) -> Value {
 
 fn tool_error(msg: String) -> Value {
     json!({"content":[{"type":"text","text":msg}],"isError":true})
+}
+
+fn encode_query_value(value: &str) -> String {
+    value
+        .bytes()
+        .flat_map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                vec![byte as char]
+            }
+            _ => format!("%{:02X}", byte).chars().collect(),
+        })
+        .collect()
+}
+
+fn push_query_param(params: &mut Vec<String>, name: &str, value: impl ToString) {
+    params.push(format!(
+        "{}={}",
+        name,
+        encode_query_value(&value.to_string())
+    ));
+}
+
+fn push_string_array_query_params(
+    params: &mut Vec<String>,
+    args: &Value,
+    arg_name: &str,
+    query_name: &str,
+) {
+    if let Some(values) = args.get(arg_name).and_then(|v| v.as_array()) {
+        for value in values {
+            if let Some(value) = value.as_str() {
+                push_query_param(params, query_name, value);
+            }
+        }
+    }
+}
+
+fn push_number_array_query_params(
+    params: &mut Vec<String>,
+    args: &Value,
+    arg_name: &str,
+    query_name: &str,
+) {
+    if let Some(values) = args.get(arg_name).and_then(|v| v.as_array()) {
+        for value in values {
+            if let Some(value) = value.as_i64() {
+                push_query_param(params, query_name, value);
+            }
+        }
+    }
+}
+
+fn push_bool_query_param(params: &mut Vec<String>, args: &Value, arg_name: &str, query_name: &str) {
+    if let Some(value) = args.get(arg_name).and_then(|v| v.as_bool()) {
+        push_query_param(params, query_name, value);
+    }
+}
+
+fn push_i64_query_param(params: &mut Vec<String>, args: &Value, arg_name: &str, query_name: &str) {
+    if let Some(value) = args.get(arg_name).and_then(|v| v.as_i64()) {
+        push_query_param(params, query_name, value);
+    }
+}
+
+fn push_string_query_param(
+    params: &mut Vec<String>,
+    args: &Value,
+    arg_name: &str,
+    query_name: &str,
+) {
+    if let Some(value) = args.get(arg_name).and_then(|v| v.as_str()) {
+        push_query_param(params, query_name, value);
+    }
+}
+
+fn task_search_query_params(args: &Value) -> Vec<String> {
+    let mut params = Vec::new();
+
+    push_string_array_query_params(&mut params, args, "space_ids", "space_ids[]");
+    push_string_array_query_params(&mut params, args, "project_ids", "project_ids[]");
+    push_string_array_query_params(&mut params, args, "list_ids", "list_ids[]");
+    push_string_array_query_params(&mut params, args, "statuses", "statuses[]");
+    push_string_array_query_params(&mut params, args, "assignees", "assignees[]");
+    push_string_array_query_params(&mut params, args, "tags", "tags[]");
+    push_number_array_query_params(&mut params, args, "custom_items", "custom_items[]");
+
+    for key in [
+        "include_closed",
+        "subtasks",
+        "reverse",
+        "include_markdown_description",
+    ] {
+        push_bool_query_param(&mut params, args, key, key);
+    }
+
+    for key in [
+        "due_date_gt",
+        "due_date_lt",
+        "date_created_gt",
+        "date_created_lt",
+        "date_updated_gt",
+        "date_updated_lt",
+        "date_done_gt",
+        "date_done_lt",
+    ] {
+        push_i64_query_param(&mut params, args, key, key);
+    }
+
+    push_string_query_param(&mut params, args, "parent", "parent");
+    push_string_query_param(&mut params, args, "order_by", "order_by");
+
+    if let Some(custom_fields) = args.get("custom_fields").and_then(|v| v.as_array()) {
+        push_query_param(
+            &mut params,
+            "custom_fields",
+            serde_json::to_string(custom_fields).unwrap_or_else(|_| "[]".to_string()),
+        );
+    }
+
+    params
 }
 
 /// Inspects a `tools/call` request and returns a JSON-RPC response when the
@@ -209,7 +330,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_search",
-            "description": "Search tasks across an entire ClickUp workspace with optional space/list/status/assignee filters — useful for cross-list queries. Returns a paginated array of task objects. For tasks in a single list, prefer clickup_task_list (fewer parameters, same shape).",
+            "description": "Search tasks across an entire ClickUp workspace with ClickUp's filtered team tasks endpoint. Supports hierarchy, assignee, status, tag, date range, custom field, custom item type, parent/subtask, and ordering filters. Returns a paginated array of task objects. For tasks in a single list, prefer clickup_task_list (fewer parameters, same shape).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -218,6 +339,11 @@ pub fn tool_list() -> Value {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Restrict results to these space IDs. Obtain from clickup_space_list (field: id). Omit to search all spaces."
+                    },
+                    "project_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Restrict results to these folder/project IDs. ClickUp's API parameter is project_ids[]. Obtain IDs from clickup_folder_list."
                     },
                     "list_ids": {
                         "type": "array",
@@ -233,7 +359,36 @@ pub fn tool_list() -> Value {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "User IDs (as strings) to restrict to tasks assigned to them. Obtain from clickup_member_list. Omit to return tasks regardless of assignee."
-                    }
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tag names to filter by. Tags must match ClickUp tag names in the relevant spaces."
+                    },
+                    "include_closed": {"type": "boolean", "description": "true = include tasks in closed statuses; false or omitted = exclude closed tasks."},
+                    "subtasks": {"type": "boolean", "description": "true = include subtasks in search results; false or omitted = exclude subtasks unless parent is provided."},
+                    "parent": {"type": "string", "description": "Parent task ID. When set, returns subtasks under this parent task."},
+                    "order_by": {"type": "string", "description": "Sort field supported by ClickUp, such as id, created, updated, or due_date."},
+                    "reverse": {"type": "boolean", "description": "true = reverse the selected sort order."},
+                    "due_date_gt": {"type": "integer", "description": "Filter tasks with due_date greater than this Unix timestamp in milliseconds."},
+                    "due_date_lt": {"type": "integer", "description": "Filter tasks with due_date less than this Unix timestamp in milliseconds."},
+                    "date_created_gt": {"type": "integer", "description": "Filter tasks created after this Unix timestamp in milliseconds."},
+                    "date_created_lt": {"type": "integer", "description": "Filter tasks created before this Unix timestamp in milliseconds."},
+                    "date_updated_gt": {"type": "integer", "description": "Filter tasks updated after this Unix timestamp in milliseconds."},
+                    "date_updated_lt": {"type": "integer", "description": "Filter tasks updated before this Unix timestamp in milliseconds."},
+                    "date_done_gt": {"type": "integer", "description": "Filter tasks completed after this Unix timestamp in milliseconds."},
+                    "date_done_lt": {"type": "integer", "description": "Filter tasks completed before this Unix timestamp in milliseconds."},
+                    "custom_fields": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "ClickUp custom field filters. Each object is sent inside the custom_fields JSON query parameter, e.g. [{\"field_id\":\"...\",\"operator\":\"=\",\"value\":\"...\"}]. Use operators supported by ClickUp, including IS NULL / IS NOT NULL for unset/set checks."
+                    },
+                    "custom_items": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Filter by ClickUp custom task type IDs. Include 0 for regular tasks, 1 for milestones, or workspace-defined custom item type IDs."
+                    },
+                    "include_markdown_description": {"type": "boolean", "description": "true = ask ClickUp to return task descriptions in Markdown format."}
                 },
                 "required": []
             }
@@ -251,12 +406,12 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_comment_create",
-            "description": "Post a new top-level comment on a ClickUp task. Supports markdown and @mentions in the text body. Returns the created comment object including its new id, which you can pass to clickup_comment_reply, clickup_comment_update, etc.",
+            "description": "Post a new top-level comment on a ClickUp task. @mentions are recognised by ClickUp. Note: ClickUp's v2 comment API stores the body verbatim and does NOT render markdown. Tokens like `**bold**` appear as literal characters in the UI. Returns the created comment object including its new id, which you can pass to clickup_comment_reply, clickup_comment_update, etc.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task to comment on. Obtain from clickup_task_list (field: id) or clickup_task_search."},
-                    "text": {"type": "string", "description": "Comment body. Markdown and @mentions (e.g. '@username') are supported."},
+                    "text": {"type": "string", "description": "Comment body. @mentions (e.g. '@username') are rendered. Markdown is NOT rendered by ClickUp's v2 comment API. Markdown syntax is stored as literal text."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the comment to — they will receive a notification. Obtain from clickup_member_list."},
                     "notify_all": {"type": "boolean", "description": "true = send a notification to every assignee of the task; false or omitted = only notify people mentioned or the explicit assignee."}
                 },
@@ -265,7 +420,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_field_list",
-            "description": "List the custom field definitions available on a ClickUp list — field id, name, type (text, number, dropdown, labels, date, url, email, phone, money, progress, formula, etc.), and for dropdown/labels fields the permitted option values. Use this before clickup_field_set to learn the correct field_id and value shape. Returns an array of custom field definitions.",
+            "description": "List the custom field definitions available on a ClickUp list — field id, name, type (text, number, drop_down, labels, date, url, email, phone, money, progress, formula, etc.), and for drop_down/labels fields the permitted option values extracted from type_config.options. Use this before clickup_field_set to learn the correct field_id, option ids, and value shape. Returns an array of custom field definitions.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -276,13 +431,13 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_field_set",
-            "description": "Set or overwrite a single custom field value on a ClickUp task. The value's JSON shape must match the field type (string for text/url/email, number for number/currency/progress, array of option ids for dropdown/labels, Unix ms for date, etc.). Use clickup_field_list first to see the field type and option ids. Use clickup_field_unset to clear a value. Returns an empty object on success.",
+            "description": "Set or overwrite a single custom field value on a ClickUp task. The value's JSON shape must match the field type (string for text/url/email and for a drop_down option id, number for number/currency/progress, array of option ids for labels, Unix ms for date, etc.). Use clickup_field_list first to see the field type and option ids. Use clickup_field_unset to clear a value. Returns an empty object on success.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task whose field value should change. Obtain from clickup_task_list (field: id)."},
                     "field_id": {"type": "string", "description": "ID of the custom field to set. Obtain from clickup_field_list (field: id) or clickup_task_get (custom_fields[].id)."},
-                    "value": {"description": "New value; the accepted type depends on the custom field type. Examples: 'hello' (text), 42 (number), ['option-uuid'] (dropdown), 1735689600000 (date as Unix ms). See clickup_field_list for the field's type."}
+                    "value": {"description": "New value; the accepted type depends on the custom field type. Examples: 'hello' (text), 42 (number), 'option-uuid' (drop_down), ['option-uuid'] (labels), 1735689600000 (date as Unix ms). See clickup_field_list for the field's type and option ids."}
                 },
                 "required": ["task_id", "field_id", "value"]
             }
@@ -715,7 +870,7 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "comment_id": {"type": "string", "description": "ID of the comment to edit. Obtain from clickup_comment_list (field: id)."},
-                    "text": {"type": "string", "description": "Replacement body for the comment. ClickUp accepts markdown plus @mentions (e.g. '@username'). The previous body is overwritten entirely."},
+                    "text": {"type": "string", "description": "Replacement body for the comment. @mentions (e.g. '@username') are rendered. Markdown is NOT rendered by ClickUp's v2 comment API; markdown syntax is stored as literal text. The previous body is overwritten entirely."},
                     "assignee": {"type": "integer", "description": "Reassign the comment to this user ID, who will receive a notification. Obtain from clickup_member_list."},
                     "resolved": {"type": "boolean", "description": "true = mark the comment thread resolved/closed; false = reopen it."}
                 },
@@ -951,7 +1106,7 @@ pub fn tool_list() -> Value {
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "name": {"type": "string", "description": "Display name for the doc (shown in the doc tree)."},
-                    "parent": {"type": "object", "description": "Optional parent object to attach the doc under. Shape: { 'id': '<id>', 'type': <int> } where type is 4=space, 5=folder, 6=list, 7=task. Omit to create at the workspace root."}
+                    "parent": {"type": "object", "description": "Optional parent object to attach the doc under. Shape: { 'id': '<id>', 'type': <int> } where type is 4=space, 5=folder, 6=list, 7=everything, 12=workspace. Omit to create at the workspace root."}
                 },
                 "required": ["name"]
             }
@@ -974,7 +1129,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_doc_edit_page",
-            "description": "Rename or rewrite an existing page inside a ClickUp doc. The supplied content replaces the current page body entirely (not an append). For a fresh page use clickup_doc_add_page instead. Returns the updated page object.",
+            "description": "Rename or rewrite an existing page inside a ClickUp doc. By default the supplied content replaces the current page body. Pass mode='append' or mode='prepend' to merge with the existing body instead. For a fresh page use clickup_doc_add_page instead. Returns the updated page object.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -982,7 +1137,8 @@ pub fn tool_list() -> Value {
                     "doc_id": {"type": "string", "description": "ID of the parent doc. Obtain from clickup_doc_list (field: id)."},
                     "page_id": {"type": "string", "description": "ID of the page to edit. Obtain from clickup_doc_pages (field: id)."},
                     "name": {"type": "string", "description": "New page title. Omit to keep current title."},
-                    "content": {"type": "string", "description": "New page body in ClickUp-flavoured markdown. Replaces the existing body entirely. Omit to leave content unchanged."}
+                    "content": {"type": "string", "description": "New page body in ClickUp-flavoured markdown. Replaces the existing body unless mode is set. Omit to leave content unchanged."},
+                    "mode": {"type": "string", "description": "How to combine content with the existing body: 'replace' (default), 'append', or 'prepend'. Sent as content_edit_mode on the wire."}
                 },
                 "required": ["doc_id", "page_id"]
             }
@@ -1022,7 +1178,7 @@ pub fn tool_list() -> Value {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
                     "channel_id": {"type": "string", "description": "ID of the channel to update. Obtain from clickup_chat_channel_list (field: id)."},
                     "name": {"type": "string", "description": "New display name for the channel. Must be unique within the workspace."},
-                    "description": {"type": "string", "description": "New channel description/topic shown in the channel header. Markdown supported."}
+                    "description": {"type": "string", "description": "New channel description shown in the channel header."}
                 },
                 "required": ["channel_id"]
             }
@@ -1060,7 +1216,8 @@ pub fn tool_list() -> Value {
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "channel_id": {"type": "string", "description": "ID of the target channel. Obtain from clickup_chat_channel_list (field: id)."},
-                    "content": {"type": "string", "description": "Message body. Supports markdown, @mentions (e.g. '@username'), and emoji."}
+                    "content": {"type": "string", "description": "Message body. Supports markdown, @mentions (e.g. '@username'), and emoji."},
+                    "type": {"type": "string", "description": "Message subtype. Defaults to 'message' (a normal chat message). Use 'post' for a long-form post. ClickUp requires this field server-side."}
                 },
                 "required": ["channel_id", "content"]
             }
@@ -1079,15 +1236,18 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_dm",
-            "description": "Send a direct message from the authenticated user to another workspace member. If no DM channel exists between the two users, one is created automatically. Returns the created message object. Use clickup_chat_message_send for channel messages.",
+            "description": "Create or fetch the direct-message channel between the authenticated user and one or more other workspace members (ClickUp groups DMs around the participant set). Returns the channel object including its id. To send a message in the channel, follow with clickup_chat_message_send using the returned channel id.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "user_id": {"type": "integer", "description": "Numeric user ID of the recipient. Obtain from clickup_member_list or clickup_user_get (field: id)."},
-                    "content": {"type": "string", "description": "Message body. Supports markdown, emoji, and @mentions."}
+                    "user_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Numeric user IDs of the DM participants (excluding the caller). ClickUp permits up to 15 participants for a group DM. Obtain IDs from clickup_member_list or clickup_user_get."
+                    }
                 },
-                "required": ["user_id", "content"]
+                "required": ["user_ids"]
             }
         },
         {
@@ -1131,7 +1291,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_webhook_delete",
-            "description": "Permanently delete a ClickUp webhook, stopping all future event deliveries to its endpoint. Destructive and irreversible — the webhook record is removed immediately. If you only want to pause deliveries, use clickup_webhook_update with status='suspended' instead. Returns an empty object on success.",
+            "description": "Permanently delete a ClickUp webhook, stopping all future event deliveries to its endpoint. Destructive and irreversible: the webhook record is removed immediately. If you only want to pause deliveries, use clickup_webhook_update with status='inactive' instead. Returns an empty object on success.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1419,16 +1579,26 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_replace_estimates",
-            "description": "Replace all time estimates for a task (PUT replaces all user estimates)",
+            "description": "Replace the full set of per-user time estimates on a task. The request body is an array; any user not in the array has their estimate removed. To set one user's estimate without disturbing others, use clickup_task_set_estimate instead. Body shape per ClickUp's spec: [{assignee, time}]. Requires Business plan for multiple owners.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "string", "description": "Task ID"},
+                    "task_id": {"type": "string", "description": "Task ID. Custom task IDs (PROJ-42) are auto-detected."},
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
-                    "user_id": {"type": "integer", "description": "User ID"},
-                    "time_estimate": {"type": "integer", "description": "Time estimate in milliseconds"}
+                    "estimates": {
+                        "type": "array",
+                        "description": "Full set of per-user estimates to replace with. Every assignee not present here will have their estimate removed. At least one entry required.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "assignee": {"description": "User ID (integer) or the literal string 'unassigned'."},
+                                "time": {"type": "integer", "description": "Time estimate in milliseconds (>= 0)."}
+                            },
+                            "required": ["assignee", "time"]
+                        }
+                    }
                 },
-                "required": ["task_id", "user_id", "time_estimate"]
+                "required": ["task_id", "estimates"]
             }
         },
         {
@@ -1471,7 +1641,7 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "comment_id": {"type": "string", "description": "ID of the parent comment to reply to. Obtain from clickup_comment_list (field: id)."},
-                    "text": {"type": "string", "description": "Reply body. Markdown and @mentions supported."},
+                    "text": {"type": "string", "description": "Reply body. @mentions are rendered. Markdown is NOT rendered by ClickUp's v2 comment API; markdown syntax is stored as literal text."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the reply to — they receive a notification. Obtain from clickup_member_list."}
                 },
                 "required": ["comment_id", "text"]
@@ -1667,15 +1837,17 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_time_rename_tag",
-            "description": "Rename a time-entry tag across the entire workspace. All historical time entries carrying the old name are updated. Cannot change colour via this endpoint. Returns an empty object on success.",
+            "description": "Rename a time-entry tag across the entire workspace. All historical time entries carrying the old name are updated. ClickUp's spec requires the new background and foreground hex colours on every rename call (pass the existing values if you don't want to change them). Returns an empty object on success.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "name": {"type": "string", "description": "Current name of the tag to rename. Obtain from clickup_time_tags (field: name)."},
-                    "new_name": {"type": "string", "description": "Replacement name for the tag. Must not collide with an existing time-entry tag."}
+                    "new_name": {"type": "string", "description": "Replacement name for the tag. Must not collide with an existing time-entry tag."},
+                    "tag_bg": {"type": "string", "description": "Required. New background colour as a hex string (e.g. #000000). Pass the existing value to leave the colour unchanged."},
+                    "tag_fg": {"type": "string", "description": "Required. New foreground colour as a hex string (e.g. #FFFFFF). Pass the existing value to leave the colour unchanged."}
                 },
-                "required": ["name", "new_name"]
+                "required": ["name", "new_name", "tag_bg", "tag_fg"]
             }
         },
         {
@@ -1924,29 +2096,56 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_audit_log_query",
-            "description": "Query the ClickUp audit log (who did what, when) for a workspace — filter by event type, acting user, and date range. Requires Enterprise plan. Uses v3 cursor pagination. Returns an array of audit event objects (actor, event, target, timestamp).",
+            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires Enterprise plan. Uses v3 cursor pagination. Body shape per ClickUp's OpenAPI spec: { applicability, filter?, pagination? }. Returns the raw response (data array plus pagination cursor).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "type": {"type": "string", "description": "Audit event type filter (e.g. 'task_created', 'user_added', 'permission_changed'). Required. See ClickUp docs for the full list."},
-                    "user_id": {"type": "integer", "description": "Restrict to events performed by this user ID. Obtain from clickup_member_list. Omit for all users."},
-                    "start_date": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds (e.g. 1735689600000 for 2025-01-01). Omit for no lower bound."},
-                    "end_date": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Omit for no upper bound."}
+                    "applicability": {"type": "string", "description": "Required. Scope of the query. ClickUp's documented values: WORKSPACE, TEAMS, USERS."},
+                    "event_type": {"type": "string", "description": "Optional filter on event category. ClickUp's documented categories include AUTH, HIERARCHY, USER, CUSTOM_FIELDS, AGENT, OTHER. Maps to filter.eventType."},
+                    "event_status": {"type": "string", "description": "Optional filter on event status (e.g. SUCCESS, FAILURE). Maps to filter.eventStatus."},
+                    "user_id": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of user IDs to filter on. Maps to filter.userId."
+                    },
+                    "user_email": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of user emails to filter on. Maps to filter.userEmail."
+                    },
+                    "start_time": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds. Maps to filter.startTime."},
+                    "end_time": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Maps to filter.endTime."},
+                    "page_rows": {"type": "integer", "description": "Pagination page size. Maps to pagination.pageRows."},
+                    "page_timestamp": {"type": "integer", "description": "Pagination cursor timestamp. Maps to pagination.pageTimestamp."},
+                    "page_direction": {"type": "string", "description": "Pagination direction (NEXT or PREVIOUS). Maps to pagination.pageDirection."}
                 },
-                "required": ["type"]
+                "required": ["applicability"]
             }
         },
         {
             "name": "clickup_acl_update",
-            "description": "Change the privacy (ACL) of a ClickUp hierarchy object — make a space/folder/list private (explicit members only) or public (whole workspace). Uses the v3 ACL endpoint. Requires Enterprise plan. Returns the updated object.",
+            "description": "Change the privacy (ACL) of a ClickUp hierarchy object — toggle private/public and grant or revoke per-user/per-group access. Uses the v3 ACL endpoint. Requires Enterprise plan. Body shape per ClickUp's OpenAPI spec: { private?: bool, entries?: [{kind, id, permission_level?}] }.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
                     "object_type": {"type": "string", "description": "Type of object to change: 'space', 'folder', or 'list'."},
                     "object_id": {"type": "string", "description": "ID of the space/folder/list. Obtain from the matching list endpoint (clickup_space_list, clickup_folder_list, or clickup_list_list)."},
-                    "private": {"type": "boolean", "description": "true = make the object private (only explicit members see it); false = make it public (visible to the whole workspace)."}
+                    "private": {"type": "boolean", "description": "true = make the object private (only explicit members see it); false = make it public (visible to the whole workspace). Omit to leave unchanged."},
+                    "entries": {
+                        "type": "array",
+                        "description": "Grant or revoke per-principal access. Each entry: {kind: 'user'|'group', id: string, permission_level?: integer}. permission_level enum: 1=read, 3=comment, 4=edit, 5=create; pass 0 to revoke. Maps directly to ClickUp's `entries` array per the v3 spec.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "kind": {"type": "string", "enum": ["user", "group"], "description": "Principal type."},
+                                "id": {"type": "string", "description": "User ID (for kind='user') or user-group ID (for kind='group')."},
+                                "permission_level": {"type": "integer", "description": "1=read, 3=comment, 4=edit, 5=create. Pass 0 to revoke. Defaults to read (1) if omitted on a grant."}
+                            },
+                            "required": ["kind", "id"]
+                        }
+                    }
                 },
                 "required": ["object_type", "object_id"]
             }
@@ -1972,6 +2171,35 @@ pub fn filtered_tool_list(filter: &filter::Filter) -> serde_json::Value {
         })
         .unwrap_or_default();
     serde_json::Value::Array(filtered)
+}
+
+/// Compact custom field definitions while preserving option IDs for fields
+/// whose possible values live in `type_config.options`.
+pub fn compact_custom_fields(fields: &[Value]) -> Value {
+    let compacted: Vec<Value> = fields
+        .iter()
+        .map(|field| {
+            let mut obj = serde_json::Map::new();
+            for key in ["id", "name", "type", "required"] {
+                obj.insert(
+                    key.to_string(),
+                    Value::String(flatten_value(field.get(key))),
+                );
+            }
+
+            if let Some(options) = field
+                .get("type_config")
+                .and_then(|config| config.get("options"))
+                .and_then(|options| options.as_array())
+            {
+                obj.insert("options".to_string(), Value::Array(options.clone()));
+            }
+
+            Value::Object(obj)
+        })
+        .collect();
+
+    Value::Array(compacted)
 }
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -2006,6 +2234,28 @@ async fn dispatch_tool(
         workspace_id
             .clone()
             .ok_or_else(|| "No workspace_id found in config. Please run `clickup setup` or provide team_id in the tool arguments.".to_string())
+    };
+
+    // Normalise a caller-supplied task_id and, if it's a custom-format ID
+    // (e.g. `PROJ-42`), return the `custom_task_ids=true&team_id=<ws>` query
+    // fragment that ClickUp requires. Returns the cleaned task id (with any
+    // `CU-` prefix stripped) plus an optional query fragment to attach to the
+    // request URL. The returned fragment does NOT include a leading `?` or `&`.
+    let resolve_task = |args: &Value, key: &str| -> Result<(String, Option<String>), String> {
+        let raw = args
+            .get(key)
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| format!("Missing required parameter: {}", key))?;
+        let resolved = git::parse_task_id(raw);
+        if resolved.is_custom {
+            let ws = resolve_workspace(args)?;
+            Ok((
+                resolved.id,
+                Some(format!("custom_task_ids=true&team_id={}", ws)),
+            ))
+        } else {
+            Ok((resolved.id, None))
+        }
     };
 
     match name {
@@ -2150,15 +2400,18 @@ async fn dispatch_tool(
         }
 
         "clickup_task_get" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let include_subtasks = args
                 .get("include_subtasks")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let path = format!("/v2/task/{}?include_subtasks={}", task_id, include_subtasks);
+            let path = match custom_q {
+                Some(q) => format!(
+                    "/v2/task/{}?include_subtasks={}&{}",
+                    task_id, include_subtasks, q
+                ),
+                None => format!("/v2/task/{}?include_subtasks={}", task_id, include_subtasks),
+            };
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             Ok(compact_items(
                 &[resp],
@@ -2185,7 +2438,7 @@ async fn dispatch_tool(
                 .ok_or("Missing required parameter: name")?;
             let mut body = json!({"name": name});
             if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
-                body["description"] = json!(desc);
+                body["markdown_content"] = json!(desc);
             }
             if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
                 body["status"] = json!(status);
@@ -2211,10 +2464,7 @@ async fn dispatch_tool(
         }
 
         "clickup_task_update" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let mut body = json!({});
             if let Some(name) = args.get("name").and_then(|v| v.as_str()) {
                 body["name"] = json!(name);
@@ -2226,7 +2476,7 @@ async fn dispatch_tool(
                 body["priority"] = json!(priority);
             }
             if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
-                body["description"] = json!(desc);
+                body["markdown_content"] = json!(desc);
             }
             if let Some(te) = args.get("time_estimate").and_then(|v| v.as_i64()) {
                 body["time_estimate"] = json!(te);
@@ -2236,7 +2486,10 @@ async fn dispatch_tool(
             } else if let Some(rem) = args.get("rem_assignees") {
                 body["assignees"] = json!({"add": [], "rem": rem});
             }
-            let path = format!("/v2/task/{}", task_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}?{}", task_id, q),
+                None => format!("/v2/task/{}", task_id),
+            };
             let resp = client.put(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(compact_items(
                 &[resp],
@@ -2245,47 +2498,24 @@ async fn dispatch_tool(
         }
 
         "clickup_task_delete" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
-            let path = format!("/v2/task/{}", task_id);
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}?{}", task_id, q),
+                None => format!("/v2/task/{}", task_id),
+            };
             client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Task {} deleted", task_id)}))
         }
 
         "clickup_task_search" => {
             let team_id = resolve_workspace(args)?;
-            let mut qs = String::new();
-            if let Some(space_ids) = args.get("space_ids").and_then(|v| v.as_array()) {
-                for id in space_ids {
-                    if let Some(id) = id.as_str() {
-                        qs.push_str(&format!("&space_ids[]={}", id));
-                    }
-                }
-            }
-            if let Some(list_ids) = args.get("list_ids").and_then(|v| v.as_array()) {
-                for id in list_ids {
-                    if let Some(id) = id.as_str() {
-                        qs.push_str(&format!("&list_ids[]={}", id));
-                    }
-                }
-            }
-            if let Some(statuses) = args.get("statuses").and_then(|v| v.as_array()) {
-                for s in statuses {
-                    if let Some(s) = s.as_str() {
-                        qs.push_str(&format!("&statuses[]={}", s));
-                    }
-                }
-            }
-            if let Some(assignees) = args.get("assignees").and_then(|v| v.as_array()) {
-                for a in assignees {
-                    if let Some(a) = a.as_str() {
-                        qs.push_str(&format!("&assignees[]={}", a));
-                    }
-                }
-            }
-            let path = format!("/v2/team/{}/task?{}", team_id, qs.trim_start_matches('&'));
+            let params = task_search_query_params(args);
+            let query = if params.is_empty() {
+                String::new()
+            } else {
+                format!("?{}", params.join("&"))
+            };
+            let path = format!("/v2/team/{}/task{}", team_id, query);
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let tasks = resp
                 .get("tasks")
@@ -2299,11 +2529,11 @@ async fn dispatch_tool(
         }
 
         "clickup_comment_list" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
-            let path = format!("/v2/task/{}/comment", task_id);
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/comment?{}", task_id, q),
+                None => format!("/v2/task/{}/comment", task_id),
+            };
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let comments = resp
                 .get("comments")
@@ -2317,10 +2547,7 @@ async fn dispatch_tool(
         }
 
         "clickup_comment_create" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let text = args
                 .get("text")
                 .and_then(|v| v.as_str())
@@ -2332,7 +2559,10 @@ async fn dispatch_tool(
             if let Some(notify_all) = args.get("notify_all").and_then(|v| v.as_bool()) {
                 body["notify_all"] = json!(notify_all);
             }
-            let path = format!("/v2/task/{}/comment", task_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/comment?{}", task_id, q),
+                None => format!("/v2/task/{}/comment", task_id),
+            };
             let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": "Comment created", "id": resp.get("id")}))
         }
@@ -2349,14 +2579,11 @@ async fn dispatch_tool(
                 .and_then(|f| f.as_array())
                 .cloned()
                 .unwrap_or_default();
-            Ok(compact_items(&fields, &["id", "name", "type", "required"]))
+            Ok(compact_custom_fields(&fields))
         }
 
         "clickup_field_set" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let field_id = args
                 .get("field_id")
                 .and_then(|v| v.as_str())
@@ -2365,7 +2592,10 @@ async fn dispatch_tool(
                 .get("value")
                 .ok_or("Missing required parameter: value")?;
             let body = json!({"value": value});
-            let path = format!("/v2/task/{}/field/{}", task_id, field_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/field/{}?{}", task_id, field_id, q),
+                None => format!("/v2/task/{}/field/{}", task_id, field_id),
+            };
             client.post(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Field {} set on task {}", field_id, task_id)}))
         }
@@ -2435,15 +2665,15 @@ async fn dispatch_tool(
         }
 
         "clickup_checklist_create" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let name = args
                 .get("name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: name")?;
-            let path = format!("/v2/task/{}/checklist", task_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/checklist?{}", task_id, q),
+                None => format!("/v2/task/{}/checklist", task_id),
+            };
             let body = json!({"name": name});
             let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
             let checklist = resp.get("checklist").cloned().unwrap_or(resp);
@@ -2502,6 +2732,14 @@ async fn dispatch_tool(
             if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
                 body["description"] = json!(desc);
             }
+            // ClickUp's create-goal spec requires `multiple_owners` (bool).
+            // Derive it from the size of the owner_ids array.
+            let owner_count = args
+                .get("owner_ids")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            body["multiple_owners"] = json!(owner_count > 1);
             if let Some(owner_ids) = args.get("owner_ids") {
                 body["owners"] = owner_ids.clone();
             }
@@ -2630,15 +2868,15 @@ async fn dispatch_tool(
         }
 
         "clickup_task_add_tag" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let tag_name = args
                 .get("tag_name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: tag_name")?;
-            let path = format!("/v2/task/{}/tag/{}", task_id, tag_name);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/tag/{}?{}", task_id, tag_name, q),
+                None => format!("/v2/task/{}/tag/{}", task_id, tag_name),
+            };
             client
                 .post(&path, &json!({}))
                 .await
@@ -2647,15 +2885,15 @@ async fn dispatch_tool(
         }
 
         "clickup_task_remove_tag" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let tag_name = args
                 .get("tag_name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: tag_name")?;
-            let path = format!("/v2/task/{}/tag/{}", task_id, tag_name);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/tag/{}?{}", task_id, tag_name, q),
+                None => format!("/v2/task/{}/tag/{}", task_id, tag_name),
+            };
             client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Tag '{}' removed from task {}", tag_name, task_id)}))
         }
@@ -2854,7 +3092,7 @@ async fn dispatch_tool(
                 .ok_or("Missing required parameter: name")?;
             let mut body = json!({"name": name});
             if let Some(content) = args.get("content").and_then(|v| v.as_str()) {
-                body["content"] = json!(content);
+                body["markdown_content"] = json!(content);
             }
             if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) {
                 body["due_date"] = json!(due_date);
@@ -2883,7 +3121,7 @@ async fn dispatch_tool(
                 body["name"] = json!(name);
             }
             if let Some(content) = args.get("content").and_then(|v| v.as_str()) {
-                body["content"] = json!(content);
+                body["markdown_content"] = json!(content);
             }
             if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) {
                 body["due_date"] = json!(due_date);
@@ -2984,10 +3222,7 @@ async fn dispatch_tool(
         }
 
         "clickup_task_add_dep" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let mut body = json!({});
             if let Some(dep) = args.get("depends_on").and_then(|v| v.as_str()) {
                 body["depends_on"] = json!(dep);
@@ -2995,18 +3230,16 @@ async fn dispatch_tool(
             if let Some(dep) = args.get("dependency_of").and_then(|v| v.as_str()) {
                 body["dependency_of"] = json!(dep);
             }
-            client
-                .post(&format!("/v2/task/{}/dependency", task_id), &body)
-                .await
-                .map_err(|e| e.to_string())?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/dependency?{}", task_id, q),
+                None => format!("/v2/task/{}/dependency", task_id),
+            };
+            client.post(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Dependency added to task {}", task_id)}))
         }
 
         "clickup_task_remove_dep" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let mut body = json!({});
             if let Some(dep) = args.get("depends_on").and_then(|v| v.as_str()) {
                 body["depends_on"] = json!(dep);
@@ -3014,45 +3247,45 @@ async fn dispatch_tool(
             if let Some(dep) = args.get("dependency_of").and_then(|v| v.as_str()) {
                 body["dependency_of"] = json!(dep);
             }
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/dependency?{}", task_id, q),
+                None => format!("/v2/task/{}/dependency", task_id),
+            };
             client
-                .delete_with_body(&format!("/v2/task/{}/dependency", task_id), &body)
+                .delete_with_body(&path, &body)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Dependency removed from task {}", task_id)}))
         }
 
         "clickup_task_link" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let links_to = args
                 .get("links_to")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: links_to")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/link/{}?{}", task_id, links_to, q),
+                None => format!("/v2/task/{}/link/{}", task_id, links_to),
+            };
             let resp = client
-                .post(
-                    &format!("/v2/task/{}/link/{}", task_id, links_to),
-                    &json!({}),
-                )
+                .post(&path, &json!({}))
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Task {} linked to {}", task_id, links_to), "data": resp}))
         }
 
         "clickup_task_unlink" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let links_to = args
                 .get("links_to")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: links_to")?;
-            client
-                .delete(&format!("/v2/task/{}/link/{}", task_id, links_to))
-                .await
-                .map_err(|e| e.to_string())?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/link/{}?{}", task_id, links_to, q),
+                None => format!("/v2/task/{}/link/{}", task_id, links_to),
+            };
+            client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Task {} unlinked from {}", task_id, links_to)}))
         }
 
@@ -3282,7 +3515,11 @@ async fn dispatch_tool(
                 .get("type")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: type")?;
-            let body = json!({"name": name, "type": view_type});
+            // ClickUp's view-create endpoint requires grouping / divide /
+            // sorting / filters / columns / team_sidebar / settings. Reuse
+            // the CLI helper for the documented neutral defaults so the MCP
+            // tool also succeeds with just name + type.
+            let body = crate::commands::view::default_view_body(name, view_type);
             let resp = client
                 .post(&format!("/v2/{}/{}/view", scope, scope_id), &body)
                 .await
@@ -3389,6 +3626,17 @@ async fn dispatch_tool(
             if let Some(content) = args.get("content").and_then(|v| v.as_str()) {
                 body["content"] = json!(content);
             }
+            if let Some(mode) = args.get("mode").and_then(|v| v.as_str()) {
+                let allowed = ["replace", "append", "prepend"];
+                if !allowed.contains(&mode) {
+                    return Err(format!(
+                        "Invalid mode '{}'. Valid values: {}",
+                        mode,
+                        allowed.join(", ")
+                    ));
+                }
+                body["content_edit_mode"] = json!(mode);
+            }
             let resp = client
                 .put(
                     &format!(
@@ -3491,8 +3739,11 @@ async fn dispatch_tool(
                 path.push_str(&format!("?cursor={}", cursor));
             }
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            // v3 envelope: { "data": [...], "next_cursor": "..." }
+            // Older shape used "messages" — fall back for safety.
             let messages = resp
-                .get("messages")
+                .get("data")
+                .or_else(|| resp.get("messages"))
                 .and_then(|m| m.as_array())
                 .cloned()
                 .unwrap_or_default();
@@ -3509,7 +3760,11 @@ async fn dispatch_tool(
                 .get("content")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: content")?;
-            let body = json!({"content": content});
+            let msg_type = args
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("message");
+            let body = json!({"content": content, "type": msg_type});
             let resp = client
                 .post(
                     &format!(
@@ -3541,15 +3796,14 @@ async fn dispatch_tool(
 
         "clickup_chat_dm" => {
             let team_id = resolve_workspace(args)?;
-            let user_id = args
-                .get("user_id")
-                .and_then(|v| v.as_i64())
-                .ok_or("Missing required parameter: user_id")?;
-            let content = args
-                .get("content")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: content")?;
-            let body = json!({"user_id": user_id, "content": content});
+            let user_ids = args
+                .get("user_ids")
+                .and_then(|v| v.as_array())
+                .ok_or("Missing required parameter: user_ids (array of integers)")?;
+            if user_ids.is_empty() {
+                return Err("user_ids must contain at least one user id".to_string());
+            }
+            let body = json!({"user_ids": user_ids});
             let resp = client
                 .post(
                     &format!("/v3/workspaces/{}/chat/channels/direct_message", team_id),
@@ -3557,7 +3811,8 @@ async fn dispatch_tool(
                 )
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(json!({"message": "DM sent", "id": resp.get("id")}))
+            let channel = resp.get("data").cloned().unwrap_or(resp);
+            Ok(json!({"message": "DM channel ready", "id": channel.get("id"), "channel": channel}))
         }
 
         "clickup_webhook_create" => {
@@ -3772,11 +4027,15 @@ async fn dispatch_tool(
             if let Some(name) = args.get("name").and_then(|v| v.as_str()) {
                 tag["name"] = json!(name);
             }
+            // ClickUp's tag UPDATE endpoint uses `fg_color` / `bg_color`,
+            // unlike CREATE which uses `tag_fg` / `tag_bg`. (Quirk confirmed
+            // against the OpenAPI spec.) Keep the input arg names matching
+            // CREATE for caller ergonomics; translate on the wire.
             if let Some(fg) = args.get("tag_fg").and_then(|v| v.as_str()) {
-                tag["tag_fg"] = json!(fg);
+                tag["fg_color"] = json!(fg);
             }
             if let Some(bg) = args.get("tag_bg").and_then(|v| v.as_str()) {
-                tag["tag_bg"] = json!(bg);
+                tag["bg_color"] = json!(bg);
             }
             let body = json!({"tag": tag});
             client
@@ -3803,32 +4062,28 @@ async fn dispatch_tool(
         }
 
         "clickup_field_unset" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let field_id = args
                 .get("field_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: field_id")?;
-            client
-                .delete(&format!("/v2/task/{}/field/{}", task_id, field_id))
-                .await
-                .map_err(|e| e.to_string())?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/field/{}?{}", task_id, field_id, q),
+                None => format!("/v2/task/{}/field/{}", task_id, field_id),
+            };
+            client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Field {} unset on task {}", field_id, task_id)}))
         }
 
         "clickup_attachment_list" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             // ClickUp has no dedicated list-attachments endpoint. The `attachments`
             // array is returned inline by GET /v2/task/{id}, per the API docs.
-            let resp = client
-                .get(&format!("/v2/task/{}", task_id))
-                .await
-                .map_err(|e| e.to_string())?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}?{}", task_id, q),
+                None => format!("/v2/task/{}", task_id),
+            };
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let attachments = resp
                 .get("attachments")
                 .and_then(|a| a.as_array())
@@ -3947,14 +4202,12 @@ async fn dispatch_tool(
         }
 
         "clickup_task_time_in_status" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
-            let resp = client
-                .get(&format!("/v2/task/{}/time_in_status", task_id))
-                .await
-                .map_err(|e| e.to_string())?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/time_in_status?{}", task_id, q),
+                None => format!("/v2/task/{}/time_in_status", task_id),
+            };
+            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             Ok(resp)
         }
 
@@ -4021,16 +4274,20 @@ async fn dispatch_tool(
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
-            let user_id = args
-                .get("user_id")
-                .and_then(|v| v.as_i64())
-                .ok_or("Missing required parameter: user_id")?;
-            let time_estimate = args
-                .get("time_estimate")
-                .and_then(|v| v.as_i64())
-                .ok_or("Missing required parameter: time_estimate")?;
-            let body =
-                json!({"time_estimates": [{"user_id": user_id, "time_estimate": time_estimate}]});
+            // ClickUp's spec body is an ARRAY of {assignee, time}.
+            // The previous shape {time_estimates: [{user_id, time_estimate}]}
+            // had the wrong field names and the wrong wrapping, and it only
+            // accepted a single user, silently erasing all other estimates.
+            let estimates = args
+                .get("estimates")
+                .and_then(|v| v.as_array())
+                .ok_or("Missing required parameter: estimates (array of {assignee, time})")?;
+            if estimates.is_empty() {
+                return Err(
+                    "estimates must contain at least one {assignee, time} entry".to_string()
+                );
+            }
+            let body = Value::Array(estimates.clone());
             client
                 .put(
                     &format!(
@@ -4117,8 +4374,10 @@ async fn dispatch_tool(
                 path.push_str(&format!("?include_closed={}", include_closed));
             }
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+            // v3 envelope wraps the list in "data"; older shape used "channels".
             let channels = resp
-                .get("channels")
+                .get("data")
+                .or_else(|| resp.get("channels"))
                 .and_then(|c| c.as_array())
                 .cloned()
                 .unwrap_or_default();
@@ -4204,7 +4463,7 @@ async fn dispatch_tool(
                 .get("emoji")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: emoji")?;
-            let body = json!({"emoji": emoji});
+            let body = json!({"reaction": emoji});
             client
                 .post(
                     &format!(
@@ -4228,10 +4487,13 @@ async fn dispatch_tool(
                 .get("emoji")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: emoji")?;
+            // Emoji typically contain bytes outside the URL path's unreserved
+            // set; percent-encode the segment so the request is well-formed.
+            let encoded_emoji = encode_query_value(emoji);
             client
                 .delete(&format!(
                     "/v3/workspaces/{}/chat/messages/{}/reactions/{}",
-                    team_id, message_id, emoji
+                    team_id, message_id, encoded_emoji
                 ))
                 .await
                 .map_err(|e| e.to_string())?;
@@ -4253,7 +4515,15 @@ async fn dispatch_tool(
                 ))
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(resp)
+            // v3 envelope: { "data": [...], "next_cursor": "..." }
+            // Older shape used "replies"; bare array also seen in practice.
+            let replies = resp
+                .get("data")
+                .or_else(|| resp.get("replies"))
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_else(|| resp.as_array().cloned().unwrap_or_default());
+            Ok(compact_items(&replies, &["id", "content", "date"]))
         }
 
         "clickup_chat_reply_send" => {
@@ -4379,7 +4649,20 @@ async fn dispatch_tool(
                 .get("new_name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: new_name")?;
-            let body = json!({"name": name, "new_name": new_name});
+            // ClickUp's spec marks tag_bg and tag_fg as required on the
+            // PUT /v2/team/{ws}/time_entries/tags endpoint, even when the
+            // caller only wants to rename. Callers can repeat the existing
+            // hex colours to leave them unchanged.
+            let tag_bg = args
+                .get("tag_bg")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: tag_bg")?;
+            let tag_fg = args
+                .get("tag_fg")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: tag_fg")?;
+            let body =
+                json!({"name": name, "new_name": new_name, "tag_bg": tag_bg, "tag_fg": tag_fg});
             client
                 .put(&format!("/v2/team/{}/time_entries/tags", team_id), &body)
                 .await
@@ -4702,15 +4985,15 @@ async fn dispatch_tool(
         }
 
         "clickup_attachment_upload" => {
-            let task_id = args
-                .get("task_id")
-                .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: task_id")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
             let file_path = args
                 .get("file_path")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: file_path")?;
-            let path = format!("/v2/task/{}/attachment", task_id);
+            let path = match custom_q {
+                Some(q) => format!("/v2/task/{}/attachment?{}", task_id, q),
+                None => format!("/v2/task/{}/attachment", task_id),
+            };
             let resp = client
                 .upload_file(&path, std::path::Path::new(file_path))
                 .await
@@ -4754,19 +5037,54 @@ async fn dispatch_tool(
 
         "clickup_audit_log_query" => {
             let team_id = resolve_workspace(args)?;
-            let event_type = args
-                .get("type")
+            let applicability = args
+                .get("applicability")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: type")?;
-            let mut body = json!({"type": event_type});
-            if let Some(user_id) = args.get("user_id").and_then(|v| v.as_i64()) {
-                body["user_id"] = json!(user_id);
+                .ok_or("Missing required parameter: applicability")?;
+
+            // ClickUp's audit-log body per the v3 OpenAPI spec:
+            //   { applicability, filter?: {...}, pagination?: {...} }
+            // The previous implementation invented `{type, user_id, date_filter}`,
+            // which the endpoint does not recognise.
+            let mut body = json!({"applicability": applicability});
+
+            let mut filter = serde_json::Map::new();
+            if let Some(t) = args.get("event_type").and_then(|v| v.as_str()) {
+                filter.insert("eventType".into(), json!(t));
             }
-            if let Some(start_date) = args.get("start_date").and_then(|v| v.as_i64()) {
-                body["date_filter"] = json!({"start_date": start_date, "end_date": args.get("end_date").and_then(|v| v.as_i64()).unwrap_or(i64::MAX)});
-            } else if let Some(end_date) = args.get("end_date").and_then(|v| v.as_i64()) {
-                body["date_filter"] = json!({"end_date": end_date});
+            if let Some(s) = args.get("event_status").and_then(|v| v.as_str()) {
+                filter.insert("eventStatus".into(), json!(s));
             }
+            if let Some(ids) = args.get("user_id").and_then(|v| v.as_array()) {
+                filter.insert("userId".into(), Value::Array(ids.clone()));
+            }
+            if let Some(emails) = args.get("user_email").and_then(|v| v.as_array()) {
+                filter.insert("userEmail".into(), Value::Array(emails.clone()));
+            }
+            if let Some(t) = args.get("start_time").and_then(|v| v.as_i64()) {
+                filter.insert("startTime".into(), json!(t));
+            }
+            if let Some(t) = args.get("end_time").and_then(|v| v.as_i64()) {
+                filter.insert("endTime".into(), json!(t));
+            }
+            if !filter.is_empty() {
+                body["filter"] = Value::Object(filter);
+            }
+
+            let mut pagination = serde_json::Map::new();
+            if let Some(n) = args.get("page_rows").and_then(|v| v.as_i64()) {
+                pagination.insert("pageRows".into(), json!(n));
+            }
+            if let Some(t) = args.get("page_timestamp").and_then(|v| v.as_i64()) {
+                pagination.insert("pageTimestamp".into(), json!(t));
+            }
+            if let Some(d) = args.get("page_direction").and_then(|v| v.as_str()) {
+                pagination.insert("pageDirection".into(), json!(d));
+            }
+            if !pagination.is_empty() {
+                body["pagination"] = Value::Object(pagination);
+            }
+
             let resp = client
                 .post(&format!("/v3/workspaces/{}/auditlogs", team_id), &body)
                 .await
@@ -4787,6 +5105,35 @@ async fn dispatch_tool(
             let mut body = json!({});
             if let Some(private) = args.get("private").and_then(|v| v.as_bool()) {
                 body["private"] = json!(private);
+            }
+            if let Some(entries) = args.get("entries").and_then(|v| v.as_array()) {
+                let mut normalized: Vec<Value> = Vec::with_capacity(entries.len());
+                for (i, entry) in entries.iter().enumerate() {
+                    let kind = entry
+                        .get("kind")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| format!("entries[{}] missing required field 'kind'", i))?;
+                    if kind != "user" && kind != "group" {
+                        return Err(format!(
+                            "entries[{}] kind must be 'user' or 'group' (got '{}')",
+                            i, kind
+                        ));
+                    }
+                    let id = entry
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| format!("entries[{}] missing required field 'id'", i))?;
+                    let mut out = serde_json::Map::new();
+                    out.insert("kind".into(), json!(kind));
+                    out.insert("id".into(), json!(id));
+                    if let Some(level) = entry.get("permission_level").and_then(|v| v.as_i64()) {
+                        out.insert("permission_level".into(), json!(level));
+                    }
+                    normalized.push(Value::Object(out));
+                }
+                if !normalized.is_empty() {
+                    body["entries"] = Value::Array(normalized);
+                }
             }
             client
                 .patch(
@@ -4922,4 +5269,62 @@ pub async fn serve(filter: filter::Filter) -> Result<(), Box<dyn std::error::Err
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_search_query_params_include_rich_filters() {
+        let args = json!({
+            "space_ids": ["space 1"],
+            "project_ids": ["folder-1"],
+            "list_ids": ["list-1"],
+            "statuses": ["in progress"],
+            "assignees": ["123"],
+            "tags": ["release train"],
+            "include_closed": true,
+            "subtasks": true,
+            "parent": "parent-1",
+            "order_by": "due_date",
+            "reverse": true,
+            "due_date_gt": 1700000000000_i64,
+            "date_updated_lt": 1800000000000_i64,
+            "custom_items": [0, 1300],
+            "include_markdown_description": true,
+            "custom_fields": [
+                {"field_id": "cf-1", "operator": "IS NOT NULL"},
+                {"field_id": "cf-2", "operator": "=", "value": "ready"}
+            ]
+        });
+
+        let params = task_search_query_params(&args);
+
+        assert!(params.contains(&"space_ids[]=space%201".to_string()));
+        assert!(params.contains(&"project_ids[]=folder-1".to_string()));
+        assert!(params.contains(&"list_ids[]=list-1".to_string()));
+        assert!(params.contains(&"statuses[]=in%20progress".to_string()));
+        assert!(params.contains(&"assignees[]=123".to_string()));
+        assert!(params.contains(&"tags[]=release%20train".to_string()));
+        assert!(params.contains(&"include_closed=true".to_string()));
+        assert!(params.contains(&"subtasks=true".to_string()));
+        assert!(params.contains(&"parent=parent-1".to_string()));
+        assert!(params.contains(&"order_by=due_date".to_string()));
+        assert!(params.contains(&"reverse=true".to_string()));
+        assert!(params.contains(&"due_date_gt=1700000000000".to_string()));
+        assert!(params.contains(&"date_updated_lt=1800000000000".to_string()));
+        assert!(params.contains(&"custom_items[]=0".to_string()));
+        assert!(params.contains(&"custom_items[]=1300".to_string()));
+        assert!(params.contains(&"include_markdown_description=true".to_string()));
+        assert!(
+            params.iter().any(|param| {
+                param.starts_with("custom_fields=%5B")
+                    && param.contains("IS%20NOT%20NULL")
+                    && param.contains("%22value%22%3A%22ready%22")
+            }),
+            "custom_fields should be serialized as one encoded JSON query value: {:?}",
+            params
+        );
+    }
 }

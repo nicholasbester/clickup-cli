@@ -265,6 +265,46 @@ fn filtered_tool_list_returns_only_allowed_tools() {
     );
 }
 
+#[test]
+fn task_search_exposes_filtered_team_task_filters() {
+    let tools = tool_list();
+    let array = tools.as_array().unwrap();
+    let task_search = array
+        .iter()
+        .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some("clickup_task_search"))
+        .expect("missing clickup_task_search");
+    let properties = task_search["inputSchema"]["properties"]
+        .as_object()
+        .expect("clickup_task_search properties must be an object");
+
+    for prop in [
+        "include_closed",
+        "project_ids",
+        "tags",
+        "due_date_gt",
+        "due_date_lt",
+        "date_created_gt",
+        "date_created_lt",
+        "date_updated_gt",
+        "date_updated_lt",
+        "date_done_gt",
+        "date_done_lt",
+        "custom_fields",
+        "parent",
+        "custom_items",
+        "order_by",
+        "reverse",
+        "subtasks",
+        "include_markdown_description",
+    ] {
+        assert!(
+            properties.contains_key(prop),
+            "clickup_task_search should expose {}",
+            prop
+        );
+    }
+}
+
 // ── handle_tools_call_early tests ────────────────────────────────────────────
 
 use clickup_cli::mcp::handle_tools_call_early;

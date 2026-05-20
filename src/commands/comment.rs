@@ -31,7 +31,7 @@ pub enum CommentCommands {
         /// View ID
         #[arg(long, conflicts_with_all = ["task", "list"])]
         view: Option<String>,
-        /// Comment text
+        /// Comment text. Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
         #[arg(long)]
         text: String,
         /// Assignee user ID (task comments only)
@@ -45,7 +45,7 @@ pub enum CommentCommands {
     Update {
         /// Comment ID
         id: String,
-        /// New comment text
+        /// New comment text. Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
         #[arg(long)]
         text: String,
         /// Mark as resolved
@@ -69,7 +69,7 @@ pub enum CommentCommands {
     Reply {
         /// Comment ID
         id: String,
-        /// Reply text
+        /// Reply text. Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
         #[arg(long)]
         text: String,
         /// Assignee user ID

@@ -9,7 +9,7 @@ use wiremock::matchers::{method, path as path_matcher};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn clickup(server: &MockServer) -> Command {
-    let mut cmd = Command::cargo_bin("clickup").unwrap();
+    let mut cmd = Command::cargo_bin("clickup-cli").unwrap();
     cmd.env("CLICKUP_API_URL", server.uri())
         .env("CLICKUP_TOKEN", "pk_test")
         .env("CLICKUP_WORKSPACE", "99")

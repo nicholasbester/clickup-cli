@@ -11,7 +11,7 @@ pub mod output;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "clickup", version, about = "CLI for the ClickUp API")]
+#[command(name = "clickup-cli", version, about = "CLI for the ClickUp API")]
 pub struct Cli {
     /// API token (overrides config file)
     #[arg(long, global = true)]

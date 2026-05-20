@@ -25,7 +25,7 @@ pub enum DocCommands {
         /// Visibility: PUBLIC, PRIVATE, or PERSONAL
         #[arg(long)]
         visibility: Option<String>,
-        /// Parent type: SPACE, FOLDER, or LIST
+        /// Parent type: SPACE, FOLDER, LIST, EVERYTHING, or WORKSPACE
         #[arg(long)]
         parent_type: Option<String>,
         /// Parent ID
@@ -100,7 +100,7 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
         DocCommands::List { creator, archived } => {
             let mut params = Vec::new();
             if let Some(c) = &creator {
-                params.push(format!("creator_id={}", c));
+                params.push(format!("creator={}", c));
             }
             if archived {
                 params.push("archived=true".to_string());
@@ -135,7 +135,23 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
             if parent_type.is_some() || parent_id.is_some() {
                 let mut parent = serde_json::Map::new();
                 if let Some(pt) = parent_type {
-                    parent.insert("type".into(), serde_json::Value::String(pt));
+                    let type_id = match pt.to_uppercase().as_str() {
+                        "SPACE" | "4" => 4,
+                        "FOLDER" | "5" => 5,
+                        "LIST" | "6" => 6,
+                        "EVERYTHING" | "7" => 7,
+                        "WORKSPACE" | "12" => 12,
+                        other => {
+                            return Err(CliError::ClientError {
+                                message: format!(
+                                    "Invalid --parent-type '{}'. Valid values: SPACE, FOLDER, LIST, EVERYTHING, WORKSPACE",
+                                    other
+                                ),
+                                status: 0,
+                            });
+                        }
+                    };
+                    parent.insert("type".into(), serde_json::json!(type_id));
                 }
                 if let Some(pi) = parent_id {
                     parent.insert("id".into(), serde_json::Value::String(pi));

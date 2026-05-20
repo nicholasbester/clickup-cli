@@ -29,7 +29,7 @@ fn git_init_with_branch(dir: &Path, branch: &str) {
 }
 
 fn clickup(dir: &Path, server: &MockServer) -> Command {
-    let mut cmd = Command::cargo_bin("clickup").unwrap();
+    let mut cmd = Command::cargo_bin("clickup-cli").unwrap();
     cmd.current_dir(dir)
         .env("CLICKUP_API_URL", server.uri())
         .env("CLICKUP_TOKEN", "pk_test")
