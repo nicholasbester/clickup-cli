@@ -453,6 +453,16 @@ Other community tools in the ClickUp ecosystem — picking the right one depends
 
 Rust binary, zero runtime dependency, ~130 REST endpoints + 143 MCP tools (100% API coverage), statically linked musl build for Alpine / distroless containers, and token-efficient output tuned for LLM agents. Use this when you want one binary that covers both the CLI and MCP roles without a Node/Python toolchain.
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=nicholasbester%2Fclickup-cli&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=nicholasbester/clickup-cli&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=nicholasbester/clickup-cli&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=nicholasbester/clickup-cli&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ## License
 
 [Apache-2.0](LICENSE)
