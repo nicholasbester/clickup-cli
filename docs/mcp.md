@@ -208,7 +208,7 @@ All tool names are prefixed with `clickup_` (e.g., `clickup_task_list`).
 
 ## Pagination
 
-Tools backed by paginated ClickUp endpoints expose pagination controls. Eight tools currently support pagination:
+Tools backed by paginated ClickUp endpoints expose pagination controls. Fifteen tools currently support pagination, across four styles:
 
 | Tool | Style | Pagination args |
 |---|---|---|
@@ -218,8 +218,15 @@ Tools backed by paginated ClickUp endpoints expose pagination controls. Eight to
 | `clickup_template_list` | page-based (v2) | `page`, `limit`, `all` |
 | `clickup_doc_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
 | `clickup_chat_channel_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
+| `clickup_chat_channel_followers` | cursor-based (v3) | `cursor`, `limit`, `all` |
+| `clickup_chat_channel_members` | cursor-based (v3) | `cursor`, `limit`, `all` |
 | `clickup_chat_message_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
+| `clickup_chat_reaction_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
 | `clickup_chat_reply_list` | cursor-based (v3) | `cursor`, `limit`, `all` |
+| `clickup_chat_tagged_users` | cursor-based (v3) | `cursor`, `limit`, `all` |
+| `clickup_comment_list` | start-id-based (v2) | `start`, `start_id`, `limit`, `all` |
+| `clickup_comment_replies` | start-id-based (v2) | `start`, `start_id`, `limit`, `all` |
+| `clickup_audit_log_query` | body-based (v3) | `page_rows`, `page_timestamp`, `page_direction`, `limit`, `all` |
 
 The contract is **opt-in and non-breaking**:
 
@@ -230,10 +237,14 @@ The contract is **opt-in and non-breaking**:
   {
     "items": [ /* compact items, same shape as before */ ],
     "pagination": {
-      "style": "page",        // or "cursor"
-      "page": 0,              // page-style only
-      "last_page": false,     // page-style only
-      "next_cursor": "...",   // cursor-style only, omitted when exhausted
+      "style": "page",                 // or "cursor", "start_id", "body"
+      "page": 0,                       // page-style only
+      "last_page": false,              // page-style only
+      "next_cursor": "...",            // cursor-style only, omitted when exhausted
+      "next_start": 1700000000,        // start_id-style only, omitted when exhausted
+      "next_start_id": "...",          // start_id-style only, omitted when exhausted
+      "next_page_timestamp": 1700000,  // body-style only, omitted when exhausted
+      "page_direction": "NEXT",        // body-style only, echoes caller input
       "has_more": true,
       "returned": 42,
       "all": false
@@ -241,7 +252,17 @@ The contract is **opt-in and non-breaking**:
   }
   ```
 
-With `all=true` the server walks pages until `last_page=true` (page-style), `next_cursor` is null (cursor-style), or `limit` is reached. A hard cap of 100 pages prevents runaway loops on misbehaving endpoints.
+With `all=true` the server walks pages until natural termination:
+- **page-style**: ClickUp reports `last_page=true`.
+- **cursor-style**: `next_cursor` is null or empty.
+- **start-id-style**: the returned page is shorter than ClickUp's documented page size (25).
+- **body-style**: the server returns an empty response.
+
+…or `limit` is reached. A hard cap of 100 pages prevents runaway loops on misbehaving endpoints.
+
+`has_more` reports purely whether the **server** has additional pages — not whether `limit` truncated the response. A `limit`-capped call with more results available still surfaces `next_cursor` / `next_start` / `next_page_timestamp` so callers who want to continue from where the server left off (rather than from where the helper cut the buffer) have what they need.
+
+The CLI side mirrors this contract on every paginated command via the same set of global flags: `--all`, `--page` / `--cursor` / `--start` + `--start-id`, and `--limit`. CLI output stays as plain table/JSON/CSV — no envelope — but pagination state is honoured identically.
 
 ## How It Works
 

@@ -17,9 +17,11 @@ Pattern: `clickup-cli <resource> <action> [ID] [flags]` (or `clkup` for short)
 | `--fields LIST` | Comma-separated field names to display |
 | `--no-header` | Omit table header row |
 | `-q` / `--quiet` | Print IDs only, one per line |
-| `--all` | Fetch all pages (auto-paginate) |
-| `--limit N` | Cap total results |
-| `--page N` | Manual page selection |
+| `--all` | Auto-walk every page; applies to every paginated list command (hard-capped at 100 pages) |
+| `--limit N` | Cap total items returned (enforced after walking, so `--all --limit 500` returns ≤500 across N pages) |
+| `--page N` | Manual page selection (v2 page-style: `task list`, `task search`, `view tasks`, `template list`) |
+| `--cursor X` | Manual cursor (v3 cursor-style: `doc list`, all `chat *` list commands) |
+| `--start MS` + `--start-id ID` | Manual boundary pair (v2 start-id-style: `comment list`, `comment replies`) |
 | `--token TOKEN` | Override config file token |
 | `--workspace ID` | Override default workspace |
 | `--timeout SECS` | HTTP timeout (default 30) |
@@ -340,7 +342,7 @@ clickup-cli view get <ID>
 clickup-cli view create --name NAME --type TYPE --space <ID>   # also --folder, --list, --workspace-level
 clickup-cli view update <ID> [--name NAME]
 clickup-cli view delete <ID>
-clickup-cli view tasks <ID> [--page N]
+clickup-cli view tasks <ID>
 ```
 
 View types: `list`, `board`, `calendar`, `gantt`, `activity`, `map`, `workload`, `table`
@@ -427,7 +429,7 @@ Events: `taskCreated`, `taskUpdated`, `taskDeleted`, `taskStatusUpdated`, `taskC
 ## template
 
 ```bash
-clickup-cli template list [--page N]
+clickup-cli template list
 clickup-cli template apply-task <TEMPLATE_ID> --list <ID> --name NAME
 clickup-cli template apply-list <TEMPLATE_ID> --folder <ID> --name NAME
 clickup-cli template apply-list <TEMPLATE_ID> --space <ID> --name NAME
