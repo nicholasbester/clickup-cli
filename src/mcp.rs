@@ -402,11 +402,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_comment_list",
-            "description": "List comments on a ClickUp task in chronological order (oldest first). Only top-level comments are returned; use clickup_comment_replies to fetch a threaded reply chain. Returns a compact array of comment objects (id, comment_text, user, resolved, date).",
+            "description": "List comments on a ClickUp task in chronological order (newest first). Only top-level comments are returned; use clickup_comment_replies to fetch a threaded reply chain. Returns a compact array of comment objects (id, comment_text, user, date). Pass `start`/`start_id`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. ClickUp's comment endpoints use start-id-based pagination: to fetch the next page, pass the previous response's `pagination.next_start` and `pagination.next_start_id`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "string", "description": "ID of the task to read comments from. Obtain from clickup_task_list (field: id) or clickup_task_search."}
+                    "task_id": {"type": "string", "description": "ID of the task to read comments from. Obtain from clickup_task_list (field: id) or clickup_task_search."},
+                    "start": {"type": "integer", "description": "Unix millisecond timestamp of the boundary comment — pass the previous response's `pagination.next_start`. Required as a pair with `start_id`. Omit for the first page."},
+                    "start_id": {"type": "string", "description": "Comment ID matching the `start` timestamp — pass the previous response's `pagination.next_start_id`. Required as a pair with `start`. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until the server returns a short page (< 25 items) or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
                 "required": ["task_id"]
             }
@@ -1641,11 +1645,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_comment_replies",
-            "description": "List the threaded replies attached to a top-level ClickUp comment, oldest first. Returns an array of reply objects (id, comment_text, user, date). Use clickup_comment_reply to post a new reply to the thread.",
+            "description": "List the threaded replies attached to a top-level ClickUp comment, newest first. Returns a compact array of reply objects (id, comment_text, user, date). Pass `start`/`start_id`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. Use clickup_comment_reply to post a new reply to the thread.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "comment_id": {"type": "string", "description": "ID of the parent comment. Obtain from clickup_comment_list (field: id)."}
+                    "comment_id": {"type": "string", "description": "ID of the parent comment. Obtain from clickup_comment_list (field: id)."},
+                    "start": {"type": "integer", "description": "Unix millisecond timestamp of the boundary reply — pass the previous response's `pagination.next_start`. Required as a pair with `start_id`. Omit for the first page."},
+                    "start_id": {"type": "string", "description": "Reply ID matching the `start` timestamp — pass the previous response's `pagination.next_start_id`. Required as a pair with `start`. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until the server returns a short page (< 25 items) or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
                 "required": ["comment_id"]
             }
@@ -2562,20 +2570,31 @@ async fn dispatch_tool(
 
         "clickup_comment_list" => {
             let (task_id, custom_q) = resolve_task(args, "task_id")?;
-            let path = match custom_q {
-                Some(q) => format!("/v2/task/{}/comment?{}", task_id, q),
-                None => format!("/v2/task/{}/comment", task_id),
-            };
-            let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            let comments = resp
-                .get("comments")
-                .and_then(|c| c.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(
-                &comments,
+            let sargs = pagination::StartIdArgs::from_args(args);
+            pagination::start_id_dispatch(
+                &sargs,
+                client,
+                "comments",
                 &["id", "user", "date", "comment_text"],
-            ))
+                |start, start_id| {
+                    let mut qs = String::new();
+                    if let Some(q) = &custom_q {
+                        qs.push_str(q);
+                    }
+                    if let (Some(s), Some(sid)) = (start, start_id) {
+                        if !qs.is_empty() {
+                            qs.push('&');
+                        }
+                        qs.push_str(&format!("start={}&start_id={}", s, sid));
+                    }
+                    if qs.is_empty() {
+                        format!("/v2/task/{}/comment", task_id)
+                    } else {
+                        format!("/v2/task/{}/comment?{}", task_id, qs)
+                    }
+                },
+            )
+            .await
         }
 
         "clickup_comment_create" => {
@@ -4362,21 +4381,24 @@ async fn dispatch_tool(
             let comment_id = args
                 .get("comment_id")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: comment_id")?;
-            let resp = client
-                .get(&format!("/v2/comment/{}/reply", comment_id))
-                .await
-                .map_err(|e| e.to_string())?;
-            let comments = resp
-                .get("comments")
-                .or_else(|| resp.get("replies"))
-                .and_then(|c| c.as_array())
-                .cloned()
-                .unwrap_or_default();
-            Ok(compact_items(
-                &comments,
+                .ok_or("Missing required parameter: comment_id")?
+                .to_string();
+            let sargs = pagination::StartIdArgs::from_args(args);
+            pagination::start_id_dispatch(
+                &sargs,
+                client,
+                // `comments` first (current shape), `replies` as legacy fallback.
+                "comments",
                 &["id", "user", "date", "comment_text"],
-            ))
+                |start, start_id| match (start, start_id) {
+                    (Some(s), Some(sid)) => format!(
+                        "/v2/comment/{}/reply?start={}&start_id={}",
+                        comment_id, s, sid
+                    ),
+                    _ => format!("/v2/comment/{}/reply", comment_id),
+                },
+            )
+            .await
         }
 
         "clickup_comment_reply" => {
