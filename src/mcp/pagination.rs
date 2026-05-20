@@ -1,30 +1,36 @@
 //! MCP pagination helpers.
 //!
-//! ClickUp's paginated endpoints come in two flavours: v2 page-based (`?page=N`,
-//! response carries `last_page: bool`) and v3 cursor-based (`?cursor=X`, response
-//! carries `next_cursor: string` or null). This module hides the loop logic and
-//! response-shape glue so each MCP tool dispatch can be a one-liner.
+//! ClickUp's paginated endpoints come in three flavours:
+//! - **page-based** (v2): `?page=N`, response carries `last_page: bool`.
+//! - **cursor-based** (v3): `?cursor=X`, response carries `next_cursor: string` or null.
+//! - **start-id-based** (v2 comments): `?start=<unix_ms>&start_id=<id>` pair,
+//!   response is a bare array, termination inferred from page-size hint.
+//!
+//! This module hides the loop logic and response-shape glue so each MCP tool
+//! dispatch can be a one-liner.
 //!
 //! ## Contract
 //!
-//! **Schema.** Every paginated tool's inputSchema gains either:
+//! **Schema.** Every paginated tool's inputSchema gains one of:
 //! - page style: `page` (int ≥0), `limit` (int ≥1), `all` (bool); or
-//! - cursor style: `cursor` (opaque string), `limit` (int ≥1), `all` (bool).
+//! - cursor style: `cursor` (opaque string), `limit` (int ≥1), `all` (bool); or
+//! - start-id style: `start` (int ms), `start_id` (string), `limit` (int ≥1), `all` (bool).
 //!
 //! **Output.** The contract is _opt-in_:
 //! - If the caller passes NO pagination arg, the response is unchanged from
 //!   pre-pagination: a bare compact array. Back-compat for existing clients.
-//! - If the caller passes ANY pagination arg (`page`, `cursor`, `limit`, `all`),
-//!   the response becomes an envelope:
+//! - If the caller passes ANY pagination arg, the response becomes an envelope:
 //!
 //!   ```json
 //!   {
 //!     "items": [...],
 //!     "pagination": {
-//!       "style": "page" | "cursor",
-//!       "page": 0,            // page style only
-//!       "last_page": false,   // page style only
-//!       "next_cursor": "...", // cursor style only, omitted when exhausted
+//!       "style": "page" | "cursor" | "start_id",
+//!       "page": 0,                // page style only
+//!       "last_page": false,       // page style only
+//!       "next_cursor": "...",     // cursor style only, omitted when exhausted
+//!       "next_start": 1700000000, // start_id style only, omitted when exhausted
+//!       "next_start_id": "...",   // start_id style only, omitted when exhausted
 //!       "has_more": true,
 //!       "returned": 42,
 //!       "all": false
@@ -32,9 +38,9 @@
 //!   }
 //!   ```
 //!
-//! Calling code uses [`PageArgs::from_args`] / [`CursorArgs::from_args`] to
-//! parse pagination input, then [`page_dispatch`] / [`cursor_dispatch`] to run
-//! the fetch loop.
+//! Calling code uses [`PageArgs::from_args`] / [`CursorArgs::from_args`] /
+//! [`StartIdArgs::from_args`] to parse pagination input, then [`page_dispatch`] /
+//! [`cursor_dispatch`] / [`start_id_dispatch`] to run the fetch loop.
 
 use crate::client::ClickUpClient;
 use crate::output::compact_items;
@@ -96,6 +102,47 @@ impl CursorArgs {
         let requested = cursor.is_some() || limit.is_some() || args.get("all").is_some();
         Self {
             cursor,
+            limit,
+            all,
+            requested,
+        }
+    }
+}
+
+/// Parsed start-id-based pagination input. ClickUp's v2 comment endpoints
+/// (`/v2/task/{id}/comment`, `/v2/list/{id}/comment`, `/v2/view/{id}/comment`,
+/// `/v2/comment/{id}/reply`) use this style: pass `?start=<unix_ms>&start_id=<id>`
+/// to retrieve items older than that boundary. Both params are required as a
+/// pair when paginating; omitting them returns the first page (newest first).
+/// The response is a bare `{ "comments": [...] }` array — no pagination
+/// metadata — so termination is inferred when the returned array is shorter
+/// than the endpoint's page size (25 for ClickUp's comment endpoints).
+#[derive(Debug, Clone, Default)]
+pub struct StartIdArgs {
+    pub start: Option<i64>,
+    pub start_id: Option<String>,
+    pub limit: Option<usize>,
+    pub all: bool,
+    pub requested: bool,
+}
+
+impl StartIdArgs {
+    pub fn from_args(args: &Value) -> Self {
+        let start = args.get("start").and_then(|v| v.as_i64());
+        let start_id = args
+            .get("start_id")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize);
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let requested =
+            start.is_some() || start_id.is_some() || limit.is_some() || args.get("all").is_some();
+        Self {
+            start,
+            start_id,
             limit,
             all,
             requested,
@@ -268,6 +315,136 @@ where
     }))
 }
 
+/// Default page size used by ClickUp's v2 comment endpoints. The endpoints
+/// don't expose a `last_page` flag and don't accept a custom page size, so
+/// callers infer "more results exist" by checking if the returned array is
+/// shorter than this value. The 25 figure comes from ClickUp's published
+/// API docs; if their server-side default ever changes the helper's only
+/// failure mode is "stops one page too early when `all=true`" — survivable.
+const START_ID_PAGE_HINT: usize = 25;
+
+/// Run a start-id-based pagination loop. `build_path(start, start_id)` should
+/// return a path including the `?start=...&start_id=...` query when both are
+/// Some, or no pagination query when both are None. (ClickUp requires the
+/// params as a pair — passing only one is a caller bug.) `items_key` is the
+/// response array's field name (`"comments"` for both comment endpoints).
+///
+/// The next-page boundary is derived from the LAST item in the returned
+/// array: its `date` field (a stringified unix-ms timestamp) becomes the
+/// next `start`, and its `id` field becomes the next `start_id`. Termination
+/// happens when the array is empty OR shorter than `START_ID_PAGE_HINT`.
+pub async fn start_id_dispatch<F>(
+    args: &StartIdArgs,
+    client: &ClickUpClient,
+    items_key: &str,
+    compact_fields: &[&str],
+    build_path: F,
+) -> Result<Value, String>
+where
+    F: Fn(Option<i64>, Option<&str>) -> String,
+{
+    let mut current_start = args.start;
+    let mut current_start_id = args.start_id.clone();
+    let mut collected: Vec<Value> = Vec::new();
+    // The boundary for the FOLLOWING page after the most recent fetch. Holds
+    // the (date_ms, comment_id) extracted from the last item in the response.
+    // The initial `None` is overwritten on the first iteration; the variable
+    // survives the loop so the value feeds the pagination envelope.
+    #[allow(unused_assignments)]
+    let mut next_boundary: Option<(i64, String)> = None;
+    // Whether the loop terminated because we reached the natural end (empty
+    // response or short page). False when we stopped due to limit/MAX_PAGES
+    // and there might still be more on the server. Drives `has_more`.
+    let mut reached_end = false;
+    let mut pages_fetched = 0usize;
+
+    loop {
+        let path = build_path(current_start, current_start_id.as_deref());
+        let resp = client.get(&path).await.map_err(|e| e.to_string())?;
+        let items = extract_array(&resp, &[items_key, "data"]).unwrap_or_default();
+        let count = items.len();
+
+        // Extract next-page boundary from the last item before consuming the
+        // vec. ClickUp returns `date` as a stringified ms integer.
+        if let Some(last) = items.last() {
+            let date_ms = last
+                .get("date")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<i64>().ok())
+                .or_else(|| last.get("date").and_then(|v| v.as_i64()));
+            let id = last.get("id").and_then(|v| v.as_str()).map(String::from);
+            next_boundary = match (date_ms, id) {
+                (Some(d), Some(i)) => Some((d, i)),
+                _ => None,
+            };
+        } else {
+            next_boundary = None;
+        }
+
+        collected.extend(items);
+        pages_fetched += 1;
+
+        // A short or empty page means the server has no more results — record
+        // that so the pagination envelope can report `has_more: false` even
+        // though we still have a boundary from the last item we did receive.
+        if count < START_ID_PAGE_HINT {
+            reached_end = true;
+        }
+
+        if !args.all {
+            break;
+        }
+        if reached_end || pages_fetched >= MAX_PAGES {
+            break;
+        }
+        if let Some(limit) = args.limit {
+            if collected.len() >= limit {
+                break;
+            }
+        }
+
+        // Advance to next page. If we somehow have no boundary (e.g. last item
+        // was missing date/id), bail to avoid an infinite loop with the same
+        // start.
+        match next_boundary.clone() {
+            Some((d, i)) => {
+                current_start = Some(d);
+                current_start_id = Some(i);
+            }
+            None => break,
+        }
+    }
+
+    if let Some(limit) = args.limit {
+        collected.truncate(limit);
+    }
+
+    let compact = compact_items(&collected, compact_fields);
+
+    if !args.requested {
+        return Ok(compact);
+    }
+
+    let compact_arr = compact.as_array().cloned().unwrap_or_default();
+    let returned = compact_arr.len();
+    let has_more =
+        !reached_end && next_boundary.is_some() && args.limit.is_none_or(|l| returned < l);
+
+    let mut pagination = serde_json::Map::new();
+    pagination.insert("style".into(), json!("start_id"));
+    pagination.insert("has_more".into(), json!(has_more));
+    pagination.insert("returned".into(), json!(returned));
+    pagination.insert("all".into(), json!(args.all));
+    if let Some((d, i)) = next_boundary {
+        pagination.insert("next_start".into(), json!(d));
+        pagination.insert("next_start_id".into(), json!(i));
+    }
+    Ok(json!({
+        "items": compact_arr,
+        "pagination": Value::Object(pagination),
+    }))
+}
+
 /// Extract an array from a JSON response, trying multiple candidate keys in
 /// order. Returns `None` if no candidate key holds an array. Used to resolve
 /// the v3 `"data"` envelope vs older list keys.
@@ -287,7 +464,7 @@ fn extract_array(resp: &Value, keys: &[&str]) -> Option<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path, query_param};
+    use wiremock::matchers::{method, path, query_param, query_param_is_missing};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn test_client(server: &MockServer) -> ClickUpClient {
@@ -425,6 +602,108 @@ mod tests {
         assert!(p.get("next_cursor").is_none());
     }
 
+    #[tokio::test]
+    async fn start_id_dispatch_no_pagination_args_returns_bare_array() {
+        // Caller passes no start/start_id/limit/all -> bare array, matching
+        // the existing pre-pagination shape for comment list/replies.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v2/task/T1/comment"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "comments": [
+                    {"id": "c1", "date": "1700000000000", "comment_text": "a"},
+                    {"id": "c2", "date": "1700000005000", "comment_text": "b"},
+                ],
+            })))
+            .mount(&server)
+            .await;
+        let client = test_client(&server);
+        let args = StartIdArgs::from_args(&json!({}));
+        let result = start_id_dispatch(
+            &args,
+            &client,
+            "comments",
+            &["id", "comment_text"],
+            |start, start_id| match (start, start_id) {
+                (Some(s), Some(i)) => format!("/v2/task/T1/comment?start={}&start_id={}", s, i),
+                _ => "/v2/task/T1/comment".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(result.is_array(), "expected bare array, got {}", result);
+        assert_eq!(result.as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn start_id_dispatch_all_true_walks_pages_via_last_item_boundary() {
+        // First page: 25 items (the page-size hint) -> caller knows to keep
+        // walking. Helper derives boundary from last item's date+id and
+        // requests the next page. Second page: 2 items (< 25) -> termination.
+        let server = MockServer::start().await;
+
+        let mut first_page = Vec::new();
+        for i in 0..25 {
+            first_page.push(json!({
+                "id": format!("c{}", i),
+                "date": format!("{}", 1_700_000_000_000_u64 + (i as u64) * 1000),
+                "comment_text": format!("comment {}", i),
+            }));
+        }
+        // The last item in page 1 will be the boundary for page 2:
+        //   start = 1700000024000 (date of c24), start_id = "c24"
+        let last_first = &first_page[24];
+        let boundary_date = last_first["date"].as_str().unwrap();
+        let boundary_id = last_first["id"].as_str().unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/v2/task/T1/comment"))
+            // First call has no start/start_id query.
+            .and(query_param_is_missing("start"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "comments": first_page,
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v2/task/T1/comment"))
+            .and(query_param("start", boundary_date))
+            .and(query_param("start_id", boundary_id))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "comments": [
+                    {"id": "c25", "date": "1700000025000"},
+                    {"id": "c26", "date": "1700000026000"},
+                ],
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let args = StartIdArgs::from_args(&json!({"all": true}));
+        let result = start_id_dispatch(
+            &args,
+            &client,
+            "comments",
+            &["id"],
+            |start, start_id| match (start, start_id) {
+                (Some(s), Some(i)) => format!("/v2/task/T1/comment?start={}&start_id={}", s, i),
+                _ => "/v2/task/T1/comment".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        let items = result.get("items").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(items.len(), 27, "expected 25 + 2 across 2 pages");
+        let p = result.get("pagination").unwrap();
+        assert_eq!(p.get("style").and_then(|v| v.as_str()), Some("start_id"));
+        // Has_more should be false: 2nd page returned < page-size hint.
+        assert_eq!(p.get("has_more").and_then(|v| v.as_bool()), Some(false));
+        // next_start / next_start_id reflect the LAST seen item (c26),
+        // because boundary extraction runs on every fetch.
+        assert_eq!(p.get("next_start_id").and_then(|v| v.as_str()), Some("c26"));
+    }
+
     #[test]
     fn page_args_empty() {
         let p = PageArgs::from_args(&json!({}));
@@ -463,6 +742,40 @@ mod tests {
         assert!(c.requested);
         assert_eq!(c.cursor.as_deref(), Some("abc"));
         assert_eq!(c.limit, Some(10));
+    }
+
+    #[test]
+    fn start_id_args_empty() {
+        let s = StartIdArgs::from_args(&json!({}));
+        assert!(!s.requested);
+        assert!(s.start.is_none());
+        assert!(s.start_id.is_none());
+        assert_eq!(s.limit, None);
+        assert!(!s.all);
+    }
+
+    #[test]
+    fn start_id_args_full() {
+        let s = StartIdArgs::from_args(
+            &json!({"start": 1700000000000_i64, "start_id": "c1", "limit": 20, "all": true}),
+        );
+        assert!(s.requested);
+        assert_eq!(s.start, Some(1700000000000));
+        assert_eq!(s.start_id.as_deref(), Some("c1"));
+        assert_eq!(s.limit, Some(20));
+        assert!(s.all);
+    }
+
+    #[test]
+    fn start_id_args_partial_start_only_still_requested() {
+        // Passing only `start` (no `start_id`) is technically invalid as a
+        // ClickUp request, but should still register as `requested` so the
+        // helper switches to the envelope shape and the caller's URL-builder
+        // closure can validate / error out cleanly.
+        let s = StartIdArgs::from_args(&json!({"start": 1700000000000_i64}));
+        assert!(s.requested);
+        assert_eq!(s.start, Some(1700000000000));
+        assert!(s.start_id.is_none());
     }
 
     #[test]
