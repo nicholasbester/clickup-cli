@@ -2126,7 +2126,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_audit_log_query",
-            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires Enterprise plan. Uses v3 cursor pagination. Body shape per ClickUp's OpenAPI spec: { applicability, filter?, pagination? }. Returns the raw response (data array plus pagination cursor).",
+            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires Enterprise plan. Uses body-based pagination — pagination state lives inside the POST body. Returns a compact array of event objects (id, eventType, eventStatus, userId, eventTime). Pass `page_rows`/`page_timestamp`/`page_direction`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. With `all=true` the helper walks pages in the chosen direction (default NEXT) until the server returns an empty page or limit is reached.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2146,9 +2146,11 @@ pub fn tool_list() -> Value {
                     },
                     "start_time": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds. Maps to filter.startTime."},
                     "end_time": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Maps to filter.endTime."},
-                    "page_rows": {"type": "integer", "description": "Pagination page size. Maps to pagination.pageRows."},
-                    "page_timestamp": {"type": "integer", "description": "Pagination cursor timestamp. Maps to pagination.pageTimestamp."},
-                    "page_direction": {"type": "string", "description": "Pagination direction (NEXT or PREVIOUS). Maps to pagination.pageDirection."}
+                    "page_rows": {"type": "integer", "minimum": 1, "description": "Pagination page size. Maps to pagination.pageRows."},
+                    "page_timestamp": {"type": "integer", "description": "Boundary timestamp (Unix ms) — pass the previous response's `pagination.next_page_timestamp` to continue. Maps to pagination.pageTimestamp. Omit for the first page."},
+                    "page_direction": {"type": "string", "enum": ["NEXT", "PREVIOUS"], "description": "Direction to walk relative to `page_timestamp`: NEXT for newer events, PREVIOUS for older. Maps to pagination.pageDirection."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages in the chosen direction until the server returns an empty page or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
                 "required": ["applicability"]
             }
@@ -5108,56 +5110,98 @@ async fn dispatch_tool(
             let applicability = args
                 .get("applicability")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: applicability")?;
+                .ok_or("Missing required parameter: applicability")?
+                .to_string();
 
-            // ClickUp's audit-log body per the v3 OpenAPI spec:
-            //   { applicability, filter?: {...}, pagination?: {...} }
-            // The previous implementation invented `{type, user_id, date_filter}`,
-            // which the endpoint does not recognise.
-            let mut body = json!({"applicability": applicability});
+            // Snapshot the filter-related args once so the base_body closure
+            // can be called fresh on every iteration without re-parsing.
+            let event_type = args
+                .get("event_type")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let event_status = args
+                .get("event_status")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let user_ids = args
+                .get("user_id")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let user_emails = args
+                .get("user_email")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let start_time = args.get("start_time").and_then(|v| v.as_i64());
+            let end_time = args.get("end_time").and_then(|v| v.as_i64());
 
-            let mut filter = serde_json::Map::new();
-            if let Some(t) = args.get("event_type").and_then(|v| v.as_str()) {
-                filter.insert("eventType".into(), json!(t));
-            }
-            if let Some(s) = args.get("event_status").and_then(|v| v.as_str()) {
-                filter.insert("eventStatus".into(), json!(s));
-            }
-            if let Some(ids) = args.get("user_id").and_then(|v| v.as_array()) {
-                filter.insert("userId".into(), Value::Array(ids.clone()));
-            }
-            if let Some(emails) = args.get("user_email").and_then(|v| v.as_array()) {
-                filter.insert("userEmail".into(), Value::Array(emails.clone()));
-            }
-            if let Some(t) = args.get("start_time").and_then(|v| v.as_i64()) {
-                filter.insert("startTime".into(), json!(t));
-            }
-            if let Some(t) = args.get("end_time").and_then(|v| v.as_i64()) {
-                filter.insert("endTime".into(), json!(t));
-            }
-            if !filter.is_empty() {
-                body["filter"] = Value::Object(filter);
-            }
+            let bargs = pagination::BodyPaginationArgs::from_args(args);
+            let path = format!("/v3/workspaces/{}/auditlogs", team_id);
 
-            let mut pagination = serde_json::Map::new();
-            if let Some(n) = args.get("page_rows").and_then(|v| v.as_i64()) {
-                pagination.insert("pageRows".into(), json!(n));
-            }
-            if let Some(t) = args.get("page_timestamp").and_then(|v| v.as_i64()) {
-                pagination.insert("pageTimestamp".into(), json!(t));
-            }
-            if let Some(d) = args.get("page_direction").and_then(|v| v.as_str()) {
-                pagination.insert("pageDirection".into(), json!(d));
-            }
-            if !pagination.is_empty() {
-                body["pagination"] = Value::Object(pagination);
-            }
-
-            let resp = client
-                .post(&format!("/v3/workspaces/{}/auditlogs", team_id), &body)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+            pagination::body_pagination_dispatch(
+                &bargs,
+                client,
+                &path,
+                // v3 envelope; fallback to `events` in case ClickUp's response
+                // uses a domain-specific key. Bare-array shape also tolerated
+                // via extract_array's last-resort branch.
+                &["data", "events"],
+                // Compact fields chosen for token efficiency; the raw response
+                // has many fields per event but these are the most useful.
+                &["id", "eventType", "eventStatus", "userId", "eventTime"],
+                || {
+                    // ClickUp's audit-log body per the v3 OpenAPI spec:
+                    //   { applicability, filter?, pagination? }
+                    // The helper inserts the pagination block; we provide
+                    // applicability + filter here.
+                    let mut body = json!({"applicability": applicability});
+                    let mut filter = serde_json::Map::new();
+                    if let Some(t) = &event_type {
+                        filter.insert("eventType".into(), json!(t));
+                    }
+                    if let Some(s) = &event_status {
+                        filter.insert("eventStatus".into(), json!(s));
+                    }
+                    if !user_ids.is_empty() {
+                        filter.insert("userId".into(), Value::Array(user_ids.clone()));
+                    }
+                    if !user_emails.is_empty() {
+                        filter.insert("userEmail".into(), Value::Array(user_emails.clone()));
+                    }
+                    if let Some(t) = start_time {
+                        filter.insert("startTime".into(), json!(t));
+                    }
+                    if let Some(t) = end_time {
+                        filter.insert("endTime".into(), json!(t));
+                    }
+                    if !filter.is_empty() {
+                        body["filter"] = Value::Object(filter);
+                    }
+                    body
+                },
+                // Per-item next-timestamp extractor. ClickUp's audit-log
+                // entries carry the event time under `eventTime` per the
+                // pageTimestamp / startTime / endTime naming convention.
+                // Fall back to `timestamp` then `date` for safety against
+                // undocumented variants.
+                |item| {
+                    for key in ["eventTime", "timestamp", "date"] {
+                        if let Some(v) = item.get(key) {
+                            if let Some(n) = v.as_i64() {
+                                return Some(n);
+                            }
+                            if let Some(s) = v.as_str() {
+                                if let Ok(n) = s.parse::<i64>() {
+                                    return Some(n);
+                                }
+                            }
+                        }
+                    }
+                    None
+                },
+            )
+            .await
         }
 
         "clickup_acl_update" => {
