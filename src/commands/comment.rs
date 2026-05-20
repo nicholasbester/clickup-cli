@@ -87,30 +87,37 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
 
     match command {
         CommentCommands::List { task, list, view } => {
-            let (url, key) = if let Some(id) = list {
-                (format!("/v2/list/{}/comment", id), "comments")
+            let base = if let Some(id) = list {
+                format!("/v2/list/{}/comment", id)
             } else if let Some(id) = view {
-                (format!("/v2/view/{}/comment", id), "comments")
+                format!("/v2/view/{}/comment", id)
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                (format!("/v2/task/{}/comment", resolved.id), "comments")
+                format!("/v2/task/{}/comment", resolved.id)
             } else {
                 return Err(CliError::ClientError {
                     message: "One of --task, --list, or --view is required".to_string(),
                     status: 0,
                 });
             };
-            let resp = client.get(&url).await?;
-            let comments = resp
-                .get(key)
-                .and_then(|c| c.as_array())
-                .cloned()
-                .unwrap_or_default();
+            let comments = crate::commands::pagination::walk_start_id(
+                cli,
+                &client,
+                "comments",
+                |start, start_id| match (start, start_id) {
+                    (Some(s), Some(sid)) => format!("{}?start={}&start_id={}", base, s, sid),
+                    _ => base.clone(),
+                },
+            )
+            .await?;
             let truncated: Vec<serde_json::Value> = comments
                 .into_iter()
                 .map(|mut c| {
                     if let Some(text) = c.get("comment_text").and_then(|v| v.as_str()) {
-                        let truncated = if text.len() > 60 {
-                            format!("{}…", &text[..60])
+                        // Truncate by chars (not bytes) so the 60-byte boundary
+                        // can't land inside a multibyte UTF-8 codepoint.
+                        let truncated = if text.chars().count() > 60 {
+                            let head: String = text.chars().take(60).collect();
+                            format!("{}…", head)
                         } else {
                             text.to_string()
                         };
@@ -187,12 +194,18 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             Ok(())
         }
         CommentCommands::Replies { id } => {
-            let resp = client.get(&format!("/v2/comment/{}/reply", id)).await?;
-            let comments = resp
-                .get("comments")
-                .and_then(|c| c.as_array())
-                .cloned()
-                .unwrap_or_default();
+            let comments = crate::commands::pagination::walk_start_id(
+                cli,
+                &client,
+                "comments",
+                |start, start_id| match (start, start_id) {
+                    (Some(s), Some(sid)) => {
+                        format!("/v2/comment/{}/reply?start={}&start_id={}", id, s, sid)
+                    }
+                    _ => format!("/v2/comment/{}/reply", id),
+                },
+            )
+            .await?;
             output.print_items(&comments, COMMENT_FIELDS, "id");
             Ok(())
         }

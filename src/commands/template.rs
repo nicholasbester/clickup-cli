@@ -8,12 +8,8 @@ use clap::Subcommand;
 
 #[derive(Subcommand)]
 pub enum TemplateCommands {
-    /// List task templates for the workspace
-    List {
-        /// Page number
-        #[arg(long, default_value = "0")]
-        page: u32,
-    },
+    /// List task templates for the workspace. Honours global --all/--page/--limit.
+    List {},
     /// Apply a task template to a list
     #[command(name = "apply-task")]
     ApplyTask {
@@ -63,19 +59,13 @@ pub async fn execute(command: TemplateCommands, cli: &Cli) -> Result<(), CliErro
     let output = OutputConfig::from_cli(&cli.output, &cli.fields, cli.no_header, cli.quiet);
 
     match command {
-        TemplateCommands::List { page } => {
+        TemplateCommands::List {} => {
             let ws_id = resolve_workspace(cli)?;
-            let resp = client
-                .get(&format!("/v2/team/{}/taskTemplate?page={}", ws_id, page))
+            let templates =
+                crate::commands::pagination::walk_page(cli, &client, "templates", |p| {
+                    format!("/v2/team/{}/taskTemplate?page={}", ws_id, p)
+                })
                 .await?;
-            let mut templates = resp
-                .get("templates")
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_default();
-            if let Some(limit) = cli.limit {
-                templates.truncate(limit);
-            }
             output.print_items(&templates, TEMPLATE_FIELDS, "id");
             Ok(())
         }

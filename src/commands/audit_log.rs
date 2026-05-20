@@ -64,78 +64,95 @@ pub async fn execute(command: AuditLogCommands, cli: &Cli) -> Result<(), CliErro
             page_direction,
         } => {
             let team_id = resolve_workspace(cli)?;
+            let path = format!("/v3/workspaces/{}/auditlogs", team_id);
 
-            // ClickUp's audit-log request body shape per the v3 OpenAPI spec:
-            //   { applicability, filter?: {...}, pagination?: {...} }
-            // The previous implementation invented `{type, user_id, date_filter}`,
-            // which ClickUp's endpoint does not recognise.
-            let mut body = serde_json::json!({ "applicability": applicability });
+            let page_direction_owned = page_direction.clone();
 
-            let mut filter = serde_json::Map::new();
-            if let Some(t) = event_type {
-                filter.insert("eventType".into(), serde_json::Value::String(t));
-            }
-            if let Some(s) = event_status {
-                filter.insert("eventStatus".into(), serde_json::Value::String(s));
-            }
-            if !user_id.is_empty() {
-                filter.insert(
-                    "userId".into(),
-                    serde_json::Value::Array(
-                        user_id.into_iter().map(serde_json::Value::String).collect(),
-                    ),
-                );
-            }
-            if !user_email.is_empty() {
-                filter.insert(
-                    "userEmail".into(),
-                    serde_json::Value::Array(
-                        user_email
-                            .into_iter()
-                            .map(serde_json::Value::String)
-                            .collect(),
-                    ),
-                );
-            }
-            if let Some(s) = start_time {
-                filter.insert("startTime".into(), serde_json::Value::Number(s.into()));
-            }
-            if let Some(e) = end_time {
-                filter.insert("endTime".into(), serde_json::Value::Number(e.into()));
-            }
-            if !filter.is_empty() {
-                body["filter"] = serde_json::Value::Object(filter);
-            }
-
-            let mut pagination = serde_json::Map::new();
+            // The static portion of the pagination block (pageRows + direction)
+            // is passed through unchanged on every iteration; pageTimestamp
+            // is what the walker advances.
+            let mut extra_pagination = serde_json::Map::new();
             if let Some(n) = page_rows {
-                pagination.insert("pageRows".into(), serde_json::Value::Number(n.into()));
+                extra_pagination.insert("pageRows".into(), serde_json::Value::Number(n.into()));
             }
-            if let Some(t) = page_timestamp {
-                pagination.insert("pageTimestamp".into(), serde_json::Value::Number(t.into()));
-            }
-            if let Some(d) = page_direction {
-                pagination.insert("pageDirection".into(), serde_json::Value::String(d));
-            }
-            if !pagination.is_empty() {
-                body["pagination"] = serde_json::Value::Object(pagination);
+            if let Some(d) = page_direction_owned {
+                extra_pagination.insert("pageDirection".into(), serde_json::Value::String(d));
             }
 
-            let resp = client
-                .post(&format!("/v3/workspaces/{}/auditlogs", team_id), &body)
-                .await?;
+            let logs = crate::commands::pagination::walk_body(
+                cli,
+                &client,
+                &path,
+                &["data", "audit_logs"],
+                || {
+                    let mut body = serde_json::json!({ "applicability": applicability });
+                    let mut filter = serde_json::Map::new();
+                    if let Some(t) = &event_type {
+                        filter.insert("eventType".into(), serde_json::json!(t));
+                    }
+                    if let Some(s) = &event_status {
+                        filter.insert("eventStatus".into(), serde_json::json!(s));
+                    }
+                    if !user_id.is_empty() {
+                        filter.insert(
+                            "userId".into(),
+                            serde_json::Value::Array(
+                                user_id
+                                    .iter()
+                                    .cloned()
+                                    .map(serde_json::Value::String)
+                                    .collect(),
+                            ),
+                        );
+                    }
+                    if !user_email.is_empty() {
+                        filter.insert(
+                            "userEmail".into(),
+                            serde_json::Value::Array(
+                                user_email
+                                    .iter()
+                                    .cloned()
+                                    .map(serde_json::Value::String)
+                                    .collect(),
+                            ),
+                        );
+                    }
+                    if let Some(s) = start_time {
+                        filter.insert("startTime".into(), serde_json::json!(s));
+                    }
+                    if let Some(e) = end_time {
+                        filter.insert("endTime".into(), serde_json::json!(e));
+                    }
+                    if !filter.is_empty() {
+                        body["filter"] = serde_json::Value::Object(filter);
+                    }
+                    body
+                },
+                extra_pagination,
+                page_timestamp,
+                |item| {
+                    for key in ["eventTime", "timestamp", "date"] {
+                        if let Some(v) = item.get(key) {
+                            if let Some(n) = v.as_i64() {
+                                return Some(n);
+                            }
+                            if let Some(s) = v.as_str() {
+                                if let Ok(n) = s.parse::<i64>() {
+                                    return Some(n);
+                                }
+                            }
+                        }
+                    }
+                    None
+                },
+            )
+            .await?;
 
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&resp).unwrap());
+                println!("{}", serde_json::to_string_pretty(&logs).unwrap());
                 return Ok(());
             }
 
-            let logs = resp
-                .get("data")
-                .and_then(|d| d.as_array())
-                .or_else(|| resp.get("audit_logs").and_then(|d| d.as_array()))
-                .cloned()
-                .unwrap_or_default();
             output.print_items(&logs, AUDIT_LOG_FIELDS, "id");
             Ok(())
         }

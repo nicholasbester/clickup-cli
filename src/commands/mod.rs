@@ -16,6 +16,7 @@ pub mod guest;
 pub mod list;
 pub mod mcp_cmd;
 pub mod member;
+pub mod pagination;
 pub mod role;
 pub mod setup;
 pub mod shared;

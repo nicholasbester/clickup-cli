@@ -62,13 +62,10 @@ pub enum ViewCommands {
         /// View ID
         id: String,
     },
-    /// List tasks in a view
+    /// List tasks in a view. Honours global --all/--page/--limit for pagination.
     Tasks {
         /// View ID
         id: String,
-        /// Page number (0-indexed)
-        #[arg(long, default_value = "0")]
-        page: u32,
     },
 }
 
@@ -167,15 +164,11 @@ pub async fn execute(command: ViewCommands, cli: &Cli) -> Result<(), CliError> {
             output.print_message(&format!("View {} deleted", id));
             Ok(())
         }
-        ViewCommands::Tasks { id, page } => {
-            let resp = client
-                .get(&format!("/v2/view/{}/task?page={}", id, page))
-                .await?;
-            let tasks = resp
-                .get("tasks")
-                .and_then(|t| t.as_array())
-                .cloned()
-                .unwrap_or_default();
+        ViewCommands::Tasks { id } => {
+            let tasks = crate::commands::pagination::walk_page(cli, &client, "tasks", |p| {
+                format!("/v2/view/{}/task?page={}", id, p)
+            })
+            .await?;
             output.print_items(&tasks, &["id", "name", "status", "assignees"], "id");
             Ok(())
         }

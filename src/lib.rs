@@ -41,9 +41,24 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub limit: Option<usize>,
 
-    /// Manual page selection
+    /// Manual page selection (v2 page-based endpoints)
     #[arg(long, global = true)]
     pub page: Option<u32>,
+
+    /// Opaque cursor from a previous response (v3 cursor-based endpoints).
+    /// Use with chat-* and doc list commands.
+    #[arg(long, global = true)]
+    pub cursor: Option<String>,
+
+    /// Boundary timestamp in Unix ms (v2 start-id-based comment endpoints).
+    /// Pair with --start-id; both required when continuing a comment listing.
+    #[arg(long, global = true)]
+    pub start: Option<i64>,
+
+    /// Boundary comment id (v2 start-id-based comment endpoints).
+    /// Pair with --start.
+    #[arg(long = "start-id", global = true)]
+    pub start_id: Option<String>,
 
     /// Only print IDs, one per line
     #[arg(short, long, global = true)]

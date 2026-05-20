@@ -159,22 +159,26 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
 
     match command {
         ChatCommands::ChannelList { include_closed } => {
-            let query = if include_closed {
-                "?include_closed=true"
-            } else {
-                ""
-            };
-            let resp = client.get(&format!("{}/channels{}", base, query)).await?;
-            // v3 envelope wraps the list in "data"; older shape used "channels".
-            let mut channels = resp
-                .get("data")
-                .or_else(|| resp.get("channels"))
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_default();
-            if let Some(limit) = cli.limit {
-                channels.truncate(limit);
-            }
+            let channels = crate::commands::pagination::walk_cursor(
+                cli,
+                &client,
+                &["data", "channels"],
+                |cursor| {
+                    let mut qs: Vec<String> = Vec::new();
+                    if include_closed {
+                        qs.push("include_closed=true".to_string());
+                    }
+                    if let Some(c) = cursor {
+                        qs.push(format!("cursor={}", c));
+                    }
+                    if qs.is_empty() {
+                        format!("{}/channels", base)
+                    } else {
+                        format!("{}/channels?{}", base, qs.join("&"))
+                    }
+                },
+            )
+            .await?;
             output.print_items(&channels, CHANNEL_FIELDS, "id");
             Ok(())
         }
@@ -215,17 +219,27 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::ChannelFollowers { id } => {
-            let resp = client
-                .get(&format!("{}/channels/{}/followers", base, id))
+            let followers =
+                crate::commands::pagination::walk_cursor(cli, &client, &["data"], |cursor| {
+                    match cursor {
+                        Some(c) => format!("{}/channels/{}/followers?cursor={}", base, id, c),
+                        None => format!("{}/channels/{}/followers", base, id),
+                    }
+                })
                 .await?;
-            println!("{}", serde_json::to_string_pretty(&resp).unwrap());
+            output.print_items(&followers, &["id", "name", "username", "email"], "id");
             Ok(())
         }
         ChatCommands::ChannelMembers { id } => {
-            let resp = client
-                .get(&format!("{}/channels/{}/members", base, id))
+            let members =
+                crate::commands::pagination::walk_cursor(cli, &client, &["data"], |cursor| {
+                    match cursor {
+                        Some(c) => format!("{}/channels/{}/members?cursor={}", base, id, c),
+                        None => format!("{}/channels/{}/members", base, id),
+                    }
+                })
                 .await?;
-            println!("{}", serde_json::to_string_pretty(&resp).unwrap());
+            output.print_items(&members, &["id", "name", "username", "email"], "id");
             Ok(())
         }
         ChatCommands::Dm { user_ids } => {
@@ -237,20 +251,16 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::MessageList { channel } => {
-            let resp = client
-                .get(&format!("{}/channels/{}/messages", base, channel))
-                .await?;
-            // v3 envelope wraps the list in "data"; older shape used "messages",
-            // and some endpoints return a bare array.
-            let mut messages = resp
-                .get("data")
-                .or_else(|| resp.get("messages"))
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_else(|| resp.as_array().cloned().unwrap_or_default());
-            if let Some(limit) = cli.limit {
-                messages.truncate(limit);
-            }
+            let messages = crate::commands::pagination::walk_cursor(
+                cli,
+                &client,
+                &["data", "messages"],
+                |cursor| match cursor {
+                    Some(c) => format!("{}/channels/{}/messages?cursor={}", base, channel, c),
+                    None => format!("{}/channels/{}/messages", base, channel),
+                },
+            )
+            .await?;
             output.print_items(&messages, MESSAGE_FIELDS, "id");
             Ok(())
         }
@@ -280,10 +290,15 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::ReactionList { msg_id } => {
-            let resp = client
-                .get(&format!("{}/messages/{}/reactions", base, msg_id))
+            let reactions =
+                crate::commands::pagination::walk_cursor(cli, &client, &["data"], |cursor| {
+                    match cursor {
+                        Some(c) => format!("{}/messages/{}/reactions?cursor={}", base, msg_id, c),
+                        None => format!("{}/messages/{}/reactions", base, msg_id),
+                    }
+                })
                 .await?;
-            println!("{}", serde_json::to_string_pretty(&resp).unwrap());
+            output.print_items(&reactions, &["reaction", "user", "date"], "reaction");
             Ok(())
         }
         ChatCommands::ReactionAdd { msg_id, emoji } => {
@@ -319,20 +334,16 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::ReplyList { msg_id } => {
-            let resp = client
-                .get(&format!("{}/messages/{}/replies", base, msg_id))
-                .await?;
-            // v3 envelope wraps the list in "data"; older shape used "replies",
-            // and some endpoints return a bare array.
-            let mut replies = resp
-                .get("data")
-                .or_else(|| resp.get("replies"))
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_else(|| resp.as_array().cloned().unwrap_or_default());
-            if let Some(limit) = cli.limit {
-                replies.truncate(limit);
-            }
+            let replies = crate::commands::pagination::walk_cursor(
+                cli,
+                &client,
+                &["data", "replies"],
+                |cursor| match cursor {
+                    Some(c) => format!("{}/messages/{}/replies?cursor={}", base, msg_id, c),
+                    None => format!("{}/messages/{}/replies", base, msg_id),
+                },
+            )
+            .await?;
             output.print_items(&replies, MESSAGE_FIELDS, "id");
             Ok(())
         }
@@ -345,10 +356,17 @@ pub async fn execute(command: ChatCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ChatCommands::TaggedUsers { msg_id } => {
-            let resp = client
-                .get(&format!("{}/messages/{}/tagged_users", base, msg_id))
+            let users =
+                crate::commands::pagination::walk_cursor(cli, &client, &["data"], |cursor| {
+                    match cursor {
+                        Some(c) => {
+                            format!("{}/messages/{}/tagged_users?cursor={}", base, msg_id, c)
+                        }
+                        None => format!("{}/messages/{}/tagged_users", base, msg_id),
+                    }
+                })
                 .await?;
-            println!("{}", serde_json::to_string_pretty(&resp).unwrap());
+            output.print_items(&users, &["id", "name", "username", "email"], "id");
             Ok(())
         }
     }

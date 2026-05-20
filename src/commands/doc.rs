@@ -98,27 +98,29 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
 
     match command {
         DocCommands::List { creator, archived } => {
-            let mut params = Vec::new();
-            if let Some(c) = &creator {
-                params.push(format!("creator={}", c));
-            }
-            if archived {
-                params.push("archived=true".to_string());
-            }
-            let query = if params.is_empty() {
-                String::new()
-            } else {
-                format!("?{}", params.join("&"))
-            };
-            let resp = client.get(&format!("{}{}", base, query)).await?;
-            let mut docs = resp
-                .get("docs")
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_default();
-            if let Some(limit) = cli.limit {
-                docs.truncate(limit);
-            }
+            let docs = crate::commands::pagination::walk_cursor(
+                cli,
+                &client,
+                &["data", "docs"],
+                |cursor| {
+                    let mut params: Vec<String> = Vec::new();
+                    if let Some(c) = &creator {
+                        params.push(format!("creator={}", c));
+                    }
+                    if archived {
+                        params.push("archived=true".to_string());
+                    }
+                    if let Some(c) = cursor {
+                        params.push(format!("cursor={}", c));
+                    }
+                    if params.is_empty() {
+                        base.clone()
+                    } else {
+                        format!("{}?{}", base, params.join("&"))
+                    }
+                },
+            )
+            .await?;
             output.print_items(&docs, DOC_FIELDS, "id");
             Ok(())
         }
