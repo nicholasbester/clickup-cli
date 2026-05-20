@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
   packages: write
+  # Required so the npm CLI can request an OIDC token from GitHub for
+  # the npm Trusted Publishing exchange. Replaces the long-lived
+  # NPM_TOKEN secret. See:
+  # https://docs.npmjs.com/trusted-publishers
+  id-token: write
 
 jobs:
   build:
@@ -158,10 +163,17 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
+      # npm Trusted Publishing: the npm CLI (>= 11.5.1) auto-exchanges the
+      # workflow's OIDC token (granted via `id-token: write` above) for a
+      # short-lived publish credential. No NPM_TOKEN env var needed.
+      # Configured on npmjs.com -> Package settings -> Publishing access ->
+      # Trusted publisher = nicholasbester/clickup-cli, workflow build.yml.
+      - name: Upgrade npm to a Trusted-Publishing-capable version
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: npm install -g npm@latest
+
       - name: Publish to npm
         if: ${{ !contains(github.ref_name, '-') }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           cd npm
@@ -169,7 +181,9 @@ jobs:
           if npm view "@nick.bester/clickup-cli@${VERSION}" version >/dev/null 2>&1; then
             echo "::notice::npm: version ${VERSION} already exists, skipping"
           else
-            npm publish --access public
+            # --provenance attaches a build attestation; required by npm's
+            # trusted-publishing flow.
+            npm publish --access public --provenance
           fi
 
       - name: Setup Node.js (GitHub Packages)
