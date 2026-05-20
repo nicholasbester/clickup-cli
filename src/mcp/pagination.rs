@@ -1,10 +1,12 @@
 //! MCP pagination helpers.
 //!
-//! ClickUp's paginated endpoints come in three flavours:
+//! ClickUp's paginated endpoints come in four flavours:
 //! - **page-based** (v2): `?page=N`, response carries `last_page: bool`.
 //! - **cursor-based** (v3): `?cursor=X`, response carries `next_cursor: string` or null.
 //! - **start-id-based** (v2 comments): `?start=<unix_ms>&start_id=<id>` pair,
 //!   response is a bare array, termination inferred from page-size hint.
+//! - **body-based** (v3 audit-log): pagination state lives inside the POST
+//!   body as `pagination: { pageRows, pageTimestamp, pageDirection }`.
 //!
 //! This module hides the loop logic and response-shape glue so each MCP tool
 //! dispatch can be a one-liner.
@@ -14,7 +16,9 @@
 //! **Schema.** Every paginated tool's inputSchema gains one of:
 //! - page style: `page` (int ≥0), `limit` (int ≥1), `all` (bool); or
 //! - cursor style: `cursor` (opaque string), `limit` (int ≥1), `all` (bool); or
-//! - start-id style: `start` (int ms), `start_id` (string), `limit` (int ≥1), `all` (bool).
+//! - start-id style: `start` (int ms), `start_id` (string), `limit` (int ≥1), `all` (bool); or
+//! - body style: `page_rows`, `page_timestamp` (int ms), `page_direction`
+//!   (`"NEXT"`/`"PREVIOUS"`), `limit`, `all`.
 //!
 //! **Output.** The contract is _opt-in_:
 //! - If the caller passes NO pagination arg, the response is unchanged from
@@ -25,12 +29,14 @@
 //!   {
 //!     "items": [...],
 //!     "pagination": {
-//!       "style": "page" | "cursor" | "start_id",
-//!       "page": 0,                // page style only
-//!       "last_page": false,       // page style only
-//!       "next_cursor": "...",     // cursor style only, omitted when exhausted
-//!       "next_start": 1700000000, // start_id style only, omitted when exhausted
-//!       "next_start_id": "...",   // start_id style only, omitted when exhausted
+//!       "style": "page" | "cursor" | "start_id" | "body",
+//!       "page": 0,                       // page style only
+//!       "last_page": false,              // page style only
+//!       "next_cursor": "...",            // cursor style only, omitted when exhausted
+//!       "next_start": 1700000000,        // start_id style only, omitted when exhausted
+//!       "next_start_id": "...",          // start_id style only, omitted when exhausted
+//!       "next_page_timestamp": 1700000,  // body style only, omitted when exhausted
+//!       "page_direction": "NEXT",        // body style only, echoes caller input
 //!       "has_more": true,
 //!       "returned": 42,
 //!       "all": false
@@ -39,8 +45,9 @@
 //!   ```
 //!
 //! Calling code uses [`PageArgs::from_args`] / [`CursorArgs::from_args`] /
-//! [`StartIdArgs::from_args`] to parse pagination input, then [`page_dispatch`] /
-//! [`cursor_dispatch`] / [`start_id_dispatch`] to run the fetch loop.
+//! [`StartIdArgs::from_args`] / [`BodyPaginationArgs::from_args`] to parse
+//! pagination input, then [`page_dispatch`] / [`cursor_dispatch`] /
+//! [`start_id_dispatch`] / [`body_pagination_dispatch`] to run the fetch loop.
 
 use crate::client::ClickUpClient;
 use crate::output::compact_items;
@@ -143,6 +150,51 @@ impl StartIdArgs {
         Self {
             start,
             start_id,
+            limit,
+            all,
+            requested,
+        }
+    }
+}
+
+/// Parsed body-pagination input. ClickUp's v3 audit-log endpoint
+/// (`POST /v3/workspaces/{ws}/auditlogs`) puts pagination state inside the
+/// request **body** as `pagination: { pageRows, pageTimestamp, pageDirection }`,
+/// not in query params. `pageDirection` is `"NEXT"` or `"PREVIOUS"` —
+/// `--all` walks in whatever direction the caller passes, defaulting to
+/// `"NEXT"` (newer events) if unspecified.
+#[derive(Debug, Clone, Default)]
+pub struct BodyPaginationArgs {
+    pub page_rows: Option<i64>,
+    pub page_timestamp: Option<i64>,
+    pub page_direction: Option<String>,
+    pub limit: Option<usize>,
+    pub all: bool,
+    pub requested: bool,
+}
+
+impl BodyPaginationArgs {
+    pub fn from_args(args: &Value) -> Self {
+        let page_rows = args.get("page_rows").and_then(|v| v.as_i64());
+        let page_timestamp = args.get("page_timestamp").and_then(|v| v.as_i64());
+        let page_direction = args
+            .get("page_direction")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize);
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let requested = page_rows.is_some()
+            || page_timestamp.is_some()
+            || page_direction.is_some()
+            || limit.is_some()
+            || args.get("all").is_some();
+        Self {
+            page_rows,
+            page_timestamp,
+            page_direction,
             limit,
             all,
             requested,
@@ -449,6 +501,138 @@ where
     if let Some((d, i)) = next_boundary {
         pagination.insert("next_start".into(), json!(d));
         pagination.insert("next_start_id".into(), json!(i));
+    }
+    Ok(json!({
+        "items": compact_arr,
+        "pagination": Value::Object(pagination),
+    }))
+}
+
+/// Run a body-pagination POST loop for endpoints like the v3 audit-log query.
+/// Pagination state lives inside the request body as
+/// `pagination: { pageRows, pageTimestamp, pageDirection }`.
+///
+/// Caller responsibilities:
+/// - `path`: POST target, fixed across all iterations.
+/// - `items_keys`: candidate response keys for the items array, in priority
+///   order (e.g. `&["data"]` for v3 audit-log).
+/// - `compact_fields`: fields to project per item via `compact_items`.
+/// - `base_body`: closure returning a fresh non-pagination body each call.
+///   The helper merges the `pagination` block into it.
+/// - `next_timestamp`: closure that takes the last item of the current
+///   response and returns the next request's `pageTimestamp` (typically the
+///   event's own timestamp field). `None` means "no further boundary
+///   available" — the loop ends.
+///
+/// Termination: empty response, `next_timestamp` returns None, `limit` cap
+/// reached, or `MAX_PAGES` reached.
+pub async fn body_pagination_dispatch<BB, NT>(
+    args: &BodyPaginationArgs,
+    client: &ClickUpClient,
+    path: &str,
+    items_keys: &[&str],
+    compact_fields: &[&str],
+    base_body: BB,
+    next_timestamp: NT,
+) -> Result<Value, String>
+where
+    BB: Fn() -> Value,
+    NT: Fn(&Value) -> Option<i64>,
+{
+    let mut current_timestamp = args.page_timestamp;
+    let mut collected: Vec<Value> = Vec::new();
+    // Whether the loop terminated because we ran out of server-side results
+    // (empty response or no next boundary). Drives `has_more`.
+    let mut reached_end = false;
+    // The next-page boundary surfaced in the envelope when caller passed
+    // pagination args. Initial None is overwritten on the first iteration.
+    #[allow(unused_assignments)]
+    let mut next_boundary: Option<i64> = None;
+    let mut pages_fetched = 0usize;
+
+    loop {
+        // Build the body fresh each iteration: the base body, plus a
+        // pagination block reflecting current state. We rebuild on every
+        // iteration rather than mutating in place so the base_body closure
+        // is the single source of truth for the non-pagination fields.
+        let mut body = base_body();
+        let mut pagination = serde_json::Map::new();
+        if let Some(n) = args.page_rows {
+            pagination.insert("pageRows".into(), json!(n));
+        }
+        if let Some(t) = current_timestamp {
+            pagination.insert("pageTimestamp".into(), json!(t));
+        }
+        if let Some(d) = args.page_direction.as_deref() {
+            pagination.insert("pageDirection".into(), json!(d));
+        }
+        if !pagination.is_empty() {
+            body["pagination"] = Value::Object(pagination);
+        }
+
+        let resp = client.post(path, &body).await.map_err(|e| e.to_string())?;
+        let items = extract_array(&resp, items_keys).unwrap_or_default();
+        let count = items.len();
+
+        // Derive next-page boundary from the last item BEFORE consuming it
+        // into the collected vec.
+        next_boundary = items.last().and_then(&next_timestamp);
+
+        collected.extend(items);
+        pages_fetched += 1;
+
+        if count == 0 {
+            reached_end = true;
+        }
+
+        if !args.all {
+            break;
+        }
+        if reached_end || pages_fetched >= MAX_PAGES {
+            break;
+        }
+        if let Some(limit) = args.limit {
+            if collected.len() >= limit {
+                break;
+            }
+        }
+
+        // Advance: walk in caller's chosen direction by updating
+        // `pageTimestamp` from the boundary we just extracted. If the
+        // extractor returned None, bail to avoid an infinite loop.
+        match next_boundary {
+            Some(t) => current_timestamp = Some(t),
+            None => {
+                reached_end = true;
+                break;
+            }
+        }
+    }
+
+    if let Some(limit) = args.limit {
+        collected.truncate(limit);
+    }
+
+    let compact = compact_items(&collected, compact_fields);
+
+    if !args.requested {
+        return Ok(compact);
+    }
+
+    let compact_arr = compact.as_array().cloned().unwrap_or_default();
+    let returned = compact_arr.len();
+    let has_more = !reached_end && next_boundary.is_some();
+
+    let mut pagination = serde_json::Map::new();
+    pagination.insert("style".into(), json!("body"));
+    pagination.insert("has_more".into(), json!(has_more));
+    pagination.insert("returned".into(), json!(returned));
+    pagination.insert("all".into(), json!(args.all));
+    if let Some(t) = next_boundary {
+        pagination.insert("next_page_timestamp".into(), json!(t));
+    }
+    if let Some(d) = args.page_direction.as_deref() {
+        pagination.insert("page_direction".into(), json!(d));
     }
     Ok(json!({
         "items": compact_arr,
@@ -831,6 +1015,184 @@ mod tests {
         // UNTRUNCATED response (c24, the 25th item), so the caller can
         // continue from where the server left off, not from where we cut.
         assert_eq!(p.get("next_start_id").and_then(|v| v.as_str()), Some("c24"));
+    }
+
+    // ---- body_pagination_dispatch tests ----
+
+    fn audit_event(id: &str, ts: i64) -> Value {
+        json!({"id": id, "eventTime": ts, "eventType": "auth"})
+    }
+
+    #[tokio::test]
+    async fn body_dispatch_no_pagination_args_returns_bare_array() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v3/workspaces/W1/auditlogs"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": [audit_event("e1", 1700000000), audit_event("e2", 1700000005)],
+            })))
+            .mount(&server)
+            .await;
+        let client = test_client(&server);
+        let args = BodyPaginationArgs::from_args(&json!({}));
+        let result = body_pagination_dispatch(
+            &args,
+            &client,
+            "/v3/workspaces/W1/auditlogs",
+            &["data"],
+            &["id", "eventTime"],
+            || json!({"applicability": "AUTH"}),
+            |item| item.get("eventTime").and_then(|v| v.as_i64()),
+        )
+        .await
+        .unwrap();
+        assert!(result.is_array(), "expected bare array, got {}", result);
+        assert_eq!(result.as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn body_dispatch_all_true_walks_pages_via_timestamp_boundary() {
+        // First page: 3 events. Boundary = last event's eventTime (1700000020).
+        // Second page (with pageTimestamp=1700000020): 2 events. Boundary moves.
+        // Third page (with pageTimestamp=1700000035): empty -> stop.
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v3/workspaces/W1/auditlogs"))
+            .and(wiremock::matchers::body_partial_json(
+                json!({"applicability": "AUTH"}),
+            ))
+            .and(wiremock::matchers::body_partial_json(
+                json!({"pagination": {"pageTimestamp": 1700000020_i64}}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": [
+                    audit_event("e4", 1700000030),
+                    audit_event("e5", 1700000035),
+                ],
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v3/workspaces/W1/auditlogs"))
+            .and(wiremock::matchers::body_partial_json(
+                json!({"pagination": {"pageTimestamp": 1700000035_i64}}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": [],
+            })))
+            .mount(&server)
+            .await;
+        // First call has no pageTimestamp in body; lowest priority match so
+        // the more-specific matches above are tried first.
+        Mock::given(method("POST"))
+            .and(path("/v3/workspaces/W1/auditlogs"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": [
+                    audit_event("e1", 1700000010),
+                    audit_event("e2", 1700000015),
+                    audit_event("e3", 1700000020),
+                ],
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let args = BodyPaginationArgs::from_args(&json!({"all": true}));
+        let result = body_pagination_dispatch(
+            &args,
+            &client,
+            "/v3/workspaces/W1/auditlogs",
+            &["data"],
+            &["id"],
+            || json!({"applicability": "AUTH"}),
+            |item| item.get("eventTime").and_then(|v| v.as_i64()),
+        )
+        .await
+        .unwrap();
+        let items = result.get("items").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(items.len(), 5, "expected 3 + 2 + 0 across 3 pages");
+        let p = result.get("pagination").unwrap();
+        assert_eq!(p.get("style").and_then(|v| v.as_str()), Some("body"));
+        assert_eq!(
+            p.get("has_more").and_then(|v| v.as_bool()),
+            Some(false),
+            "reached natural end (empty page) -> has_more false"
+        );
+    }
+
+    #[tokio::test]
+    async fn body_dispatch_limit_truncates_but_has_more_reflects_server() {
+        // Server returns a non-empty response and a valid next-boundary;
+        // limit truncates. has_more must still be true.
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v3/workspaces/W1/auditlogs"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": [
+                    audit_event("e1", 1700000010),
+                    audit_event("e2", 1700000015),
+                    audit_event("e3", 1700000020),
+                ],
+            })))
+            .mount(&server)
+            .await;
+        let client = test_client(&server);
+        let args = BodyPaginationArgs::from_args(&json!({"limit": 2}));
+        let result = body_pagination_dispatch(
+            &args,
+            &client,
+            "/v3/workspaces/W1/auditlogs",
+            &["data"],
+            &["id"],
+            || json!({"applicability": "AUTH"}),
+            |item| item.get("eventTime").and_then(|v| v.as_i64()),
+        )
+        .await
+        .unwrap();
+        let items = result.get("items").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(items.len(), 2, "limit cap honoured");
+        let p = result.get("pagination").unwrap();
+        assert_eq!(
+            p.get("has_more").and_then(|v| v.as_bool()),
+            Some(true),
+            "limit-truncated non-empty page should report has_more=true"
+        );
+        // next_page_timestamp should be the last item's timestamp from the
+        // UNTRUNCATED response (e3 = 1700000020), so the caller can continue
+        // from where the server left off.
+        assert_eq!(
+            p.get("next_page_timestamp").and_then(|v| v.as_i64()),
+            Some(1700000020)
+        );
+    }
+
+    #[test]
+    fn body_pagination_args_empty() {
+        let a = BodyPaginationArgs::from_args(&json!({}));
+        assert!(!a.requested);
+        assert!(a.page_rows.is_none());
+        assert!(a.page_timestamp.is_none());
+        assert!(a.page_direction.is_none());
+        assert!(a.limit.is_none());
+        assert!(!a.all);
+    }
+
+    #[test]
+    fn body_pagination_args_full() {
+        let a = BodyPaginationArgs::from_args(&json!({
+            "page_rows": 100,
+            "page_timestamp": 1700000000_i64,
+            "page_direction": "PREVIOUS",
+            "limit": 50,
+            "all": true,
+        }));
+        assert!(a.requested);
+        assert_eq!(a.page_rows, Some(100));
+        assert_eq!(a.page_timestamp, Some(1700000000));
+        assert_eq!(a.page_direction.as_deref(), Some("PREVIOUS"));
+        assert_eq!(a.limit, Some(50));
+        assert!(a.all);
     }
 
     #[test]
