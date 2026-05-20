@@ -1688,24 +1688,30 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_channel_followers",
-            "description": "List the users who follow (receive notifications from) a ClickUp Chat channel. Followers are a subset of members — a member may or may not be a follower. Returns an array of user objects.",
+            "description": "List the users who follow (receive notifications from) a ClickUp Chat channel. Followers are a subset of members — a member may or may not be a follower. Returns a compact array of user objects (id, name, username, email). Pass `cursor`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."}
+                    "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from a previous response's `pagination.next_cursor`. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until next_cursor is empty or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
                 "required": ["channel_id"]
             }
         },
         {
             "name": "clickup_chat_channel_members",
-            "description": "List the users who are members of a ClickUp Chat channel (can read and post). For notification-receivers only use clickup_chat_channel_followers. Returns an array of user objects (id, username, email).",
+            "description": "List the users who are members of a ClickUp Chat channel (can read and post). For notification-receivers only use clickup_chat_channel_followers. Returns a compact array of user objects (id, name, username, email). Pass `cursor`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."}
+                    "channel_id": {"type": "string", "description": "ID of the channel. Obtain from clickup_chat_channel_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from a previous response's `pagination.next_cursor`. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until next_cursor is empty or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
                 "required": ["channel_id"]
             }
@@ -1725,12 +1731,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_reaction_list",
-            "description": "List the emoji reactions on a ClickUp Chat message grouped by emoji — each entry includes the emoji, count, and the users who reacted with it. Returns an array of reaction summary objects.",
+            "description": "List the emoji reactions on a ClickUp Chat message — each entry carries the reaction (emoji), the user who reacted, and the timestamp. Returns a compact array (reaction, user, date). Pass `cursor`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "message_id": {"type": "string", "description": "ID of the message whose reactions to list. Obtain from clickup_chat_message_list (field: id)."}
+                    "message_id": {"type": "string", "description": "ID of the message whose reactions to list. Obtain from clickup_chat_message_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from a previous response's `pagination.next_cursor`. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until next_cursor is empty or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
                 "required": ["message_id"]
             }
@@ -1791,12 +1800,15 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_chat_tagged_users",
-            "description": "List the users explicitly @-mentioned (tagged) in a ClickUp Chat message body. Useful for reading who a message was addressed to. Returns an array of user objects.",
+            "description": "List the users explicitly @-mentioned (tagged) in a ClickUp Chat message body. Useful for reading who a message was addressed to. Returns a compact array of user objects (id, name, username, email). Pass `cursor`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "message_id": {"type": "string", "description": "ID of the message. Obtain from clickup_chat_message_list (field: id)."}
+                    "message_id": {"type": "string", "description": "ID of the message. Obtain from clickup_chat_message_list (field: id)."},
+                    "cursor": {"type": "string", "description": "Opaque pagination cursor from a previous response's `pagination.next_cursor`. Omit for the first page."},
+                    "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
+                    "all": {"type": "boolean", "description": "true = auto-fetch pages until next_cursor is empty or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
                 "required": ["message_id"]
             }
@@ -4456,15 +4468,26 @@ async fn dispatch_tool(
             let channel_id = args
                 .get("channel_id")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: channel_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/channels/{}/followers",
-                    team_id, channel_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+                .ok_or("Missing required parameter: channel_id")?
+                .to_string();
+            let cargs = pagination::CursorArgs::from_args(args);
+            pagination::cursor_dispatch(
+                &cargs,
+                client,
+                &["data"],
+                &["id", "name", "username", "email"],
+                |cursor| match cursor {
+                    Some(c) => format!(
+                        "/v3/workspaces/{}/chat/channels/{}/followers?cursor={}",
+                        team_id, channel_id, c
+                    ),
+                    None => format!(
+                        "/v3/workspaces/{}/chat/channels/{}/followers",
+                        team_id, channel_id
+                    ),
+                },
+            )
+            .await
         }
 
         "clickup_chat_channel_members" => {
@@ -4472,15 +4495,26 @@ async fn dispatch_tool(
             let channel_id = args
                 .get("channel_id")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: channel_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/channels/{}/members",
-                    team_id, channel_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+                .ok_or("Missing required parameter: channel_id")?
+                .to_string();
+            let cargs = pagination::CursorArgs::from_args(args);
+            pagination::cursor_dispatch(
+                &cargs,
+                client,
+                &["data"],
+                &["id", "name", "username", "email"],
+                |cursor| match cursor {
+                    Some(c) => format!(
+                        "/v3/workspaces/{}/chat/channels/{}/members?cursor={}",
+                        team_id, channel_id, c
+                    ),
+                    None => format!(
+                        "/v3/workspaces/{}/chat/channels/{}/members",
+                        team_id, channel_id
+                    ),
+                },
+            )
+            .await
         }
 
         "clickup_chat_message_update" => {
@@ -4509,15 +4543,26 @@ async fn dispatch_tool(
             let message_id = args
                 .get("message_id")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: message_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/messages/{}/reactions",
-                    team_id, message_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+                .ok_or("Missing required parameter: message_id")?
+                .to_string();
+            let cargs = pagination::CursorArgs::from_args(args);
+            pagination::cursor_dispatch(
+                &cargs,
+                client,
+                &["data"],
+                &["reaction", "user", "date"],
+                |cursor| match cursor {
+                    Some(c) => format!(
+                        "/v3/workspaces/{}/chat/messages/{}/reactions?cursor={}",
+                        team_id, message_id, c
+                    ),
+                    None => format!(
+                        "/v3/workspaces/{}/chat/messages/{}/reactions",
+                        team_id, message_id
+                    ),
+                },
+            )
+            .await
         }
 
         "clickup_chat_reaction_add" => {
@@ -4625,15 +4670,26 @@ async fn dispatch_tool(
             let message_id = args
                 .get("message_id")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing required parameter: message_id")?;
-            let resp = client
-                .get(&format!(
-                    "/v3/workspaces/{}/chat/messages/{}/tagged_users",
-                    team_id, message_id
-                ))
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(resp)
+                .ok_or("Missing required parameter: message_id")?
+                .to_string();
+            let cargs = pagination::CursorArgs::from_args(args);
+            pagination::cursor_dispatch(
+                &cargs,
+                client,
+                &["data"],
+                &["id", "name", "username", "email"],
+                |cursor| match cursor {
+                    Some(c) => format!(
+                        "/v3/workspaces/{}/chat/messages/{}/tagged_users?cursor={}",
+                        team_id, message_id, c
+                    ),
+                    None => format!(
+                        "/v3/workspaces/{}/chat/messages/{}/tagged_users",
+                        team_id, message_id
+                    ),
+                },
+            )
+            .await
         }
 
         "clickup_time_current" => {
