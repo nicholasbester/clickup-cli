@@ -219,7 +219,12 @@ where
 
     let compact_arr = compact.as_array().cloned().unwrap_or_default();
     let returned = compact_arr.len();
-    let has_more = !last_page && args.limit.is_none_or(|l| returned < l);
+    // `has_more` reports whether the SERVER has additional pages — purely a
+    // function of `last_page`. Don't conjoin with limit-truncation: when the
+    // caller passes `limit` and we hit the cap, the server may still have
+    // more pages they could retrieve via a higher limit or a subsequent
+    // page= request. Telling them has_more=false in that case is misleading.
+    let has_more = !last_page;
     let last_observed_page = if args.all { current_page } else { start_page };
     Ok(json!({
         "items": compact_arr,
@@ -299,7 +304,10 @@ where
 
     let compact_arr = compact.as_array().cloned().unwrap_or_default();
     let returned = compact_arr.len();
-    let has_more = next_cursor.is_some() && args.limit.is_none_or(|l| returned < l);
+    // `has_more` reports whether the SERVER has additional pages — purely a
+    // function of `next_cursor`. Don't conjoin with limit-truncation: see
+    // the matching comment in `page_dispatch`.
+    let has_more = next_cursor.is_some();
 
     let mut pagination = serde_json::Map::new();
     pagination.insert("style".into(), json!("cursor"));
@@ -427,8 +435,11 @@ where
 
     let compact_arr = compact.as_array().cloned().unwrap_or_default();
     let returned = compact_arr.len();
-    let has_more =
-        !reached_end && next_boundary.is_some() && args.limit.is_none_or(|l| returned < l);
+    // `has_more` reports whether the SERVER has additional pages — purely a
+    // function of whether we reached a short page AND we still have a usable
+    // boundary. Don't conjoin with limit-truncation: see the matching
+    // comment in `page_dispatch`.
+    let has_more = !reached_end && next_boundary.is_some();
 
     let mut pagination = serde_json::Map::new();
     pagination.insert("style".into(), json!("start_id"));
@@ -702,6 +713,124 @@ mod tests {
         // next_start / next_start_id reflect the LAST seen item (c26),
         // because boundary extraction runs on every fetch.
         assert_eq!(p.get("next_start_id").and_then(|v| v.as_str()), Some("c26"));
+    }
+
+    // ---- Regression tests for the limit-truncation `has_more` bug ----
+    //
+    // Caught by live smoke-testing PR #44 against ClickUp: when the caller
+    // passes `limit` and the helper truncates a non-terminal page, has_more
+    // was reported as false (because the original logic conjoined "server
+    // has more" with "we didn't hit the cap"). That misleads users into
+    // thinking they got everything when the server still has pages.
+    // has_more must report ONLY whether the server has additional pages.
+
+    #[tokio::test]
+    async fn page_dispatch_limit_truncates_but_has_more_reflects_server() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v2/list/L1/task"))
+            .and(query_param("page", "0"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "tasks": [{"id": "t1"}, {"id": "t2"}, {"id": "t3"}],
+                "last_page": false,
+            })))
+            .mount(&server)
+            .await;
+        let client = test_client(&server);
+        // limit=2 truncates a 3-item response from a page that ISN'T the last.
+        let args = PageArgs::from_args(&json!({"limit": 2}));
+        let result = page_dispatch(&args, &client, "tasks", &["id"], |p| {
+            format!("/v2/list/L1/task?page={}", p)
+        })
+        .await
+        .unwrap();
+        let p = result.get("pagination").unwrap();
+        assert_eq!(
+            p.get("has_more").and_then(|v| v.as_bool()),
+            Some(true),
+            "limit-truncated page with last_page=false should report has_more=true"
+        );
+    }
+
+    #[tokio::test]
+    async fn cursor_dispatch_limit_truncates_but_has_more_reflects_server() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v3/workspaces/2648001/chat/channels"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": [{"id": "c1"}, {"id": "c2"}, {"id": "c3"}],
+                "next_cursor": "MORE",
+            })))
+            .mount(&server)
+            .await;
+        let client = test_client(&server);
+        let args = CursorArgs::from_args(&json!({"limit": 2}));
+        let result = cursor_dispatch(&args, &client, &["data"], &["id"], |c| match c {
+            Some(c) => format!("/v3/workspaces/2648001/chat/channels?cursor={}", c),
+            None => "/v3/workspaces/2648001/chat/channels".to_string(),
+        })
+        .await
+        .unwrap();
+        let p = result.get("pagination").unwrap();
+        assert_eq!(
+            p.get("has_more").and_then(|v| v.as_bool()),
+            Some(true),
+            "limit-truncated page with non-empty next_cursor should report has_more=true"
+        );
+        assert_eq!(
+            p.get("next_cursor").and_then(|v| v.as_str()),
+            Some("MORE"),
+            "next_cursor must still be exposed so caller can fetch more if they want"
+        );
+    }
+
+    #[tokio::test]
+    async fn start_id_dispatch_limit_truncates_but_has_more_reflects_server() {
+        // Server returns a FULL page (25 items, matches the page-size hint),
+        // so reached_end stays false. With limit=10 we truncate to 10. The
+        // helper should still report has_more=true because the next page
+        // would have more items.
+        let server = MockServer::start().await;
+        let mut page = Vec::new();
+        for i in 0..25 {
+            page.push(json!({
+                "id": format!("c{}", i),
+                "date": format!("{}", 1_700_000_000_000_u64 + (i as u64) * 1000),
+            }));
+        }
+        Mock::given(method("GET"))
+            .and(path("/v2/task/T1/comment"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "comments": page,
+            })))
+            .mount(&server)
+            .await;
+        let client = test_client(&server);
+        let args = StartIdArgs::from_args(&json!({"limit": 10}));
+        let result = start_id_dispatch(
+            &args,
+            &client,
+            "comments",
+            &["id"],
+            |start, start_id| match (start, start_id) {
+                (Some(s), Some(i)) => format!("/v2/task/T1/comment?start={}&start_id={}", s, i),
+                _ => "/v2/task/T1/comment".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        let items = result.get("items").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(items.len(), 10, "limit cap honoured");
+        let p = result.get("pagination").unwrap();
+        assert_eq!(
+            p.get("has_more").and_then(|v| v.as_bool()),
+            Some(true),
+            "limit-truncated full page should report has_more=true (server has more)"
+        );
+        // next_start / next_start_id should still be the last item of the
+        // UNTRUNCATED response (c24, the 25th item), so the caller can
+        // continue from where the server left off, not from where we cut.
+        assert_eq!(p.get("next_start_id").and_then(|v| v.as_str()), Some("c24"));
     }
 
     #[test]
