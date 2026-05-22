@@ -46,6 +46,41 @@ fn test_config_minimal_toml() {
 }
 
 #[test]
+fn test_find_project_config_walks_up_to_root() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    std::fs::write(root.join(".clickup.toml"), "[auth]\ntoken = \"pk_root\"\n").unwrap();
+    let nested = root.join("a").join("b").join("c");
+    std::fs::create_dir_all(&nested).unwrap();
+
+    let found = Config::find_project_config(&nested).expect("should find ancestor config");
+    assert_eq!(found, root.join(".clickup.toml"));
+}
+
+#[test]
+fn test_find_project_config_prefers_nearest() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    std::fs::write(root.join(".clickup.toml"), "[auth]\ntoken = \"pk_root\"\n").unwrap();
+    let sub = root.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join(".clickup.toml"), "[auth]\ntoken = \"pk_sub\"\n").unwrap();
+    let nested = sub.join("deeper");
+    std::fs::create_dir_all(&nested).unwrap();
+
+    let found = Config::find_project_config(&nested).expect("should find nearest config");
+    assert_eq!(found, sub.join(".clickup.toml"));
+}
+
+#[test]
+fn test_find_project_config_none_when_absent() {
+    let dir = TempDir::new().unwrap();
+    let nested = dir.path().join("a").join("b");
+    std::fs::create_dir_all(&nested).unwrap();
+    assert!(Config::find_project_config(&nested).is_none());
+}
+
+#[test]
 fn test_config_save_creates_parent_dirs() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("deep").join("nested").join("config.toml");
