@@ -48,7 +48,7 @@ fn expected_tool_count() {
     // Sanity check: we don't want a future refactor to silently drop tools.
     let tools = tool_list();
     let array = tools.as_array().unwrap();
-    assert_eq!(array.len(), 143, "tool count changed; update this test");
+    assert_eq!(array.len(), 144, "tool count changed; update this test");
 }
 
 use clickup_cli::mcp::filter::{Filter, FilterError, Profile, RawFilter};
@@ -67,7 +67,7 @@ fn tool_names_in(filter: &Filter) -> Vec<String> {
 fn default_exposes_all_tools() {
     let filter = Filter::resolve(RawFilter::default()).unwrap();
     assert_eq!(filter.profile, Profile::All);
-    assert_eq!(tool_names_in(&filter).len(), 143);
+    assert_eq!(tool_names_in(&filter).len(), 144);
 }
 
 #[test]

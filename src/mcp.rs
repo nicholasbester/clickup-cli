@@ -1162,6 +1162,23 @@ pub fn tool_list() -> Value {
             }
         },
         {
+            "name": "clickup_doc_embed_image",
+            "description": "Upload a local image file and embed it inline in a ClickUp doc page. The ClickUp API has no doc-level upload, so the image is first stored as an attachment on a host task (task_id), then the returned CDN URL is appended or prepended to the page as a markdown image, which ClickUp converts into a native inline image block. Returns the attachment url and page id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to use the default workspace from config."},
+                    "doc_id": {"type": "string", "description": "ID of the parent doc. Obtain from clickup_doc_list (field: id)."},
+                    "page_id": {"type": "string", "description": "ID of the page to embed the image into. Obtain from clickup_doc_pages (field: id)."},
+                    "file_path": {"type": "string", "description": "Absolute path to a readable image file on the server running this MCP."},
+                    "task_id": {"type": "string", "description": "Host task that stores the image binary (the API only accepts uploads to tasks). The attachment also appears on this task."},
+                    "alt": {"type": "string", "description": "Alt text for the image. Defaults to the file name."},
+                    "mode": {"type": "string", "description": "Where to insert the image relative to existing page content: 'append' (default) or 'prepend'."}
+                },
+                "required": ["doc_id", "page_id", "file_path", "task_id"]
+            }
+        },
+        {
             "name": "clickup_chat_channel_create",
             "description": "Create a new ClickUp Chat channel in a workspace. For one-on-one messages use clickup_chat_dm instead. Add members later via the channel-members endpoint. Returns the created channel object including its new id.",
             "inputSchema": {
@@ -3711,6 +3728,78 @@ async fn dispatch_tool(
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(compact_items(&[resp], &["id", "name"]))
+        }
+
+        "clickup_doc_embed_image" => {
+            let team_id = resolve_workspace(args)?;
+            let doc_id = args
+                .get("doc_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: doc_id")?;
+            let page_id = args
+                .get("page_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: page_id")?;
+            let file_path = args
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required parameter: file_path")?;
+            let (task_id, custom_q) = resolve_task(args, "task_id")?;
+            let mode = args
+                .get("mode")
+                .and_then(|v| v.as_str())
+                .unwrap_or("append");
+            if !["append", "prepend"].contains(&mode) {
+                return Err(format!(
+                    "Invalid mode '{}'. Valid values: append, prepend",
+                    mode
+                ));
+            }
+            let upload_path = match custom_q {
+                Some(q) => format!("/v2/task/{}/attachment?{}", task_id, q),
+                None => format!("/v2/task/{}/attachment", task_id),
+            };
+            let uploaded = client
+                .upload_file(&upload_path, std::path::Path::new(file_path))
+                .await
+                .map_err(|e| e.to_string())?;
+            let url = uploaded
+                .get("url")
+                .and_then(|u| u.as_str())
+                .ok_or("Upload succeeded but the response contained no attachment URL")?
+                .to_string();
+            let alt = args
+                .get("alt")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    std::path::Path::new(file_path)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                });
+            let body = json!({
+                "content": crate::commands::doc::embed_snippet(&alt, &url),
+                "content_edit_mode": mode,
+            });
+            client
+                .put(
+                    &format!(
+                        "/v3/workspaces/{}/docs/{}/pages/{}",
+                        team_id, doc_id, page_id
+                    ),
+                    &body,
+                )
+                .await
+                .map_err(|e| {
+                    format!(
+                        "Image uploaded to {} but embedding it in page {} failed: {}. \
+                         Retry via clickup_doc_edit_page with content '![{}]({})' and mode '{}' \
+                         instead of re-uploading.",
+                        url, page_id, e, alt, url, mode
+                    )
+                })?;
+            Ok(json!({"message": "Image embedded", "url": url, "page_id": page_id, "mode": mode}))
         }
 
         "clickup_chat_channel_create" => {

@@ -84,6 +84,7 @@ const OVERRIDES: &[(&str, Class, &str)] = &[
     ("clickup_time_tags", Class::Read, "time"),
     ("clickup_template_apply_list", Class::Write, "template"),
     ("clickup_doc_get_page", Class::Read, "doc"),
+    ("clickup_doc_embed_image", Class::Write, "doc"),
     ("clickup_chat_tagged_users", Class::Read, "chat"),
     ("clickup_view_tasks", Class::Read, "view"),
     ("clickup_guest_share_list", Class::Write, "guest"),
