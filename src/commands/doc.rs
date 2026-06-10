@@ -286,7 +286,17 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
             alt,
             mode,
         } => {
-            let task = git::require_task(cli, via_task.as_deref(), true)?;
+            let task = git::require_task(cli, via_task.as_deref(), true).map_err(|_| {
+                CliError::BranchDetect {
+                    message:
+                        "ClickUp has no doc-level upload; the image must be attached to a host \
+                         task."
+                            .into(),
+                    hint: "Pass --via-task TASK_ID, set CLICKUP_TASK_ID, or run from a branch \
+                           containing a task ID (e.g. feat/CU-abc123-...)."
+                        .into(),
+                }
+            })?;
             let upload_path = if task.is_custom {
                 format!(
                     "/v2/task/{}/attachment?custom_task_ids=true&team_id={}",
