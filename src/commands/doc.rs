@@ -257,3 +257,27 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
         }
     }
 }
+
+/// Markdown snippet ClickUp converts into a native inline image block.
+/// Surrounding newlines keep the image out of adjacent paragraphs.
+pub(crate) fn embed_snippet(alt: &str, url: &str) -> String {
+    format!("\n![{}]({})\n", alt, url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snippet_wraps_image_in_newlines() {
+        assert_eq!(
+            embed_snippet("chart", "https://example.com/i.png"),
+            "\n![chart](https://example.com/i.png)\n"
+        );
+    }
+
+    #[test]
+    fn snippet_allows_empty_alt() {
+        assert_eq!(embed_snippet("", "https://x.test/a.png"), "\n![](https://x.test/a.png)\n");
+    }
+}
