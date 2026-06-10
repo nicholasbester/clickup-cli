@@ -103,3 +103,33 @@ fn test_no_subcommand_shows_help() {
         .failure()
         .stderr(predicate::str::contains("Usage"));
 }
+
+#[test]
+fn test_doc_embed_image_help() {
+    clickup()
+        .args(["doc", "embed-image", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--via-task"))
+        .stdout(predicate::str::contains("--alt"))
+        .stdout(predicate::str::contains("--mode"))
+        .stdout(predicate::str::contains("append"));
+}
+
+#[test]
+fn test_doc_embed_image_rejects_replace_mode() {
+    // clap rejects values outside append|prepend before any network/config access
+    clickup()
+        .args([
+            "doc",
+            "embed-image",
+            "d1",
+            "p1",
+            "img.png",
+            "--mode",
+            "replace",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid value"));
+}

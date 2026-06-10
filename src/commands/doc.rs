@@ -2,6 +2,7 @@ use crate::client::ClickUpClient;
 use crate::commands::auth::resolve_token;
 use crate::commands::workspace::resolve_workspace;
 use crate::error::CliError;
+use crate::git;
 use crate::output::OutputConfig;
 use crate::Cli;
 use clap::Subcommand;
@@ -82,6 +83,28 @@ pub enum DocCommands {
         content: String,
         /// Content edit mode: replace, append, or prepend
         #[arg(long, default_value = "replace")]
+        mode: String,
+    },
+    /// Upload an image and embed it inline in a doc page.
+    ///
+    /// The ClickUp API has no doc-level upload, so the image is stored as an
+    /// attachment on a host task, then referenced from the page as markdown.
+    #[command(name = "embed-image")]
+    EmbedImage {
+        /// Doc ID
+        doc_id: String,
+        /// Page ID
+        page_id: String,
+        /// Path to the image file to upload
+        file: std::path::PathBuf,
+        /// Host task that stores the image binary (auto-detected from git branch if omitted)
+        #[arg(long)]
+        via_task: Option<String>,
+        /// Alt text for the image (defaults to the file name)
+        #[arg(long)]
+        alt: Option<String>,
+        /// Where to insert the image relative to existing content
+        #[arg(long, default_value = "append", value_parser = ["append", "prepend"])]
         mode: String,
     },
 }
@@ -255,6 +278,62 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
             output.print_single(&resp, PAGE_FIELDS, "id");
             Ok(())
         }
+        DocCommands::EmbedImage {
+            doc_id,
+            page_id,
+            file,
+            via_task,
+            alt,
+            mode,
+        } => {
+            let task = git::require_task(cli, via_task.as_deref(), true)?;
+            let upload_path = if task.is_custom {
+                format!(
+                    "/v2/task/{}/attachment?custom_task_ids=true&team_id={}",
+                    task.id, ws_id
+                )
+            } else {
+                format!("/v2/task/{}/attachment", task.id)
+            };
+            let uploaded = client.upload_file(&upload_path, &file).await?;
+            let url = uploaded
+                .get("url")
+                .and_then(|u| u.as_str())
+                .ok_or_else(|| CliError::ServerError {
+                    message: "Upload succeeded but the response contained no attachment URL".into(),
+                })?
+                .to_string();
+            let alt = alt.unwrap_or_else(|| {
+                file.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            });
+            let body = serde_json::json!({
+                "content": embed_snippet(&alt, &url),
+                "content_edit_mode": mode,
+            });
+            let edit = client
+                .put(&format!("{}/{}/pages/{}", base, doc_id, page_id), &body)
+                .await;
+            if let Err(e) = edit {
+                // The binary is already on the CDN; tell the caller how to
+                // finish the embed without re-uploading.
+                eprintln!(
+                    "Image uploaded to {} but embedding it in page {} failed.\n\
+                     Retry without re-uploading: clickup-cli doc edit-page {} {} \
+                     --content \"![{}]({})\" --mode {}",
+                    url, page_id, doc_id, page_id, alt, url, mode
+                );
+                return Err(e);
+            }
+            let result = serde_json::json!({
+                "url": url,
+                "page_id": page_id,
+                "mode": mode,
+            });
+            output.print_single(&result, &["url", "page_id", "mode"], "url");
+            Ok(())
+        }
     }
 }
 
@@ -278,6 +357,9 @@ mod tests {
 
     #[test]
     fn snippet_allows_empty_alt() {
-        assert_eq!(embed_snippet("", "https://x.test/a.png"), "\n![](https://x.test/a.png)\n");
+        assert_eq!(
+            embed_snippet("", "https://x.test/a.png"),
+            "\n![](https://x.test/a.png)\n"
+        );
     }
 }
