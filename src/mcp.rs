@@ -3794,12 +3794,19 @@ async fn dispatch_tool(
                 .map_err(|e| {
                     format!(
                         "Image uploaded to {} but embedding it in page {} failed: {}. \
-                         Retry via clickup_doc_edit_page with content '![{}]({})' and mode '{}' \
+                         Retry via clickup_doc_edit_page with content '\\n![{}]({})\\n' \
+                         (newline-wrapped so ClickUp converts it) and mode '{}' \
                          instead of re-uploading.",
                         url, page_id, e, alt, url, mode
                     )
                 })?;
-            Ok(json!({"message": "Image embedded", "url": url, "page_id": page_id, "mode": mode}))
+            Ok(json!({
+                "message": "Image embedded",
+                "attachment_id": uploaded.get("id"),
+                "url": url,
+                "page_id": page_id,
+                "mode": mode
+            }))
         }
 
         "clickup_chat_channel_create" => {

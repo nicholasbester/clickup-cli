@@ -331,7 +331,8 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
                 eprintln!(
                     "Image uploaded to {} but embedding it in page {} failed.\n\
                      Retry without re-uploading: clickup-cli doc edit-page {} {} \
-                     --content \"![{}]({})\" --mode {}",
+                     --content \"![{}]({})\" --mode {} \
+                     (keep the image markdown on its own line so ClickUp converts it)",
                     url, page_id, doc_id, page_id, alt, url, mode
                 );
                 return Err(e);
