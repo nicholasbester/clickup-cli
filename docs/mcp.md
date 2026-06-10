@@ -1,7 +1,7 @@
 ---
 layout: default
 title: MCP Server
-description: Built-in Model Context Protocol (MCP) server with 143 tools covering 100% of the ClickUp API. Connect Claude Desktop, Cursor, and any MCP-compatible client.
+description: Built-in Model Context Protocol (MCP) server with 144 tools covering 100% of the ClickUp API. Connect Claude Desktop, Cursor, and any MCP-compatible client.
 permalink: /mcp/
 ---
 
@@ -9,7 +9,7 @@ permalink: /mcp/
 
 The `clickup-cli` CLI (or `clkup` for short) includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server, allowing LLMs to interact with ClickUp through structured tool calls instead of shell commands.
 
-**143 tools** covering 100% of the ClickUp API — every endpoint available via CLI is also available as an MCP tool.
+**144 tools** covering 100% of the ClickUp API — every endpoint available via CLI is also available as an MCP tool.
 
 ## Setup
 
@@ -114,7 +114,7 @@ This creates both `.clickup.toml` (auth config) and `.mcp.json` (MCP server conf
 
 ### Limiting MCP tools
 
-By default `clickup-cli mcp serve` exposes all 143 tools. You can restrict this at startup to shrink the LLM's context and enforce access control. The server also logs the active filter to stderr on startup (e.g. `MCP: profile=read, exposing 52/143 tools`), so you can verify the configuration at a glance. Flags and matching env vars:
+By default `clickup-cli mcp serve` exposes all 144 tools. You can restrict this at startup to shrink the LLM's context and enforce access control. The server also logs the active filter to stderr on startup (e.g. `MCP: profile=read, exposing 52/144 tools`), so you can verify the configuration at a glance. Flags and matching env vars:
 
 | Flag | Env var | Purpose |
 | --- | --- | --- |
@@ -162,7 +162,7 @@ ClickUp ships [its own MCP server](https://developer.clickup.com/docs/connect-an
 | Auth | Personal API token | OAuth only |
 | Hosting | Local (stdio) | ClickUp-hosted (HTTPS) |
 | Data residency | Stays on your machine | Routed through ClickUp |
-| Tool count | 143 (100% API coverage) | Curated subset |
+| Tool count | 144 (100% API coverage) | Curated subset |
 | Output | Token-optimized (~98% smaller than raw JSON) | Not specified |
 | Filtering | `--profile read/safe/all` + group/tool allowlist/denylist | — |
 | Offline / air-gapped | ✅ | ❌ |
@@ -172,7 +172,7 @@ ClickUp ships [its own MCP server](https://developer.clickup.com/docs/connect-an
 
 **Pick ClickUp's official** when you want OAuth (multi-user), zero install, or a curated tool set that ClickUp maintains.
 
-## Available Tools (143)
+## Available Tools (144)
 
 | Category | Tools | Count |
 |----------|-------|-------|
@@ -194,7 +194,7 @@ ClickUp ships [its own MCP server](https://developer.clickup.com/docs/connect-an
 | **Members** | member_list | 1 |
 | **Users** | user_get, user_invite, user_update, user_remove | 4 |
 | **Chat (v3)** | chat_channel_list, chat_channel_create, chat_channel_get, chat_channel_update, chat_channel_delete, chat_channel_followers, chat_channel_members, chat_dm, chat_message_list, chat_message_send, chat_message_update, chat_message_delete, chat_reaction_list, chat_reaction_add, chat_reaction_remove, chat_reply_list, chat_reply_send, chat_tagged_users | 18 |
-| **Docs (v3)** | doc_list, doc_get, doc_create, doc_pages, doc_get_page, doc_add_page, doc_edit_page | 7 |
+| **Docs (v3)** | doc_list, doc_get, doc_create, doc_pages, doc_get_page, doc_add_page, doc_edit_page, doc_embed_image | 8 |
 | **Webhooks** | webhook_list, webhook_create, webhook_update, webhook_delete | 4 |
 | **Templates** | template_list, template_apply_task, template_apply_list, template_apply_folder | 4 |
 | **Guests** | guest_get, guest_invite, guest_update, guest_remove, guest_share_task, guest_unshare_task, guest_share_list, guest_unshare_list, guest_share_folder, guest_unshare_folder | 10 |
@@ -279,11 +279,11 @@ LLM ↔ JSON-RPC (stdio) ↔ clickup-cli mcp serve ↔ ClickUp API
 
 | | CLI Mode (recommended) | MCP Mode |
 |---|---|---|
-| **Setup cost** | ~1,000 tokens (once) | 143 tool schemas loaded into context |
+| **Setup cost** | ~1,000 tokens (once) | 144 tool schemas loaded into context |
 | **Setup** | `clickup-cli agent-config inject` | Add to MCP server config |
 | **Output** | Token-efficient tables (default) | Token-efficient compact JSON |
 | **Integration** | Shell commands via agent | Native tool calls |
-| **Coverage** | All ~130 endpoints | All ~130 endpoints (143 tools) |
+| **Coverage** | All ~130 endpoints | All ~130 endpoints (144 tools) |
 | **Best for** | Claude Code, shell-based agents | Claude Desktop, Cursor, VS Code |
 
 **The CLI approach is preferred for token efficiency** — it costs ~1,000 tokens once for the full command reference, while MCP tool schemas consume significantly more context per session. Both have 100% API coverage with token-efficient output.

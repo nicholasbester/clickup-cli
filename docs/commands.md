@@ -409,7 +409,10 @@ clickup-cli doc pages <ID> [--content] [--max-depth N]
 clickup-cli doc add-page <DOC_ID> --name NAME [--parent-page ID] [--content TEXT]
 clickup-cli doc page <DOC_ID> <PAGE_ID>
 clickup-cli doc edit-page <DOC_ID> <PAGE_ID> --content TEXT [--mode replace|append|prepend]
+clickup-cli doc embed-image <DOC_ID> <PAGE_ID> <FILE> [--via-task TASK_ID] [--alt TEXT] [--mode append|prepend]
 ```
+
+`embed-image` uploads a local image and embeds it inline in a doc page. The ClickUp API has no doc-level upload, so the image is stored as an attachment on a host task (`--via-task`, auto-detected from the current git branch like other task-scoped commands) and referenced from the page as `![alt](url)` markdown, which ClickUp converts into a native inline image block. `--alt` defaults to the file name. `--mode` is `append` (default) or `prepend`; `replace` is intentionally unsupported — use `edit-page` to rewrite a page. Output shows the CDN url, page_id, and mode; `-q` prints just the URL.
 
 ---
 

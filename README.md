@@ -309,11 +309,11 @@ Or add `.mcp.json` to your project root manually:
 }
 ```
 
-This exposes 143 tools covering 100% of the ClickUp API as native tool calls with token-efficient compact responses. See the [MCP documentation](https://clickup-cli.com/mcp) for full setup.
+This exposes 144 tools covering 100% of the ClickUp API as native tool calls with token-efficient compact responses. See the [MCP documentation](https://clickup-cli.com/mcp) for full setup.
 
 ### Limiting MCP tools
 
-By default `clickup-cli mcp serve` exposes all 143 tools. You can restrict this at startup to shrink the LLM's context and enforce access control. Flags and matching env vars:
+By default `clickup-cli mcp serve` exposes all 144 tools. You can restrict this at startup to shrink the LLM's context and enforce access control. Flags and matching env vars:
 
 | Flag | Env var | Purpose |
 | --- | --- | --- |
@@ -451,7 +451,7 @@ Other community tools in the ClickUp ecosystem — picking the right one depends
 
 **Where this project fits**
 
-Rust binary, zero runtime dependency, ~130 REST endpoints + 143 MCP tools (100% API coverage), statically linked musl build for Alpine / distroless containers, and token-efficient output tuned for LLM agents. Use this when you want one binary that covers both the CLI and MCP roles without a Node/Python toolchain.
+Rust binary, zero runtime dependency, ~130 REST endpoints + 144 MCP tools (100% API coverage), statically linked musl build for Alpine / distroless containers, and token-efficient output tuned for LLM agents. Use this when you want one binary that covers both the CLI and MCP roles without a Node/Python toolchain.
 
 ## Star History
 

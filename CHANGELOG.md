@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `doc embed-image` CLI command and `clickup_doc_embed_image` MCP tool (144 tools): upload a local image and embed it inline in a ClickUp doc page. The ClickUp API has no doc-level upload endpoint (the v3 attachment endpoint rejects `docs`/`pages` entity types), so the image is stored as an attachment on a host task (`--via-task`, auto-detected from the git branch like other task-scoped commands), and the returned public CDN URL is appended/prepended to the page as `![alt](url)` markdown, which ClickUp converts into a native inline image block.
+
 ## [0.13.0] - 2026-05-22
 
 ### Changed
