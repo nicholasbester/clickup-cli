@@ -1163,7 +1163,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_doc_embed_image",
-            "description": "Upload a local image file and embed it inline in a ClickUp doc page. The ClickUp API has no doc-level upload, so the image is first stored as an attachment on a host task (task_id), then the returned CDN URL is appended or prepended to the page as a markdown image, which ClickUp converts into a native inline image block. Returns the attachment url and page id.",
+            "description": "Upload a local image file and embed it inline in a ClickUp doc page. The ClickUp API has no doc-level upload, so the image is first stored as an attachment on a host task (task_id), then the returned CDN URL is appended or prepended to the page as a markdown image, which ClickUp converts into a native inline image block. Returns the attachment id and url, page id, and mode.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
