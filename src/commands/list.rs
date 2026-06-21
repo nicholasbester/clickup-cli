@@ -35,8 +35,8 @@ pub enum ListCommands {
         /// List name
         #[arg(long)]
         name: String,
-        /// List content/description
-        #[arg(long)]
+        /// List content/description (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         content: Option<String>,
         /// Priority (1-4)
         #[arg(long)]
@@ -52,8 +52,8 @@ pub enum ListCommands {
         /// New name
         #[arg(long)]
         name: Option<String>,
-        /// New content
-        #[arg(long)]
+        /// New content (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         content: Option<String>,
     },
     /// Delete a list

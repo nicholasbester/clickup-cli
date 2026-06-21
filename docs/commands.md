@@ -198,7 +198,7 @@ Priority values: 1=Urgent, 2=High, 3=Normal, 4=Low. Dates: YYYY-MM-DD format.
 
 `--parent` on `task update` re-parents a task — converting a top-level task into a subtask or moving a subtask between parents (`task create --parent` does the same at creation time). ClickUp does not support detaching a subtask back to top-level via this field.
 
-`--description` accepts a file or stdin reference instead of an inline string: `@path` reads the value from a file, `@-` reads from stdin, and `@@text` escapes a literal leading `@`. This makes multiline content portable across shells — notably Windows PowerShell, which otherwise splits an unquoted multiline value into separate arguments. The same convention applies to `--text` on `comment create`/`update`/`reply`. A single trailing newline is trimmed; interior newlines are preserved.
+`--description` accepts a file or stdin reference instead of an inline string: `@path` reads the value from a file, `@-` reads from stdin, and `@@text` escapes a literal leading `@`. This makes multiline content portable across shells — notably Windows PowerShell, which otherwise splits an unquoted multiline value into separate arguments. The same convention applies to every free-form text flag — `--text` (`comment create`/`update`/`reply`, `chat message-send`/`message-update`/`reply-send`), `--content` (`doc add-page`/`edit-page`, `list create`/`update`), and `--description` (`task`, `goal update`, `time`). A single trailing newline is trimmed; interior newlines are preserved. Because a leading `@` is significant, a value that should be sent literally and starts with `@` (such as an `@mention`) must be escaped as `@@` — e.g. `--text @@everyone`.
 
 ---
 

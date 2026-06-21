@@ -60,8 +60,8 @@ pub enum DocCommands {
         /// Parent page ID
         #[arg(long)]
         parent_page: Option<String>,
-        /// Page content
-        #[arg(long)]
+        /// Page content (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         content: Option<String>,
     },
     /// Get a specific page from a doc
@@ -78,8 +78,8 @@ pub enum DocCommands {
         doc_id: String,
         /// Page ID
         page_id: String,
-        /// Page content
-        #[arg(long)]
+        /// Page content (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         content: String,
         /// Content edit mode: replace, append, or prepend
         #[arg(long, default_value = "replace")]

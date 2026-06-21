@@ -45,6 +45,44 @@ async fn test_task_get_markdown_requests_and_surfaces_source() {
 }
 
 #[tokio::test]
+async fn test_task_get_markdown_surfaces_field_even_with_explicit_fields() {
+    // --markdown must reliably show markdown_description even when the user
+    // narrows columns with --fields, rather than being silently dropped.
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path_matcher("/v2/task/abc123"))
+        .and(query_param("include_markdown_description", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "abc123",
+            "name": "demo",
+            "markdown_description": "[Desktop](https://www.figma.com/design/ABC/F?node-id=1-2)"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "task",
+            "get",
+            "abc123",
+            "--markdown",
+            "--fields",
+            "id",
+            "--output",
+            "csv",
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("markdown_description"))
+        .stdout(predicates::str::contains(
+            "https://www.figma.com/design/ABC/F?node-id=1-2",
+        ));
+}
+
+#[tokio::test]
 async fn test_task_get_without_markdown_omits_query_param() {
     let dir = TempDir::new().unwrap();
     let server = MockServer::start().await;

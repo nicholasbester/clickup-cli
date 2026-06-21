@@ -32,7 +32,7 @@ pub enum CommentCommands {
         #[arg(long, conflicts_with_all = ["task", "list"])]
         view: Option<String>,
         /// Comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
-        #[arg(long)]
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Assignee user ID (task comments only)
         #[arg(long)]
@@ -46,7 +46,7 @@ pub enum CommentCommands {
         /// Comment ID
         id: String,
         /// New comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
-        #[arg(long)]
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Mark as resolved
         #[arg(long)]
@@ -70,7 +70,7 @@ pub enum CommentCommands {
         /// Comment ID
         id: String,
         /// Reply text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
-        #[arg(long)]
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Assignee user ID
         #[arg(long)]
@@ -137,7 +137,6 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             assignee,
             notify_all,
         } => {
-            let text = crate::input::resolve_value_arg(&text)?;
             let (url, resp) = if let Some(id) = list {
                 let body = serde_json::json!({ "comment_text": text });
                 let r = client
@@ -178,7 +177,6 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             resolved,
             assignee,
         } => {
-            let text = crate::input::resolve_value_arg(&text)?;
             let mut body = serde_json::json!({ "comment_text": text });
             if resolved {
                 body["resolved"] = serde_json::Value::Bool(true);
@@ -212,7 +210,6 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             Ok(())
         }
         CommentCommands::Reply { id, text, assignee } => {
-            let text = crate::input::resolve_value_arg(&text)?;
             let mut body = serde_json::json!({ "comment_text": text });
             if let Some(a) = assignee {
                 body["assignee"] = serde_json::json!(a);

@@ -115,10 +115,16 @@ async function main() {
   const binDir = path.join(__dirname, "bin");
   const primaryBin = path.join(binDir, binFile(BIN_NAMES[0]));
 
-  // Skip only if a *real* binary is already in place (e.g. previous install).
-  // The shipped stub always exists, so existence alone is not enough — we must
-  // confirm it isn't the placeholder, or we'd never download the real binary.
-  if (fs.existsSync(primaryBin) && !isStub(primaryBin)) {
+  // Skip only if EVERY shipped binary is already real (e.g. previous install).
+  // The shipped stubs always exist, so existence alone is not enough — we must
+  // confirm none is the placeholder, or we'd never download the real binary.
+  // Checking all names (not just the primary) means a partial prior install
+  // that left, say, `clkup` as a stub still gets repaired on re-run.
+  const allReal = BIN_NAMES.every((name) => {
+    const p = path.join(binDir, binFile(name));
+    return fs.existsSync(p) && !isStub(p);
+  });
+  if (allReal) {
     return;
   }
 

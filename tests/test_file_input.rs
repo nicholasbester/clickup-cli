@@ -113,3 +113,66 @@ async fn test_literal_at_is_escaped_with_double_at() {
         .assert()
         .success();
 }
+
+#[tokio::test]
+async fn test_doc_edit_page_content_from_file() {
+    // The @file convention is wired uniformly via a clap value_parser, so a
+    // newly-covered flag (doc edit-page --content) reads from a file too.
+    let dir = tempfile::TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    let content_path = dir.path().join("page.md");
+    std::fs::write(&content_path, "# Heading\n\nBody paragraph.\n").unwrap();
+
+    Mock::given(method("PUT"))
+        .and(path_matcher("/v3/workspaces/99/docs/doc-1/pages/page-1"))
+        .and(body_json(serde_json::json!({
+            "content": "# Heading\n\nBody paragraph.",
+            "content_edit_mode": "replace"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "page-1"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "doc",
+            "edit-page",
+            "doc-1",
+            "page-1",
+            "--content",
+            &format!("@{}", content_path.display()),
+        ])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn test_missing_at_file_errors_with_escape_hint() {
+    // A bare @path that doesn't resolve to a file must fail with a message that
+    // points the user at the @@ escape (so an @mention typed verbatim is
+    // self-correcting). Resolution happens at parse time, before any network
+    // call, so no server is needed.
+    let dir = tempfile::TempDir::new().unwrap();
+
+    let mut cmd = Command::cargo_bin("clickup-cli").unwrap();
+    cmd.current_dir(dir.path())
+        .env("CLICKUP_TOKEN", "pk_test")
+        .env("CLICKUP_WORKSPACE", "99")
+        .env_remove("CLICKUP_GIT_DETECT")
+        .env_remove("CLICKUP_TASK_ID")
+        .args([
+            "task",
+            "create",
+            "--list",
+            "list-1",
+            "--name",
+            "demo",
+            "--description",
+            "@everyone",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("@@everyone"));
+}

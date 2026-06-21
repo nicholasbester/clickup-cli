@@ -79,8 +79,8 @@ pub enum ChatCommands {
         /// Channel ID
         #[arg(long)]
         channel: String,
-        /// Message text
-        #[arg(long)]
+        /// Message text (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Message type: message or post
         #[arg(long, default_value = "message")]
@@ -91,8 +91,8 @@ pub enum ChatCommands {
     MessageUpdate {
         /// Message ID
         id: String,
-        /// New message text
-        #[arg(long)]
+        /// New message text (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
     },
     /// Delete a message
@@ -135,8 +135,8 @@ pub enum ChatCommands {
     ReplySend {
         /// Message ID
         msg_id: String,
-        /// Reply text
-        #[arg(long)]
+        /// Reply text (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
     },
     /// Get users tagged in a message

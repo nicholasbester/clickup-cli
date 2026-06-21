@@ -1,6 +1,7 @@
 use chrono::DateTime;
 use comfy_table::{ContentArrangement, Table};
 
+#[derive(Clone)]
 pub struct OutputConfig {
     pub mode: String,
     pub fields: Option<Vec<String>>,

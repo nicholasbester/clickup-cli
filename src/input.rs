@@ -7,9 +7,11 @@
 //! flag like `--description $desc` receives only the first line and clap
 //! errors on the remaining words as unexpected arguments (GH #70).
 //!
-//! To make multiline and large values portable across every shell, flags that
-//! accept free-form text route their value through [`resolve_value_arg`],
-//! which interprets a leading `@`:
+//! To make multiline and large values portable across every shell, every
+//! free-form text flag (e.g. `--description`, `--text`, `--content`) is wired
+//! to [`resolve_value_arg`] as a clap `value_parser`, so resolution happens
+//! uniformly at parse time and new text flags inherit it by attaching the same
+//! parser. A leading `@` is interpreted as:
 //!
 //! - `@path`  → read the value from the file at `path`
 //! - `@-`     → read the value from stdin
@@ -18,6 +20,10 @@
 //!
 //! A single trailing newline is stripped from file/stdin content (the common
 //! editor / `echo` artifact); embedded newlines are preserved.
+//!
+//! Note: because a bare leading `@` is now significant, a value that should be
+//! sent literally and starts with `@` (e.g. an `@mention`) must be escaped as
+//! `@@…`. A missing-file error names the `@@` form so the fix is discoverable.
 
 use crate::error::CliError;
 use std::io::Read;
@@ -45,7 +51,10 @@ pub fn resolve_value_arg(value: &str) -> Result<String, CliError> {
         buf
     } else {
         std::fs::read_to_string(rest).map_err(|e| {
-            CliError::ConfigError(format!("failed to read value from file '{rest}': {e}"))
+            CliError::ConfigError(format!(
+                "failed to read value from file '{rest}': {e}. \
+                 If you meant the literal text '@{rest}', escape the leading '@' as '@@{rest}'."
+            ))
         })?
     };
 

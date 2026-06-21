@@ -42,8 +42,8 @@ pub enum TimeCommands {
         /// Task ID
         #[arg(long)]
         task: Option<String>,
-        /// Description
-        #[arg(long)]
+        /// Description (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         description: Option<String>,
         /// Mark as billable
         #[arg(long)]
@@ -59,8 +59,8 @@ pub enum TimeCommands {
         /// New end time (Unix ms)
         #[arg(long)]
         end: Option<String>,
-        /// New description
-        #[arg(long)]
+        /// New description (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         description: Option<String>,
         /// Mark as billable
         #[arg(long)]
@@ -76,8 +76,8 @@ pub enum TimeCommands {
         /// Task ID to associate with the timer
         #[arg(long)]
         task: Option<String>,
-        /// Description
-        #[arg(long)]
+        /// Description (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         description: Option<String>,
         /// Mark as billable
         #[arg(long)]

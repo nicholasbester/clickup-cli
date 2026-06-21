@@ -78,7 +78,7 @@ pub enum TaskCommands {
         #[arg(long)]
         name: String,
         /// Description (use @path to read from a file, @- for stdin, @@ for a literal leading @)
-        #[arg(long)]
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         description: Option<String>,
         /// Status
         #[arg(long)]
@@ -119,7 +119,7 @@ pub enum TaskCommands {
         #[arg(long)]
         rem_assignee: Option<Vec<String>>,
         /// New description (use @path to read from a file, @- for stdin, @@ for a literal leading @)
-        #[arg(long)]
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         description: Option<String>,
         /// New time estimate in milliseconds
         #[arg(long)]
@@ -422,11 +422,21 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 .get(&format!("/v2/task/{}{}", task.id, query))
                 .await?;
             // In json mode the full raw object (including markdown_description) is
-            // printed as-is; for table/csv/json-compact, surface the field by
-            // adding it to the displayed column set when --markdown is requested.
+            // printed as-is. For table/csv/json-compact, surface the field by
+            // appending it to whatever columns are in effect — including an
+            // explicit `--fields` list — so `--markdown` reliably shows it rather
+            // than being silently dropped when the user also passes `--fields`.
             if markdown {
-                let fields = [TASK_FIELDS, &["markdown_description"]].concat();
-                output.print_single(&resp, &fields, "id");
+                let mut effective = output.clone();
+                let mut fields: Vec<String> = effective
+                    .fields
+                    .take()
+                    .unwrap_or_else(|| TASK_FIELDS.iter().map(|s| s.to_string()).collect());
+                if !fields.iter().any(|f| f == "markdown_description") {
+                    fields.push("markdown_description".to_string());
+                }
+                effective.fields = Some(fields);
+                effective.print_single(&resp, TASK_FIELDS, "id");
             } else {
                 output.print_single(&resp, TASK_FIELDS, "id");
             }
@@ -445,7 +455,6 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
         } => {
             let mut body = serde_json::json!({ "name": name });
             if let Some(d) = description {
-                let d = crate::input::resolve_value_arg(&d)?;
                 body["markdown_content"] = serde_json::Value::String(d);
             }
             if let Some(s) = status {
@@ -499,7 +508,6 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 body.insert("priority".into(), serde_json::json!(p));
             }
             if let Some(d) = description {
-                let d = crate::input::resolve_value_arg(&d)?;
                 body.insert("markdown_content".into(), serde_json::Value::String(d));
             }
             if let Some(te) = time_estimate {

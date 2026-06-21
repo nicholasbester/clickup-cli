@@ -47,8 +47,8 @@ pub enum GoalCommands {
         /// New due date (Unix ms)
         #[arg(long)]
         due_date: Option<String>,
-        /// New description
-        #[arg(long)]
+        /// New description (use @path to read from a file, @- for stdin, @@ for a literal leading @)
+        #[arg(long, value_parser = crate::input::resolve_value_arg)]
         description: Option<String>,
         /// New color hex
         #[arg(long)]
