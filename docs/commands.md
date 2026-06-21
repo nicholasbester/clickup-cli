@@ -162,9 +162,9 @@ clickup-cli task list --list <ID> [--status S] [--assignee ID] [--tag T] [--incl
 clickup-cli task search [--space ID] [--folder ID] [--list ID] [--status S] [--assignee ID] [--tag T]
 
 # CRUD
-clickup-cli task get <ID> [--subtasks] [--custom-task-id]
+clickup-cli task get <ID> [--subtasks] [--custom-task-id] [--markdown]
 clickup-cli task create --list <ID> --name NAME [--description TEXT] [--status S] [--priority 1-4] [--assignee ID] [--tag NAME] [--due-date DATE] [--parent TASK_ID]
-clickup-cli task update <ID> [--name X] [--status X] [--priority N] [--add-assignee ID] [--rem-assignee ID] [--description TEXT]
+clickup-cli task update <ID> [--name X] [--status X] [--priority N] [--add-assignee ID] [--rem-assignee ID] [--description TEXT] [--parent TASK_ID]
 clickup-cli task delete <ID>
 
 # Relationships and tags
@@ -193,6 +193,12 @@ clickup-cli task replace-estimates <ID> --assignee USER_ID --time MS
 ```
 
 Priority values: 1=Urgent, 2=High, 3=Normal, 4=Low. Dates: YYYY-MM-DD format.
+
+`--markdown` on `task get` requests the raw `markdown_description` from ClickUp, preserving inline link URLs (e.g. `[label](https://…)`) that the flattened `description`/`text_content` fields drop. It is added to the displayed columns and appears verbatim in `--output json`.
+
+`--parent` on `task update` re-parents a task — converting a top-level task into a subtask or moving a subtask between parents (`task create --parent` does the same at creation time). ClickUp does not support detaching a subtask back to top-level via this field.
+
+`--description` accepts a file or stdin reference instead of an inline string: `@path` reads the value from a file, `@-` reads from stdin, and `@@text` escapes a literal leading `@`. This makes multiline content portable across shells — notably Windows PowerShell, which otherwise splits an unquoted multiline value into separate arguments. The same convention applies to `--text` on `comment create`/`update`/`reply`. A single trailing newline is trimmed; interior newlines are preserved.
 
 ---
 

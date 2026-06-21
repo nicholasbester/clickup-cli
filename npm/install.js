@@ -59,6 +59,25 @@ function binFile(name) {
   return process.platform === "win32" ? `${name}.exe` : name;
 }
 
+// The published package ships tiny placeholder stubs at bin/* so npm's
+// bin-linking has a target to symlink before postinstall runs. Each stub is a
+// few dozen bytes and prints "npm rebuild clickup-cli". The real binary is a
+// multi-megabyte compiled executable. We must treat a stub as "not yet
+// installed" so postinstall downloads and overwrites it — otherwise the guard
+// below short-circuits forever and the CLI never works (GH #74).
+const STUB_MAX_BYTES = 4096;
+
+function isStub(p) {
+  try {
+    const stat = fs.statSync(p);
+    if (stat.size > STUB_MAX_BYTES) return false;
+    return fs.readFileSync(p, "utf8").includes("npm rebuild");
+  } catch {
+    // Unreadable / binary content / missing → not a recognizable stub.
+    return false;
+  }
+}
+
 function tryGenerateCompletions(binPath) {
   // Shell completions only make sense for global installs. Skip local
   // installs (the CLI isn't on PATH anyway) and Windows (no uniform
@@ -96,8 +115,10 @@ async function main() {
   const binDir = path.join(__dirname, "bin");
   const primaryBin = path.join(binDir, binFile(BIN_NAMES[0]));
 
-  // Skip if the primary binary already exists (e.g. previous install).
-  if (fs.existsSync(primaryBin)) {
+  // Skip only if a *real* binary is already in place (e.g. previous install).
+  // The shipped stub always exists, so existence alone is not enough — we must
+  // confirm it isn't the placeholder, or we'd never download the real binary.
+  if (fs.existsSync(primaryBin) && !isStub(primaryBin)) {
     return;
   }
 

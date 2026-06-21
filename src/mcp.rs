@@ -264,7 +264,8 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task to fetch. Obtain from clickup_task_list (field: id) or clickup_task_search."},
-                    "include_subtasks": {"type": "boolean", "description": "true = include the task's subtasks in the response under the 'subtasks' field; false or omitted = return only the parent task."}
+                    "include_subtasks": {"type": "boolean", "description": "true = include the task's subtasks in the response under the 'subtasks' field; false or omitted = return only the parent task."},
+                    "include_markdown_description": {"type": "boolean", "description": "true = include the raw `markdown_description` field, which preserves inline link URLs (e.g. `[label](https://…)`) that the flattened `description` drops. Use this when you need to extract URLs or other markdown from the task body. Omit for a leaner response."}
                 },
                 "required": ["task_id"]
             }
@@ -290,7 +291,8 @@ pub fn tool_list() -> Value {
                         "items": {"type": "string"},
                         "description": "Tag names to apply. Tags must already exist in the parent space (use clickup_tag_list to see available tags or clickup_tag_create to add new ones)."
                     },
-                    "due_date": {"type": "integer", "description": "Due date as a Unix timestamp in milliseconds (e.g. 1735689600000 for 2025-01-01). Omit for no due date."}
+                    "due_date": {"type": "integer", "description": "Due date as a Unix timestamp in milliseconds (e.g. 1735689600000 for 2025-01-01). Omit for no due date."},
+                    "parent": {"type": "string", "description": "ID of a parent task. When set, the new task is created as a subtask of that parent. Obtain from clickup_task_list/clickup_task_search/clickup_task_create. Omit to create a top-level task. The parent must live in the same workspace."}
                 },
                 "required": ["list_id", "name"]
             }
@@ -316,7 +318,8 @@ pub fn tool_list() -> Value {
                         "items": {"type": "integer"},
                         "description": "User IDs to remove from assignees (no-op if the user is not currently assigned)."
                     },
-                    "time_estimate": {"type": "integer", "description": "New total time estimate in milliseconds. Omit to keep current estimate."}
+                    "time_estimate": {"type": "integer", "description": "New total time estimate in milliseconds. Omit to keep current estimate."},
+                    "parent": {"type": "string", "description": "ID of a parent task to re-parent this task under, converting a top-level task into a subtask or moving a subtask between parents. Obtain from clickup_task_list/clickup_task_search. Omit to leave the task's position unchanged. ClickUp does not support detaching a subtask back to top-level via this field."}
                 },
                 "required": ["task_id"]
             }
@@ -2479,26 +2482,32 @@ async fn dispatch_tool(
                 .get("include_subtasks")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+            let include_markdown = args
+                .get("include_markdown_description")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let mut query = format!("include_subtasks={}", include_subtasks);
+            if include_markdown {
+                query.push_str("&include_markdown_description=true");
+            }
             let path = match custom_q {
-                Some(q) => format!(
-                    "/v2/task/{}?include_subtasks={}&{}",
-                    task_id, include_subtasks, q
-                ),
-                None => format!("/v2/task/{}?include_subtasks={}", task_id, include_subtasks),
+                Some(q) => format!("/v2/task/{}?{}&{}", task_id, query, q),
+                None => format!("/v2/task/{}?{}", task_id, query),
             };
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
-            Ok(compact_items(
-                &[resp],
-                &[
-                    "id",
-                    "name",
-                    "status",
-                    "priority",
-                    "assignees",
-                    "due_date",
-                    "description",
-                ],
-            ))
+            let mut fields = vec![
+                "id",
+                "name",
+                "status",
+                "priority",
+                "assignees",
+                "due_date",
+                "description",
+            ];
+            if include_markdown {
+                fields.push("markdown_description");
+            }
+            Ok(compact_items(&[resp], &fields))
         }
 
         "clickup_task_create" => {
@@ -2529,6 +2538,9 @@ async fn dispatch_tool(
             if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) {
                 body["due_date"] = json!(due_date);
             }
+            if let Some(parent) = args.get("parent").and_then(|v| v.as_str()) {
+                body["parent"] = json!(parent);
+            }
             let path = format!("/v2/list/{}/task", list_id);
             let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(compact_items(
@@ -2554,6 +2566,9 @@ async fn dispatch_tool(
             }
             if let Some(te) = args.get("time_estimate").and_then(|v| v.as_i64()) {
                 body["time_estimate"] = json!(te);
+            }
+            if let Some(parent) = args.get("parent").and_then(|v| v.as_str()) {
+                body["parent"] = json!(parent);
             }
             if let Some(add) = args.get("add_assignees") {
                 body["assignees"] = json!({"add": add, "rem": args.get("rem_assignees").cloned().unwrap_or(json!([]))});
@@ -5590,5 +5605,33 @@ mod tests {
             "custom_fields should be serialized as one encoded JSON query value: {:?}",
             params
         );
+    }
+
+    fn find_tool(name: &str) -> Value {
+        tool_list()
+            .as_array()
+            .expect("tool_list is an array")
+            .iter()
+            .find(|t| t.get("name").and_then(|n| n.as_str()) == Some(name))
+            .unwrap_or_else(|| panic!("tool {name} not found"))
+            .clone()
+    }
+
+    #[test]
+    fn task_create_and_update_expose_parent() {
+        for name in ["clickup_task_create", "clickup_task_update"] {
+            let tool = find_tool(name);
+            let props = tool["inputSchema"]["properties"]
+                .as_object()
+                .unwrap_or_else(|| panic!("{name} has no properties object"));
+            assert!(
+                props.contains_key("parent"),
+                "{name} should expose a `parent` parameter (GH #72)"
+            );
+            assert_eq!(
+                props["parent"]["type"], "string",
+                "{name} parent param should be a string task ID"
+            );
+        }
     }
 }
