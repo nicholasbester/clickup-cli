@@ -16,6 +16,7 @@
 
 const { spawnSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 module.exports = function launch(name) {
@@ -41,7 +42,12 @@ module.exports = function launch(name) {
     process.exit(1);
   }
 
-  // If the child was killed by a signal it has no numeric status; surface a
-  // non-zero exit rather than node's default of 0.
+  // If the child was killed by a signal (e.g. Ctrl-C at an interactive
+  // prompt), it has no numeric status — surface the conventional 128+signal
+  // exit code so shells and scripts can detect the interruption.
+  if (result.signal) {
+    const signo = os.constants.signals[result.signal];
+    process.exit(typeof signo === "number" ? 128 + signo : 1);
+  }
   process.exit(result.status === null ? 1 : result.status);
 };

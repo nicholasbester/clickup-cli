@@ -32,12 +32,17 @@ function getDownloadUrl() {
   return `https://github.com/${REPO}/releases/download/v${VERSION}/${name}.${ext}`;
 }
 
-function download(url) {
+function download(url, redirects = 0) {
   return new Promise((resolve, reject) => {
     https
       .get(url, (res) => {
         if (res.statusCode === 302 || res.statusCode === 301) {
-          return download(res.headers.location).then(resolve).catch(reject);
+          if (redirects >= 5) {
+            return reject(new Error("Download failed: too many redirects"));
+          }
+          return download(res.headers.location, redirects + 1)
+            .then(resolve)
+            .catch(reject);
         }
         if (res.statusCode !== 200) {
           return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
@@ -51,12 +56,45 @@ function download(url) {
   });
 }
 
+// Retry the download a few times with exponential backoff. Release assets can
+// briefly 404 right after a version is published (asset propagation lag), and
+// GitHub may return transient 5xx/403/429 under load — none of which should
+// permanently break `npm install`.
+async function downloadWithRetry(url, attempts = 4) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await download(url);
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) {
+        const delayMs = 1000 * Math.pow(2, i); // 1s, 2s, 4s
+        console.log(
+          `Download attempt ${i + 1} failed (${err.message}); retrying in ${delayMs / 1000}s...`
+        );
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 // Binary names shipped from 0.11.0 onwards. `clickup-cli` is canonical;
 // `clkup` is the short alias. Both are included in every release archive.
 const BIN_NAMES = ["clickup-cli", "clkup"];
 
 function binFile(name) {
   return process.platform === "win32" ? `${name}.exe` : name;
+}
+
+// The version of the binary currently vendored in bin/vendor/, or null if the
+// marker is absent/unreadable. Written only after a successful download+extract.
+function readVersionMarker(versionFile) {
+  try {
+    return fs.readFileSync(versionFile, "utf8").trim();
+  } catch {
+    return null;
+  }
 }
 
 // The package's `bin` entries are small Node launchers (bin/clickup-cli,
@@ -99,44 +137,54 @@ function tryGenerateCompletions(binPath) {
   }
 }
 
+// Single-quote a path for safe interpolation into a PowerShell command. Inside
+// a PowerShell single-quoted string a literal `'` is escaped by doubling it;
+// spaces and backslashes are already safe. Without this, an install path
+// containing an apostrophe (e.g. C:\Users\O'Brien\) breaks Expand-Archive.
+function psQuote(p) {
+  return "'" + p.replace(/'/g, "''") + "'";
+}
+
 async function main() {
   const binDir = path.join(__dirname, "bin");
   const vendorDir = path.join(binDir, "vendor");
   const primaryBin = path.join(vendorDir, binFile(BIN_NAMES[0]));
+  const versionFile = path.join(vendorDir, ".version");
 
-  // Skip only if EVERY vendored binary is already present (e.g. a previous
-  // install). Checking all names — not just the primary — means a partial
-  // prior install that fetched only one binary still gets repaired on re-run.
-  const allPresent = BIN_NAMES.every((name) =>
-    fs.existsSync(path.join(vendorDir, binFile(name)))
-  );
-  if (allPresent) {
+  // Skip only if EVERY vendored binary is present AND matches this package
+  // version. Checking all names — not just the primary — repairs a partial
+  // prior install; the version marker forces a re-download if a stale binary
+  // from an earlier version somehow survives (so the launcher never runs a
+  // binary that disagrees with the installed package version).
+  const allCurrent =
+    BIN_NAMES.every((name) =>
+      fs.existsSync(path.join(vendorDir, binFile(name)))
+    ) && readVersionMarker(versionFile) === VERSION;
+  if (allCurrent) {
     return;
   }
 
   const url = getDownloadUrl();
   console.log(`Downloading clickup-cli v${VERSION}...`);
 
-  try {
-    const buffer = await download(url);
-    fs.mkdirSync(vendorDir, { recursive: true });
+  const tmpFile = path.join(
+    vendorDir,
+    process.platform === "win32" ? "tmp.zip" : "tmp.tar.gz"
+  );
 
-    const tmpFile = path.join(
-      vendorDir,
-      process.platform === "win32" ? "tmp.zip" : "tmp.tar.gz"
-    );
+  try {
+    const buffer = await downloadWithRetry(url);
+    fs.mkdirSync(vendorDir, { recursive: true });
     fs.writeFileSync(tmpFile, buffer);
 
     if (process.platform === "win32") {
       execFileSync("powershell", [
         "-command",
-        `Expand-Archive -Path '${tmpFile}' -DestinationPath '${vendorDir}' -Force`,
+        `Expand-Archive -Path ${psQuote(tmpFile)} -DestinationPath ${psQuote(vendorDir)} -Force`,
       ]);
     } else {
       execFileSync("tar", ["xzf", tmpFile, "-C", vendorDir]);
     }
-
-    fs.unlinkSync(tmpFile);
 
     if (process.platform !== "win32") {
       for (const name of BIN_NAMES) {
@@ -144,6 +192,11 @@ async function main() {
         if (fs.existsSync(p)) fs.chmodSync(p, 0o755);
       }
     }
+
+    // Stamp the version last, so a download/extract that fails partway leaves
+    // no marker and the next run re-downloads rather than trusting a partial
+    // install.
+    fs.writeFileSync(versionFile, VERSION);
 
     console.log(`clickup-cli v${VERSION} installed successfully (binaries: ${BIN_NAMES.join(", ")})`);
     tryGenerateCompletions(primaryBin);
@@ -153,6 +206,13 @@ async function main() {
       "Install manually: https://github.com/nicholasbester/clickup-cli/releases"
     );
     process.exit(1);
+  } finally {
+    // Always clean up the temp archive, even if extraction threw.
+    try {
+      fs.unlinkSync(tmpFile);
+    } catch {
+      // not created yet, or already removed — nothing to do.
+    }
   }
 }
 
