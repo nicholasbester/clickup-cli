@@ -25,7 +25,9 @@
     "postinstall": "node install.js"
   },
   "files": [
-    "bin",
+    "bin/clickup-cli",
+    "bin/clkup",
+    "bin/launch.js",
     "install.js",
     "README.md"
   ]

@@ -12,3 +12,7 @@ target/
 # Legacy
 builds/*
 .clickup.toml
+
+# npm: native binaries fetched into bin/vendor/ by postinstall (never committed)
+npm/bin/vendor/
+npm/bin/completions/
