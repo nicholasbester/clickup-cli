@@ -52,31 +52,19 @@ function download(url) {
 }
 
 // Binary names shipped from 0.11.0 onwards. `clickup-cli` is canonical;
-// `clkup` is the short alias. Both are included in every release tarball.
+// `clkup` is the short alias. Both are included in every release archive.
 const BIN_NAMES = ["clickup-cli", "clkup"];
 
 function binFile(name) {
   return process.platform === "win32" ? `${name}.exe` : name;
 }
 
-// The published package ships tiny placeholder stubs at bin/* so npm's
-// bin-linking has a target to symlink before postinstall runs. Each stub is a
-// few dozen bytes and prints "npm rebuild clickup-cli". The real binary is a
-// multi-megabyte compiled executable. We must treat a stub as "not yet
-// installed" so postinstall downloads and overwrites it — otherwise the guard
-// below short-circuits forever and the CLI never works (GH #74).
-const STUB_MAX_BYTES = 4096;
-
-function isStub(p) {
-  try {
-    const stat = fs.statSync(p);
-    if (stat.size > STUB_MAX_BYTES) return false;
-    return fs.readFileSync(p, "utf8").includes("npm rebuild");
-  } catch {
-    // Unreadable / binary content / missing → not a recognizable stub.
-    return false;
-  }
-}
+// The package's `bin` entries are small Node launchers (bin/clickup-cli,
+// bin/clkup) so npm can bin-link them uniformly on every platform — including
+// Windows, where npm generates a `node <launcher>` shim. The launchers re-exec
+// the real platform binary, which postinstall downloads into bin/vendor/. The
+// launchers themselves are permanent (never overwritten); only the vendored
+// binaries are fetched here. See bin/launch.js.
 
 function tryGenerateCompletions(binPath) {
   // Shell completions only make sense for global installs. Skip local
@@ -113,18 +101,16 @@ function tryGenerateCompletions(binPath) {
 
 async function main() {
   const binDir = path.join(__dirname, "bin");
-  const primaryBin = path.join(binDir, binFile(BIN_NAMES[0]));
+  const vendorDir = path.join(binDir, "vendor");
+  const primaryBin = path.join(vendorDir, binFile(BIN_NAMES[0]));
 
-  // Skip only if EVERY shipped binary is already real (e.g. previous install).
-  // The shipped stubs always exist, so existence alone is not enough — we must
-  // confirm none is the placeholder, or we'd never download the real binary.
-  // Checking all names (not just the primary) means a partial prior install
-  // that left, say, `clkup` as a stub still gets repaired on re-run.
-  const allReal = BIN_NAMES.every((name) => {
-    const p = path.join(binDir, binFile(name));
-    return fs.existsSync(p) && !isStub(p);
-  });
-  if (allReal) {
+  // Skip only if EVERY vendored binary is already present (e.g. a previous
+  // install). Checking all names — not just the primary — means a partial
+  // prior install that fetched only one binary still gets repaired on re-run.
+  const allPresent = BIN_NAMES.every((name) =>
+    fs.existsSync(path.join(vendorDir, binFile(name)))
+  );
+  if (allPresent) {
     return;
   }
 
@@ -133,25 +119,28 @@ async function main() {
 
   try {
     const buffer = await download(url);
-    fs.mkdirSync(binDir, { recursive: true });
+    fs.mkdirSync(vendorDir, { recursive: true });
 
-    const tmpFile = path.join(binDir, process.platform === "win32" ? "tmp.zip" : "tmp.tar.gz");
+    const tmpFile = path.join(
+      vendorDir,
+      process.platform === "win32" ? "tmp.zip" : "tmp.tar.gz"
+    );
     fs.writeFileSync(tmpFile, buffer);
 
     if (process.platform === "win32") {
       execFileSync("powershell", [
         "-command",
-        `Expand-Archive -Path '${tmpFile}' -DestinationPath '${binDir}' -Force`,
+        `Expand-Archive -Path '${tmpFile}' -DestinationPath '${vendorDir}' -Force`,
       ]);
     } else {
-      execFileSync("tar", ["xzf", tmpFile, "-C", binDir]);
+      execFileSync("tar", ["xzf", tmpFile, "-C", vendorDir]);
     }
 
     fs.unlinkSync(tmpFile);
 
     if (process.platform !== "win32") {
       for (const name of BIN_NAMES) {
-        const p = path.join(binDir, binFile(name));
+        const p = path.join(vendorDir, binFile(name));
         if (fs.existsSync(p)) fs.chmodSync(p, 0o755);
       }
     }
