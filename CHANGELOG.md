@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-24
+
 ### Added
 - `@file` value support for every free-form text flag (#70): `task create`/`update` `--description`, `comment create`/`update`/`reply` `--text`, `doc add-page`/`edit-page` `--content`, `list create`/`update` `--content`, `chat message-send`/`message-update`/`reply-send` `--text`, `goal update --description`, and `time create`/`update`/`start` `--description`. A value of `@path` reads the argument from a file, `@-` reads from stdin, and `@@text` escapes a literal leading `@` (so `@@everyone` is sent verbatim). Resolution is wired uniformly as a clap `value_parser`, so coverage is consistent across flags rather than per-command. This works around shells — notably Windows PowerShell — that split an unquoted multiline value into separate argv tokens at the process boundary, which previously caused `error: unexpected argument '<word>' found`. A single trailing newline is trimmed from file/stdin content; interior newlines are preserved. MCP tools are unaffected (they receive structured JSON, not shell args).
 - `--markdown` flag on `task get` and an `include_markdown_description` parameter on the `clickup_task_get` MCP tool (#65). The flattened `description`/`text_content` fields reduce a markdown link to its label text, dropping the URL. With the flag set, the CLI passes `include_markdown_description=true` to ClickUp's Get Task endpoint and surfaces the raw `markdown_description` (e.g. `[Desktop](https://www.figma.com/design/…)`), so agents and scripts can recover inline link URLs without bypassing the CLI. The field is appended to the displayed columns for table/csv/json-compact output — even alongside an explicit `--fields` list — and is present verbatim in `--output json`; the MCP tool adds `markdown_description` to its compact response.
@@ -18,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - npm install was broken on every platform (#74). The package's `bin` entries (`bin/clickup-cli`, `bin/clkup`) were placeholder shell stubs, and the `postinstall` downloader either mistook the stub for an already-installed binary and skipped the download (so the CLI permanently printed `Run: npm rebuild clickup-cli`), or — on Windows — could never wire up the downloaded `clickup-cli.exe` at all, because npm's static `bin` map points at an extension-less path that Windows can't execute. The `bin` entries are now small Node launchers (`bin/clickup-cli`, `bin/clkup` → `bin/launch.js`) that npm bin-links uniformly on every platform (a `node <launcher>` shim on Windows, a symlink on Unix); `postinstall` downloads the platform binary into `bin/vendor/` and the launcher re-execs it, forwarding args, stdio, and exit code. This fixes installation on **macOS, Linux, and Windows**. The native binaries are excluded from the published package (`.npmignore`) and fetched at install time; the GitHub release archives are unchanged, so Homebrew/AUR/direct-download installs are unaffected.
+
+### Dependencies
+- Bumped `reqwest` 0.13.3 → 0.13.4, `serde_json` → 1.0.150, `chrono` → 0.4.45, and `regex` → 1.12.4 (minor/patch, #73), and CI `actions/checkout` 6 → 7 (#76) and `codecov/codecov-action` 6 → 7 (#68).
 
 ## [0.13.0] - 2026-05-22
 
