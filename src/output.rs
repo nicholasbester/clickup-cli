@@ -91,14 +91,29 @@ impl OutputConfig {
 
 /// Flatten a list of items to only include the specified fields with flattened values.
 /// Returns a JSON array. Used by MCP server for token-efficient responses.
+///
+/// A field name with a trailing `?` (e.g. `"custom_id?"`) is optional: it is
+/// emitted under the name without the marker, and only when the source value
+/// is present and non-null. All other fields are always emitted, with `"-"`
+/// as the placeholder for missing/null values.
 pub fn compact_items(items: &[serde_json::Value], fields: &[&str]) -> serde_json::Value {
     let compacted: Vec<serde_json::Value> = items
         .iter()
         .map(|item| {
             let mut obj = serde_json::Map::new();
             for &field in fields {
-                let val = flatten_value(item.get(field));
-                obj.insert(field.to_string(), serde_json::Value::String(val));
+                if let Some(key) = field.strip_suffix('?') {
+                    match item.get(key) {
+                        None | Some(serde_json::Value::Null) => {}
+                        Some(v) => {
+                            let val = flatten_value(Some(v));
+                            obj.insert(key.to_string(), serde_json::Value::String(val));
+                        }
+                    }
+                } else {
+                    let val = flatten_value(item.get(field));
+                    obj.insert(field.to_string(), serde_json::Value::String(val));
+                }
             }
             serde_json::Value::Object(obj)
         })

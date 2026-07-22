@@ -1,4 +1,4 @@
-use clickup_cli::output::{flatten_value, OutputConfig};
+use clickup_cli::output::{compact_items, flatten_value, OutputConfig};
 use serde_json::json;
 
 #[test]
@@ -83,4 +83,36 @@ fn test_flatten_due_date_ms_timestamp() {
 fn test_flatten_normal_string_not_converted() {
     let val = json!("hello world");
     assert_eq!(flatten_value(Some(&val)), "hello world");
+}
+
+#[test]
+fn compact_items_includes_optional_field_when_present() {
+    let items = vec![json!({"id": "abc123", "name": "demo", "custom_id": "PROJ-42"})];
+    let result = compact_items(&items, &["id", "name", "custom_id?"]);
+    assert_eq!(result[0]["id"], json!("abc123"));
+    assert_eq!(result[0]["custom_id"], json!("PROJ-42"));
+    // The marker itself must never leak into the output.
+    assert!(result[0].get("custom_id?").is_none());
+}
+
+#[test]
+fn compact_items_omits_optional_field_when_null() {
+    let items = vec![json!({"id": "abc123", "name": "demo", "custom_id": null})];
+    let result = compact_items(&items, &["id", "name", "custom_id?"]);
+    assert!(result[0].get("custom_id").is_none());
+    assert_eq!(result[0]["name"], json!("demo"));
+}
+
+#[test]
+fn compact_items_omits_optional_field_when_missing() {
+    let items = vec![json!({"id": "abc123", "name": "demo"})];
+    let result = compact_items(&items, &["id", "name", "custom_id?"]);
+    assert!(result[0].get("custom_id").is_none());
+}
+
+#[test]
+fn compact_items_required_field_still_placeholder_when_missing() {
+    let items = vec![json!({"id": "abc123"})];
+    let result = compact_items(&items, &["id", "name"]);
+    assert_eq!(result[0]["name"], json!("-"));
 }
