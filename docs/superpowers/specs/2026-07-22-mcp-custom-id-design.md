@@ -22,9 +22,11 @@ Include `custom_id` in the compact output of every MCP tool that returns task
 objects, omitting the key entirely when the task has no custom ID so
 workspaces that don't use the feature pay zero token overhead.
 
-**Affected tools (7):** `clickup_task_get`, `clickup_task_search`,
+**Affected tools (6):** `clickup_task_get`, `clickup_task_search`,
 `clickup_task_list`, `clickup_task_create`, `clickup_task_update`,
-`clickup_view_tasks`, `clickup_task_move`.
+`clickup_view_tasks`. (`clickup_task_move` was originally in scope but
+returns only a `{"message": ...}` confirmation, not a task object, so
+there is nothing to add a field to.)
 
 ## Approach
 

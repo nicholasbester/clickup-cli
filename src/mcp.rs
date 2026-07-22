@@ -234,7 +234,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_list",
-            "description": "List tasks in a specific ClickUp list with optional status/assignee filters. Returns the first page of task objects in compact form (id, name, status, assignees, due_date). Pass `page`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. For cross-list or cross-space queries use clickup_task_search instead; for a single task use clickup_task_get.",
+            "description": "List tasks in a specific ClickUp list with optional status/assignee filters. Returns the first page of task objects in compact form (id, name, status, assignees, due_date; custom_id when the task has one). Pass `page`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. For cross-list or cross-space queries use clickup_task_search instead; for a single task use clickup_task_get.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -259,7 +259,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_get",
-            "description": "Fetch the full object for a single ClickUp task — name, description, status, assignees, tags, custom fields, checklists, due date, time estimates, dependencies, and more. Returns the task object. Use clickup_task_list or clickup_task_search to find a task_id.",
+            "description": "Fetch the full object for a single ClickUp task — name, description, status, assignees, tags, custom fields, checklists, due date, time estimates, dependencies, and more. Returns the task object. Includes the task's custom_id when one is set. Use clickup_task_list or clickup_task_search to find a task_id.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -337,7 +337,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_search",
-            "description": "Search tasks across an entire ClickUp workspace with ClickUp's filtered team tasks endpoint. Supports hierarchy, assignee, status, tag, date range, custom field, custom item type, parent/subtask, and ordering filters. Returns a compact array of task objects. Pass `page`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. For tasks in a single list, prefer clickup_task_list (fewer parameters, same shape).",
+            "description": "Search tasks across an entire ClickUp workspace with ClickUp's filtered team tasks endpoint. Supports hierarchy, assignee, status, tag, date range, custom field, custom item type, parent/subtask, and ordering filters. Returns a compact array of task objects (custom_id included when set). Pass `page`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. For tasks in a single list, prefer clickup_task_list (fewer parameters, same shape).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -589,7 +589,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_view_tasks",
-            "description": "Fetch the tasks currently visible in a ClickUp view, honouring the view's configured filters, sort order, and grouping. Returns a compact array of task objects. Pass `page`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. Use clickup_view_list to discover view IDs and clickup_view_get for the view's definition.",
+            "description": "Fetch the tasks currently visible in a ClickUp view, honouring the view's configured filters, sort order, and grouping. Returns a compact array of task objects (custom_id included when set). Pass `page`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. Use clickup_view_list to discover view IDs and clickup_view_get for the view's definition.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2458,7 +2458,15 @@ async fn dispatch_tool(
                 &pargs,
                 client,
                 "tasks",
-                &["id", "name", "status", "priority", "assignees", "due_date"],
+                &[
+                    "id",
+                    "custom_id?",
+                    "name",
+                    "status",
+                    "priority",
+                    "assignees",
+                    "due_date",
+                ],
                 |page| {
                     let mut qs = format!("page={}", page);
                     if let Some(ic) = include_closed {
@@ -2497,6 +2505,7 @@ async fn dispatch_tool(
             let resp = client.get(&path).await.map_err(|e| e.to_string())?;
             let mut fields = vec![
                 "id",
+                "custom_id?",
                 "name",
                 "status",
                 "priority",
@@ -2545,7 +2554,15 @@ async fn dispatch_tool(
             let resp = client.post(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(compact_items(
                 &[resp],
-                &["id", "name", "status", "priority", "assignees", "due_date"],
+                &[
+                    "id",
+                    "custom_id?",
+                    "name",
+                    "status",
+                    "priority",
+                    "assignees",
+                    "due_date",
+                ],
             ))
         }
 
@@ -2582,7 +2599,15 @@ async fn dispatch_tool(
             let resp = client.put(&path, &body).await.map_err(|e| e.to_string())?;
             Ok(compact_items(
                 &[resp],
-                &["id", "name", "status", "priority", "assignees", "due_date"],
+                &[
+                    "id",
+                    "custom_id?",
+                    "name",
+                    "status",
+                    "priority",
+                    "assignees",
+                    "due_date",
+                ],
             ))
         }
 
@@ -2604,7 +2629,15 @@ async fn dispatch_tool(
                 &pargs,
                 client,
                 "tasks",
-                &["id", "name", "status", "priority", "assignees", "due_date"],
+                &[
+                    "id",
+                    "custom_id?",
+                    "name",
+                    "status",
+                    "priority",
+                    "assignees",
+                    "due_date",
+                ],
                 |page| {
                     let mut parts = vec![format!("page={}", page)];
                     parts.extend(base_params.iter().cloned());
@@ -2898,7 +2931,15 @@ async fn dispatch_tool(
                 &pargs,
                 client,
                 "tasks",
-                &["id", "name", "status", "priority", "assignees", "due_date"],
+                &[
+                    "id",
+                    "custom_id?",
+                    "name",
+                    "status",
+                    "priority",
+                    "assignees",
+                    "due_date",
+                ],
                 |page| format!("/v2/view/{}/task?page={}", view_id, page),
             )
             .await
