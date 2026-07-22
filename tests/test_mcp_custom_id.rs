@@ -103,5 +103,8 @@ async fn task_search_includes_custom_id_when_set() {
         .write_stdin(rpc_call("clickup_task_search", serde_json::json!({})))
         .assert()
         .success()
-        .stdout(predicates::str::contains("PROJ-42"));
+        .stdout(predicates::str::contains("PROJ-42"))
+        // custom_id must appear exactly once: emitted for abc123, omitted
+        // entirely for def456 (whose custom_id is null).
+        .stdout(predicates::str::contains("custom_id").count(1));
 }

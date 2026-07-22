@@ -26,7 +26,9 @@ workspaces that don't use the feature pay zero token overhead.
 `clickup_task_list`, `clickup_task_create`, `clickup_task_update`,
 `clickup_view_tasks`. (`clickup_task_move` was originally in scope but
 returns only a `{"message": ...}` confirmation, not a task object, so
-there is nothing to add a field to.)
+there is nothing to add a field to.) (`clickup_template_apply_task` also
+returns a task object but keeps its deliberately minimal id/name
+projection — possible follow-up.)
 
 ## Approach
 
@@ -53,7 +55,7 @@ Alternatives rejected:
 1. `src/output.rs` — `compact_items`: detect trailing `?` on a field name;
    strip it for the output key; skip insertion when the value is missing or
    JSON null. Document the convention in the doc comment.
-2. `src/mcp.rs` — append `"custom_id?"` to the compact field lists of the 7
+2. `src/mcp.rs` — append `"custom_id?"` to the compact field lists of the 6
    tools above. Update tool descriptions that enumerate returned fields
    (e.g. `clickup_task_list`) to note `custom_id` is included when set.
 3. Tests:

@@ -90,7 +90,9 @@ impl OutputConfig {
 }
 
 /// Flatten a list of items to only include the specified fields with flattened values.
-/// Returns a JSON array. Used by MCP server for token-efficient responses.
+/// Returns a JSON array. Used by MCP server for token-efficient responses. Also
+/// reached by the CLI's `--output json-compact` mode with user-supplied `--fields`,
+/// so the trailing-`?` marker described below applies there too.
 ///
 /// A field name with a trailing `?` (e.g. `"custom_id?"`) is optional: it is
 /// emitted under the name without the marker, and only when the source value
