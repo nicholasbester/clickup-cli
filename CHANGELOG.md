@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- MCP task tools now include the task's `custom_id` in their compact responses (#82). Applies to `clickup_task_get`, `clickup_task_search`, `clickup_task_list`, `clickup_task_create`, `clickup_task_update`, and `clickup_view_tasks`. The field is only present when the task actually has a custom ID, so workspaces that don't use custom task IDs see byte-identical output (and pay no extra tokens). The ClickUp API already returns `custom_id` on task objects — no request changes; the `custom_task_ids=true` query parameter remains input-side only (addressing a task *by* its custom ID), which the MCP server already supported.
+
 ## [0.14.0] - 2026-06-24
 
 ### Added
