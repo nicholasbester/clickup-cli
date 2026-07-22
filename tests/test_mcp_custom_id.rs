@@ -108,3 +108,29 @@ async fn task_search_includes_custom_id_when_set() {
         // entirely for def456 (whose custom_id is null).
         .stdout(predicates::str::contains("custom_id").count(1));
 }
+
+#[tokio::test]
+async fn task_create_includes_custom_id_when_set() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_matcher("/v2/list/9/task"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "new1",
+            "name": "created",
+            "custom_id": "PROJ-99",
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    mcp_serve(dir.path(), &server)
+        .write_stdin(rpc_call(
+            "clickup_task_create",
+            serde_json::json!({"list_id": "9", "name": "created"}),
+        ))
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("PROJ-99"));
+}

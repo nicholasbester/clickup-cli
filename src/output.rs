@@ -50,25 +50,36 @@ impl OutputConfig {
                 println!("{}", serde_json::to_string_pretty(&filtered).unwrap());
             }
             "csv" => {
+                // Tabular output always renders every column ("-" when absent), so
+                // the optional-omission `?` marker doesn't apply here — just strip
+                // it from the header/lookup name.
+                let names: Vec<&str> = fields
+                    .iter()
+                    .map(|&f| f.strip_suffix('?').unwrap_or(f))
+                    .collect();
                 if !self.no_header {
-                    println!("{}", fields.join(","));
+                    println!("{}", names.join(","));
                 }
                 for item in items {
                     let row: Vec<String> =
-                        fields.iter().map(|&f| flatten_value(item.get(f))).collect();
+                        names.iter().map(|&f| flatten_value(item.get(f))).collect();
                     println!("{}", row.join(","));
                 }
             }
             _ => {
-                // table (default)
+                // table (default). Same `?`-stripping as csv, for the same reason.
+                let names: Vec<&str> = fields
+                    .iter()
+                    .map(|&f| f.strip_suffix('?').unwrap_or(f))
+                    .collect();
                 let mut table = Table::new();
                 table.set_content_arrangement(ContentArrangement::Dynamic);
                 if !self.no_header {
-                    table.set_header(fields.iter().map(|f| f.to_string()).collect::<Vec<_>>());
+                    table.set_header(names.iter().map(|f| f.to_string()).collect::<Vec<_>>());
                 }
                 for item in items {
                     let row: Vec<String> =
-                        fields.iter().map(|&f| flatten_value(item.get(f))).collect();
+                        names.iter().map(|&f| flatten_value(item.get(f))).collect();
                     table.add_row(row);
                 }
                 println!("{}", table);
@@ -98,6 +109,9 @@ impl OutputConfig {
 /// emitted under the name without the marker, and only when the source value
 /// is present and non-null. All other fields are always emitted, with `"-"`
 /// as the placeholder for missing/null values.
+///
+/// The trailing `?` is always interpreted as this optional marker, so a field
+/// literally named with a trailing `?` cannot be projected verbatim.
 pub fn compact_items(items: &[serde_json::Value], fields: &[&str]) -> serde_json::Value {
     let compacted: Vec<serde_json::Value> = items
         .iter()
