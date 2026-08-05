@@ -262,7 +262,7 @@ With `all=true` the server walks pages until natural termination:
 
 `has_more` reports purely whether the **server** has additional pages — not whether `limit` truncated the response. A `limit`-capped call with more results available still surfaces `next_cursor` / `next_start` / `next_page_timestamp` so callers who want to continue from where the server left off (rather than from where the helper cut the buffer) have what they need.
 
-The CLI side mirrors this contract on every paginated command via the same set of global flags: `--all`, `--page` / `--cursor` / `--start` + `--start-id`, and `--limit`. CLI output stays as plain table/JSON/CSV — no envelope — but pagination state is honoured identically.
+The CLI side mirrors this contract on every paginated command via the matching flags: the global `--all`, `--page`, `--cursor`, and `--limit`, plus `--start` + `--start-id` locally on the comment commands. CLI output stays as plain table/JSON/CSV — no envelope — but pagination state is honoured identically.
 
 ## How It Works
 

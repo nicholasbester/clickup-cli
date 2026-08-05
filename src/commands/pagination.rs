@@ -144,12 +144,16 @@ where
 
 /// Start-id-based walker for v2 comment endpoints
 /// (`?start=<ms>&start_id=<id>` paired, response carries `{comments: [...]}`
-/// with termination inferred from short page). `build_path(Option<i64>,
-/// Option<&str>)` returns the URL given an optional boundary pair.
-/// `items_key` is the response key (typically `"comments"`).
+/// with termination inferred from short page). `start`/`start_id` are the
+/// caller's boundary pair (the comment commands' local flags — they are not
+/// global args; see issue #91). `build_path(Option<i64>, Option<&str>)`
+/// returns the URL given an optional boundary pair. `items_key` is the
+/// response key (typically `"comments"`).
 pub async fn walk_start_id<F>(
     cli: &Cli,
     client: &ClickUpClient,
+    start: Option<i64>,
+    start_id: Option<String>,
     items_key: &str,
     build_path: F,
 ) -> Result<Vec<Value>, CliError>
@@ -157,8 +161,8 @@ where
     F: Fn(Option<i64>, Option<&str>) -> String,
 {
     const PAGE_HINT: usize = 25;
-    let mut current_start = cli.start;
-    let mut current_start_id = cli.start_id.clone();
+    let mut current_start = start;
+    let mut current_start_id = start_id;
     let mut collected: Vec<Value> = Vec::new();
     let mut pages_fetched = 0usize;
 

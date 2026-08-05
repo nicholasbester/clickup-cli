@@ -21,7 +21,7 @@ Pattern: `clickup-cli <resource> <action> [ID] [flags]` (or `clkup` for short)
 | `--limit N` | Cap total items returned (enforced after walking, so `--all --limit 500` returns ≤500 across N pages) |
 | `--page N` | Manual page selection (v2 page-style: `task list`, `task search`, `view tasks`, `template list`) |
 | `--cursor X` | Manual cursor (v3 cursor-style: `doc list`, all `chat *` list commands) |
-| `--start MS` + `--start-id ID` | Manual boundary pair (v2 start-id-style: `comment list`, `comment replies`) |
+| `--start MS` + `--start-id ID` | Manual boundary pair, local to `comment list` / `comment replies` (not a global flag) |
 | `--token TOKEN` | Override config file token |
 | `--workspace ID` | Override default workspace |
 | `--timeout SECS` | HTTP timeout (default 30) |

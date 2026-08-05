@@ -19,6 +19,13 @@ pub enum CommentCommands {
         /// View ID
         #[arg(long, conflicts_with_all = ["task", "list"])]
         view: Option<String>,
+        /// Boundary timestamp in Unix ms for continuing a listing.
+        /// Pair with --start-id.
+        #[arg(long, requires = "start_id")]
+        start: Option<i64>,
+        /// Boundary comment id for continuing a listing. Pair with --start.
+        #[arg(long = "start-id", requires = "start")]
+        start_id: Option<String>,
     },
     /// Create a comment on a task, list, or view
     Create {
@@ -64,6 +71,13 @@ pub enum CommentCommands {
     Replies {
         /// Comment ID
         id: String,
+        /// Boundary timestamp in Unix ms for continuing a listing.
+        /// Pair with --start-id.
+        #[arg(long, requires = "start_id")]
+        start: Option<i64>,
+        /// Boundary comment id for continuing a listing. Pair with --start.
+        #[arg(long = "start-id", requires = "start")]
+        start_id: Option<String>,
     },
     /// Reply to a comment
     Reply {
@@ -86,7 +100,13 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
     let output = OutputConfig::from_cli(&cli.output, &cli.fields, cli.no_header, cli.quiet);
 
     match command {
-        CommentCommands::List { task, list, view } => {
+        CommentCommands::List {
+            task,
+            list,
+            view,
+            start,
+            start_id,
+        } => {
             let base = if let Some(id) = list {
                 format!("/v2/list/{}/comment", id)
             } else if let Some(id) = view {
@@ -102,6 +122,8 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             let comments = crate::commands::pagination::walk_start_id(
                 cli,
                 &client,
+                start,
+                start_id,
                 "comments",
                 |start, start_id| match (start, start_id) {
                     (Some(s), Some(sid)) => format!("{}?start={}&start_id={}", base, s, sid),
@@ -193,10 +215,16 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             output.print_message(&format!("Comment {} deleted", id));
             Ok(())
         }
-        CommentCommands::Replies { id } => {
+        CommentCommands::Replies {
+            id,
+            start,
+            start_id,
+        } => {
             let comments = crate::commands::pagination::walk_start_id(
                 cli,
                 &client,
+                start,
+                start_id,
                 "comments",
                 |start, start_id| match (start, start_id) {
                     (Some(s), Some(sid)) => {
