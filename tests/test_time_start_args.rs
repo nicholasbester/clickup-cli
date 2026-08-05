@@ -20,9 +20,10 @@ fn clickup(dir: &Path, server: &MockServer) -> Command {
     cmd
 }
 
-/// The clap command definition must be internally consistent. This is the
-/// startup-time check that would have caught the global/local `--start`
-/// type collision before release.
+/// General clap self-consistency check. Note: this does NOT catch
+/// global/local same-name type collisions like issue #91 (those fail only
+/// at access time) — the wiremock behavior tests below are the real
+/// regression guard for that class of bug.
 #[test]
 fn clap_command_definition_is_consistent() {
     use clap::CommandFactory;
@@ -147,6 +148,8 @@ async fn comment_replies_still_pass_start_boundary_pair() {
 /// `--start` must reject it instead of silently accepting a no-op.
 #[tokio::test]
 async fn time_list_rejects_start_flag() {
+    // Parse-level rejection: no HTTP call is ever made, but the helper
+    // still needs a server URI for the env template.
     let dir = TempDir::new().unwrap();
     let server = MockServer::start().await;
 
