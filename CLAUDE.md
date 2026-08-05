@@ -83,7 +83,7 @@ clickup-cli <resource> <action> [ID] [flags]
 - `--limit N` — cap total items returned (enforced after walking, so `--all --limit 500` returns up to 500 across N pages)
 - `--page N` — manual page (v2 page-style endpoints: `task list`, `task search`, `view tasks`, `template list`)
 - `--cursor X` — manual cursor (v3 cursor-style endpoints: `doc list`, all `chat *` list commands)
-- `--start MS` + `--start-id ID` — manual boundary pair (v2 start-id-style endpoints: `comment list`, `comment replies`)
+- `--start MS` + `--start-id ID` — manual boundary pair, local to `comment list` / `comment replies` (not global; a global `--start` collided with `time create`/`time update --start`, see #91)
 - `-q` / `--quiet` — IDs only
 - `--timeout SECS` — HTTP timeout (default 30)
 
