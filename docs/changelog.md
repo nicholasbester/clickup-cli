@@ -14,8 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-05
+
 ### Added
 - MCP task tools now include the task's `custom_id` in their compact responses (#82). Applies to `clickup_task_get`, `clickup_task_search`, `clickup_task_list`, `clickup_task_create`, `clickup_task_update`, and `clickup_view_tasks`. The field is only present when the task actually has a custom ID, so workspaces that don't use custom task IDs see byte-identical output (and pay no extra tokens). The ClickUp API already returns `custom_id` on task objects — no request changes; the `custom_task_ids=true` query parameter remains input-side only (addressing a task *by* its custom ID), which the MCP server already supported.
+
+### Fixed
+- `time create --start` and `time update --start` panicked during argument parsing (clap downcast panic, exit 101), making it impossible to log a time entry for a past interval (#91). The global pagination flag `--start` (Unix-ms boundary, typed `i64`) collided with the `time` subcommands' own `--start` (typed `String`); clap stored the value under one definition and read it back as the other. The pagination pair `--start` + `--start-id` is no longer global — it is now declared directly on the two commands that use it, `comment list` and `comment replies` (usage there is unchanged, and the pair is now validated as requiring each other). Behavior change: commands that don't define `--start` (e.g. `time list`, which uses `--start-date`) now reject the flag with a clap error instead of silently accepting a no-op global.
 
 ## [0.14.0] - 2026-06-24
 

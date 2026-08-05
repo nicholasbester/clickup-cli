@@ -5,7 +5,7 @@ url: https://clickup-cli.com
 
 # Single source of truth for version strings rendered on the site.
 # Update this on release; pages reference it via `{{ site.version }}`.
-version: 0.14.0
+version: 0.15.0
 lang: en
 
 author:
