@@ -258,7 +258,7 @@ Custom fields on tasks.
 ```bash
 clickup-cli field list --list <ID>            # also --folder, --space, --workspace-level
 clickup-cli field set <FIELD_ID> --value VALUE [TASK_ID]
-clickup-cli field unset <FIELD_ID> [TASK_ID]
+clickup-cli field unset <FIELD_ID> [TASK_ID]   # swapped order is auto-corrected with a stderr note
 ```
 
 Value can be a string, number, or JSON for complex field types. For `drop_down`, use the option ID from the field's `type_config.options`; for `labels`, pass a JSON array of option IDs.

@@ -6,6 +6,7 @@
 //! arguments are reinterpreted, with a breadcrumb on stderr.
 
 use assert_cmd::Command;
+use predicates::prelude::*;
 use std::path::Path;
 use tempfile::TempDir;
 use wiremock::matchers::{method, path as path_matcher};
@@ -116,5 +117,3 @@ async fn field_unset_both_uuids_not_swapped() {
         .success()
         .stderr(predicates::str::contains("swapped").not());
 }
-
-use predicates::prelude::*;

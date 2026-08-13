@@ -54,6 +54,9 @@ const FIELD_FIELDS: &[&str] = &["id", "name", "type", "required"];
 fn maybe_unswap(field_id: String, task_id: Option<String>) -> (String, Option<String>) {
     match task_id {
         Some(t) if is_uuid(&t) && !is_uuid(&field_id) => {
+            // Deliberately unconditional (not gated on -q/output mode like
+            // the branch-detect breadcrumb): this note reports that the
+            // request semantics were changed, not routine resolution.
             eprintln!(
                 "note: arguments looked swapped (field IDs are UUIDs); using '{}' as the field and '{}' as the task",
                 t, field_id
