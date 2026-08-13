@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `field set` / `field unset` invoked with the two positionals in the natural API order (`<task_id> <field_uuid>` instead of the CLI's `<FIELD_ID> [TASK_ID]`) silently built the request URL with the IDs reversed, which ClickUp answers with a misleading 401 "Team not authorized" (#96). Field IDs are always UUIDs and task IDs never are, so the swap is unambiguous: the CLI now detects it, reinterprets the arguments, and prints a `note: arguments looked swapped …` breadcrumb to stderr. The documented order and the git-branch auto-detect path are unchanged; when both arguments are UUIDs the input is used exactly as given.
+
 ## [0.15.0] - 2026-08-05
 
 ### Added
