@@ -45,6 +45,34 @@ pub enum FieldCommands {
 
 const FIELD_FIELDS: &[&str] = &["id", "name", "type", "required"];
 
+/// ClickUp custom-field IDs are UUIDs; task IDs never are (short
+/// alphanumeric or `PREFIX-42` custom IDs). When the two positionals arrive
+/// in the natural API order (task first) instead of the CLI's
+/// `<FIELD_ID> [TASK_ID]`, reinterpret them and leave a breadcrumb on
+/// stderr — otherwise the reversed URL draws a misleading
+/// 401 "Team not authorized" from ClickUp (issue #96).
+fn maybe_unswap(field_id: String, task_id: Option<String>) -> (String, Option<String>) {
+    match task_id {
+        Some(t) if is_uuid(&t) && !is_uuid(&field_id) => {
+            eprintln!(
+                "note: arguments looked swapped (field IDs are UUIDs); using '{}' as the field and '{}' as the task",
+                t, field_id
+            );
+            (t, Some(field_id))
+        }
+        other => (field_id, other),
+    }
+}
+
+fn is_uuid(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('-').collect();
+    parts.len() == 5
+        && [8usize, 4, 4, 4, 12]
+            .iter()
+            .zip(&parts)
+            .all(|(len, p)| p.len() == *len && p.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
 pub async fn execute(command: FieldCommands, cli: &Cli) -> Result<(), CliError> {
     let token = resolve_token(cli)?;
     let client = ClickUpClient::new(&token, cli.timeout)?;
@@ -87,6 +115,7 @@ pub async fn execute(command: FieldCommands, cli: &Cli) -> Result<(), CliError> 
             field_id,
             value,
         } => {
+            let (field_id, task_id) = maybe_unswap(field_id, task_id);
             let task = git::require_task(cli, task_id.as_deref(), true)?;
             // Try to parse value as JSON first, fallback to string
             let parsed_value: serde_json::Value =
@@ -99,6 +128,7 @@ pub async fn execute(command: FieldCommands, cli: &Cli) -> Result<(), CliError> 
             Ok(())
         }
         FieldCommands::Unset { task_id, field_id } => {
+            let (field_id, task_id) = maybe_unswap(field_id, task_id);
             let task = git::require_task(cli, task_id.as_deref(), true)?;
             client
                 .delete(&format!("/v2/task/{}/field/{}", task.id, field_id))
@@ -106,5 +136,49 @@ pub async fn execute(command: FieldCommands, cli: &Cli) -> Result<(), CliError> 
             output.print_message(&format!("Field {} cleared on task {}", field_id, task.raw));
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uuid_shape_is_recognized() {
+        assert!(is_uuid("b955c4dc-b8a8-48d8-a0c6-b4200788a683"));
+        assert!(is_uuid("B955C4DC-B8A8-48D8-A0C6-B4200788A683"));
+    }
+
+    #[test]
+    fn task_id_shapes_are_not_uuids() {
+        assert!(!is_uuid("86czkjbtq"));
+        assert!(!is_uuid("PROJ-42"));
+        assert!(!is_uuid("b955c4dc-b8a8-48d8-a0c6")); // too few segments
+        assert!(!is_uuid("b955c4dc-b8a8-48d8-a0c6-b4200788a68z")); // non-hex
+        assert!(!is_uuid("b955c4dcb8a848d8a0c6b4200788a683")); // no dashes
+    }
+
+    #[test]
+    fn unswap_only_when_unambiguous() {
+        // Swapped: task slot holds the UUID.
+        let (f, t) = maybe_unswap(
+            "86czkjbtq".into(),
+            Some("b955c4dc-b8a8-48d8-a0c6-b4200788a683".into()),
+        );
+        assert_eq!(f, "b955c4dc-b8a8-48d8-a0c6-b4200788a683");
+        assert_eq!(t.as_deref(), Some("86czkjbtq"));
+
+        // Correct order: untouched.
+        let (f, t) = maybe_unswap(
+            "b955c4dc-b8a8-48d8-a0c6-b4200788a683".into(),
+            Some("86czkjbtq".into()),
+        );
+        assert_eq!(f, "b955c4dc-b8a8-48d8-a0c6-b4200788a683");
+        assert_eq!(t.as_deref(), Some("86czkjbtq"));
+
+        // No task arg (git auto-detect path): untouched.
+        let (f, t) = maybe_unswap("86czkjbtq".into(), None);
+        assert_eq!(f, "86czkjbtq");
+        assert_eq!(t, None);
     }
 }
