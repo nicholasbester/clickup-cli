@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- CLI usage errors (unknown subcommand, unknown flag, missing required argument) now exit with code 1 — the documented "client error / bad input" code — instead of clap's default 2, which this CLI's exit-code contract reserves for auth/permission errors (401/403) (#109). Agents and scripts branching on exit codes previously misclassified every typo as an auth failure. `--help` and `--version` still print to stdout and exit 0, rendered by clap exactly as before; a bare `clickup-cli` with no subcommand shows help on stderr and exits 1 (previously 2). **Behavior change:** anything that specifically matched exit code 2 to detect malformed invocations must switch to 1.
 - The repo Dockerfile had been broken since the binary rename in #41: it copied a binary named `clickup` that no longer exists (the crate ships `clickup-cli`/`clkup`), and its `rust:1.87-slim` build stage fell below the crate's MSRV once that was bumped to 1.88. This also broke Glama's hosted MCP-server build, whose inferred build spec mirrored the same wrong binary name. The build stage now major-pins `rust:1-slim-trixie` (tracks stable, stays above future MSRV bumps) with the runtime on the matching `debian:trixie-slim` (mismatched Debian suites between stages fail at runtime on glibc), builds `--bin clickup-cli`, and installs it under the image's historical command name `clickup`. Verified by building the image and driving the containerized MCP server over stdio.
 
 ## [0.15.3] - 2026-08-14
@@ -22,9 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - MCP: `clickup_member_list` now routes `task_id` through the same `resolve_task` handling as every other task-scoped MCP tool (#101). Previously it passed the ID raw into `/v2/task/{id}/member`, so custom-format IDs (`PROJ-42`) drew ClickUp's misleading 401 "Team not authorized" and explicit `CU-` prefixes were not stripped. `clickup_guest_share_task`/`unshare_task` keep taking raw IDs, matching their CLI twins.
 - Release pipeline: the npm publish step failed on every tag since npm 12 raised its engine floor to Node ≥ 22 while the release job pinned Node 20 (#105). As a result, **versions 0.15.0–0.15.2 never reached npm, Homebrew, or AUR** — those channels jump from 0.14.0 directly to this release. crates.io and the GitHub release binaries were published normally for all versions. The release job now runs Node 24.
-
-### Fixed
-- MCP: `clickup_member_list` now routes `task_id` through the same `resolve_task` handling as every other task-scoped MCP tool (#101). Previously it passed the ID raw into `/v2/task/{id}/member`, so custom-format IDs (`PROJ-42`) drew ClickUp's misleading 401 "Team not authorized" and explicit `CU-` prefixes were not stripped. `clickup_guest_share_task`/`unshare_task` keep taking raw IDs, matching their CLI twins.
 
 ## [0.15.2] - 2026-08-14
 
