@@ -3054,8 +3054,14 @@ async fn dispatch_tool(
         }
 
         "clickup_member_list" => {
-            let path = if let Some(task_id) = args.get("task_id").and_then(|v| v.as_str()) {
-                format!("/v2/task/{}/member", task_id)
+            // Presence is pre-checked so resolve_task's missing-param error
+            // is unreachable and the list_id/neither branches are untouched.
+            let path = if args.get("task_id").and_then(|v| v.as_str()).is_some() {
+                let (task_id, custom_q) = resolve_task(args, "task_id")?;
+                match custom_q {
+                    Some(q) => format!("/v2/task/{}/member?{}", task_id, q),
+                    None => format!("/v2/task/{}/member", task_id),
+                }
             } else if let Some(list_id) = args.get("list_id").and_then(|v| v.as_str()) {
                 format!("/v2/list/{}/member", list_id)
             } else {
