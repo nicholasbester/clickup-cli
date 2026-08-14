@@ -297,14 +297,11 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
                         .into(),
                 }
             })?;
-            let upload_path = if task.is_custom {
-                format!(
-                    "/v2/task/{}/attachment?custom_task_ids=true&team_id={}",
-                    task.id, ws_id
-                )
-            } else {
-                format!("/v2/task/{}/attachment", task.id)
-            };
+            let upload_path = format!(
+                "/v2/task/{}/attachment{}",
+                task.id,
+                crate::commands::workspace::custom_task_query(cli, &task)?
+            );
             let uploaded = client.upload_file(&upload_path, &file).await?;
             let url = uploaded
                 .get("url")

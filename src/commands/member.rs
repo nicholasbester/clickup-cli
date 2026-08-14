@@ -31,7 +31,8 @@ pub async fn execute(command: MemberCommands, cli: &Cli) -> Result<(), CliError>
             let url = if let Some(id) = list {
                 format!("/v2/list/{}/member", id)
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                format!("/v2/task/{}/member", resolved.id)
+                let q = crate::commands::workspace::custom_task_query(cli, &resolved)?;
+                format!("/v2/task/{}/member{}", resolved.id, q)
             } else {
                 return Err(CliError::ClientError {
                     message: "Specify either --task ID or --list ID".into(),
