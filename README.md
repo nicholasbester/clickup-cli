@@ -427,7 +427,7 @@ clickup-cli completions powershell > clickup-cli.ps1
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Client error (bad input) |
+| 1 | Client error (bad input) — includes CLI usage/parse errors |
 | 2 | Auth/permission error (401, 403) |
 | 3 | Not found (404) |
 | 4 | Rate limited (429) |

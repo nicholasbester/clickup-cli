@@ -65,3 +65,13 @@ fn clkup_unknown_subcommand_exits_1() {
         .code(1)
         .stderr(predicates::str::contains("unrecognized subcommand"));
 }
+
+/// Bare invocation triggers clap's help-on-missing-subcommand kind: help
+/// text renders, but on stderr with a bad-input exit — unlike --help.
+#[test]
+fn bare_invocation_exits_1_with_help_on_stderr() {
+    clickup()
+        .assert()
+        .code(1)
+        .stderr(predicates::str::contains("Usage:"));
+}
