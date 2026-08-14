@@ -650,6 +650,12 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
         }
         TaskCommands::Move { id, list } => {
             let task = git::require_task(cli, id.as_deref(), true)?;
+            if task.is_custom {
+                return Err(CliError::ClientError {
+                    message: git::custom_id_unsupported(&task.raw, "task move"),
+                    status: 0,
+                });
+            }
             let ws_id = resolve_workspace(cli)?;
             client
                 .put(
@@ -666,6 +672,18 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
         TaskCommands::SetEstimate { id, assignee, time } => {
             let task = git::require_task(cli, id.as_deref(), true)?;
             let resp = if let Some(assignee) = assignee {
+                // Per-user estimates use an undocumented v3 endpoint with no
+                // custom-ID support; the flag-less v2 branch below handles
+                // custom IDs via custom_task_query.
+                if task.is_custom {
+                    return Err(CliError::ClientError {
+                        message: git::custom_id_unsupported(
+                            &task.raw,
+                            "task set-estimate --assignee",
+                        ),
+                        status: 0,
+                    });
+                }
                 let ws_id = resolve_workspace(cli)?;
                 let body = serde_json::json!({
                     "time_estimates": [{"user_id": assignee, "time_estimate": time}]
@@ -700,6 +718,12 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
             ..
         } => {
             let task = git::require_task(cli, id.as_deref(), true)?;
+            if task.is_custom {
+                return Err(CliError::ClientError {
+                    message: git::custom_id_unsupported(&task.raw, "task replace-estimates"),
+                    status: 0,
+                });
+            }
             let ws_id = resolve_workspace(cli)?;
 
             // ClickUp's spec for this endpoint:

@@ -178,6 +178,17 @@ pub fn parse_task_id(arg: &str) -> ResolvedTask {
     }
 }
 
+/// Error message for operations whose endpoints have no documented
+/// `custom_task_ids` support (issue #104): sending a custom-format ID raw
+/// is a guaranteed, confusing upstream failure, so callers reject it
+/// locally with this guidance instead.
+pub fn custom_id_unsupported(raw: &str, operation: &str) -> String {
+    format!(
+        "'{raw}' is a custom task ID, but {operation} requires the regular task id \
+         (its endpoint has no custom-ID support) — find it with: task get {raw}"
+    )
+}
+
 /// Is branch detection enabled? Checks `CLICKUP_GIT_DETECT=0` env override,
 /// then `[git] enabled` in config. Defaults to true.
 fn detect_enabled() -> bool {

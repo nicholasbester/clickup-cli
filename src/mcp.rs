@@ -3298,18 +3298,27 @@ async fn dispatch_tool(
                 .get("list_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: list_id")?;
-            let task_id = args
+            let raw = args
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
+            // Add Task To List documents no query params, so no custom-ID
+            // support (issue #104): strip CU-, reject custom-format IDs.
+            let task = git::parse_task_id(raw);
+            if task.is_custom {
+                return Err(git::custom_id_unsupported(
+                    &task.raw,
+                    "clickup_list_add_task",
+                ));
+            }
             client
                 .post(
-                    &format!("/v2/list/{}/task/{}", list_id, task_id),
+                    &format!("/v2/list/{}/task/{}", list_id, task.id),
                     &json!({}),
                 )
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(json!({"message": format!("Task {} added to list {}", task_id, list_id)}))
+            Ok(json!({"message": format!("Task {} added to list {}", task.raw, list_id)}))
         }
 
         "clickup_list_remove_task" => {
@@ -3317,15 +3326,23 @@ async fn dispatch_tool(
                 .get("list_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: list_id")?;
-            let task_id = args
+            let raw = args
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
+            // Same contract as clickup_list_add_task (issue #104).
+            let task = git::parse_task_id(raw);
+            if task.is_custom {
+                return Err(git::custom_id_unsupported(
+                    &task.raw,
+                    "clickup_list_remove_task",
+                ));
+            }
             client
-                .delete(&format!("/v2/list/{}/task/{}", list_id, task_id))
+                .delete(&format!("/v2/list/{}/task/{}", list_id, task.id))
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(json!({"message": format!("Task {} removed from list {}", task_id, list_id)}))
+            Ok(json!({"message": format!("Task {} removed from list {}", task.raw, list_id)}))
         }
 
         "clickup_comment_update" => {
@@ -4436,10 +4453,17 @@ async fn dispatch_tool(
 
         "clickup_task_move" => {
             let team_id = resolve_workspace(args)?;
-            let task_id = args
+            let raw = args
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
+            // The v3 home_list endpoint has no documented custom-ID support
+            // (issue #104): strip CU- prefixes, reject custom-format IDs.
+            let task = git::parse_task_id(raw);
+            if task.is_custom {
+                return Err(git::custom_id_unsupported(&task.raw, "clickup_task_move"));
+            }
+            let task_id = task.id;
             let list_id = args
                 .get("list_id")
                 .and_then(|v| v.as_str())
@@ -4493,10 +4517,19 @@ async fn dispatch_tool(
 
         "clickup_task_replace_estimates" => {
             let team_id = resolve_workspace(args)?;
-            let task_id = args
+            let raw = args
                 .get("task_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: task_id")?;
+            // v3 endpoint, no documented custom-ID support (issue #104).
+            let task = git::parse_task_id(raw);
+            if task.is_custom {
+                return Err(git::custom_id_unsupported(
+                    &task.raw,
+                    "clickup_task_replace_estimates",
+                ));
+            }
+            let task_id = task.id;
             // ClickUp's spec body is an ARRAY of {assignee, time}.
             // The previous shape {time_estimates: [{user_id, time_estimate}]}
             // had the wrong field names and the wrong wrapping, and it only

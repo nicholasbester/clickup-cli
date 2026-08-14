@@ -137,6 +137,7 @@ To limit what the server exposes, pass `--profile {all|read|safe}`, `--read-only
 - All timestamps are Unix milliseconds
 - Priority: 1=Urgent, 2=High, 3=Normal, 4=Low
 - task_count on folders is a string, not integer
+- Custom task IDs (`PROJ-42`) are NOT accepted by `task move`, `task set-estimate --assignee`, `task replace-estimates`, or `list add-task`/`remove-task` (their endpoints have no custom-ID support) — these fail locally with guidance; pass the regular task id instead
 - v3 endpoints (chat, docs, audit logs, ACLs, attachments) use cursor pagination
 - Tag create uses tag_fg/tag_bg, tag update uses fg_color/bg_color (API inconsistency)
 - Webhook update/delete use /v2/webhook/{id} path

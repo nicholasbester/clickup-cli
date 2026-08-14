@@ -168,20 +168,34 @@ pub async fn execute(command: ListCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
         ListCommands::AddTask { list_id, task_id } => {
+            let task = crate::git::parse_task_id(&task_id);
+            if task.is_custom {
+                return Err(CliError::ClientError {
+                    message: crate::git::custom_id_unsupported(&task.raw, "list add-task"),
+                    status: 0,
+                });
+            }
             client
                 .post(
-                    &format!("/v2/list/{}/task/{}", list_id, task_id),
+                    &format!("/v2/list/{}/task/{}", list_id, task.id),
                     &serde_json::json!({}),
                 )
                 .await?;
-            output.print_message(&format!("Task {} added to list {}", task_id, list_id));
+            output.print_message(&format!("Task {} added to list {}", task.raw, list_id));
             Ok(())
         }
         ListCommands::RemoveTask { list_id, task_id } => {
+            let task = crate::git::parse_task_id(&task_id);
+            if task.is_custom {
+                return Err(CliError::ClientError {
+                    message: crate::git::custom_id_unsupported(&task.raw, "list remove-task"),
+                    status: 0,
+                });
+            }
             client
-                .delete(&format!("/v2/list/{}/task/{}", list_id, task_id))
+                .delete(&format!("/v2/list/{}/task/{}", list_id, task.id))
                 .await?;
-            output.print_message(&format!("Task {} removed from list {}", task_id, list_id));
+            output.print_message(&format!("Task {} removed from list {}", task.raw, list_id));
             Ok(())
         }
     }
