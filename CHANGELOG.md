@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- MCP: `clickup_member_list` now routes `task_id` through the same `resolve_task` handling as every other task-scoped MCP tool (#101). Previously it passed the ID raw into `/v2/task/{id}/member`, so custom-format IDs (`PROJ-42`) drew ClickUp's misleading 401 "Team not authorized" and explicit `CU-` prefixes were not stripped. `clickup_guest_share_task`/`unshare_task` keep taking raw IDs, matching their CLI twins.
+
 ## [0.15.2] - 2026-08-14
 
 ### Fixed
