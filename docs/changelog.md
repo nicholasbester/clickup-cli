@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-08-14
+
 ### Fixed
 - Custom-format task IDs (`PROJ-42`) now work on every task-scoped `/v2/task/{id}/...` command, not just `task get/update/delete` and `doc embed-image` (#98). `field set`/`unset`, `comment list`/`create`, `checklist create`, `member list`, `attachment upload`/`list`, `task add-tag`/`remove-tag`/`add-dep`/`remove-dep`, and the auto-detected single-ID path of `task time-in-status` previously dropped the `custom_task_ids=true&team_id=<ws>` query pair, so a custom ID drew ClickUp's misleading 401 "Team not authorized". The pair is now appended by a shared helper (`custom_task_query`), which the existing hand-rolled copies in `task.rs`/`doc.rs` also use; regular task IDs produce byte-identical requests. When a custom ID is used with no workspace configured, the CLI fails locally with the setup hint instead of sending a request ClickUp will reject. Not covered: `time list/create/start --task` (task IDs go to team-scoped endpoints via a different mechanism) and explicit IDs passed to `task time-in-status`/`task link`/`task unlink`/`guest share-task`/`guest unshare-task` (passed through verbatim, as before). One inherent API semantic worth knowing: ClickUp applies `custom_task_ids=true` to every ID in the request, so e.g. `task add-dep PROJ-42 --depends-on <plain_id>` asks ClickUp to interpret the body ID as custom too — mixing ID styles in one call may not resolve (previously the same call was a guaranteed 401, so this is strictly no worse).
 
