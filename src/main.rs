@@ -3,7 +3,19 @@ use clickup_cli::{commands, Cli, Commands};
 
 #[tokio::main]
 async fn main() {
-    let cli = Cli::parse();
+    // Cli::parse() would exit(2) on usage errors — clap's default — but the
+    // documented exit-code contract reserves 2 for auth errors (401/403) and
+    // maps bad input to 1 (issue #109). Map usage errors to 1 ourselves;
+    // --help/--version (use_stderr() == false) keep printing to stdout with
+    // exit 0, rendered by clap exactly as parse() would.
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(e) => {
+            let code = if e.use_stderr() { 1 } else { 0 };
+            let _ = e.print();
+            std::process::exit(code);
+        }
+    };
     let exit_code = run(cli).await;
     std::process::exit(exit_code);
 }
