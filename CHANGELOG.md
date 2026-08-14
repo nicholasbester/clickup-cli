@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.5] - 2026-08-14
+
 ### Fixed
 - `task move`, `task set-estimate --assignee`, `task replace-estimates`, and `list add-task`/`remove-task` — plus their MCP twins (`clickup_task_move`, `clickup_task_replace_estimates`, `clickup_list_add_task`/`remove_task`) — now strip explicit `CU-` prefixes from task IDs like other task-scoped commands (`task link`/`unlink` keep passing IDs verbatim, as before) (#104). The MCP `clickup_task_set_estimate` tool's `user_id` branch (the same undocumented v3 endpoint) gets the identical guard. Custom-format IDs (`PROJ-42`) on these operations now fail locally with an actionable message ("requires the regular task id — find it with: task get PROJ-42") instead of being sent raw: their endpoints (the v3 `home_list`/`time_estimates_by_user` routes and v2 Add/Remove Task To List) document no `custom_task_ids` support, so the previous behavior was a confusing upstream error.
 
