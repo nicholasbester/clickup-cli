@@ -124,7 +124,7 @@ pub async fn execute(command: FieldCommands, cli: &Cli) -> Result<(), CliError> 
             let parsed_value: serde_json::Value =
                 serde_json::from_str(&value).unwrap_or(serde_json::Value::String(value));
             let body = serde_json::json!({ "value": parsed_value });
-            let q = crate::commands::workspace::custom_task_query(cli, &task, '?')?;
+            let q = crate::commands::workspace::custom_task_query(cli, &task)?;
             let resp = client
                 .post(
                     &format!("/v2/task/{}/field/{}{}", task.id, field_id, q),
@@ -137,7 +137,7 @@ pub async fn execute(command: FieldCommands, cli: &Cli) -> Result<(), CliError> 
         FieldCommands::Unset { task_id, field_id } => {
             let (field_id, task_id) = maybe_unswap(field_id, task_id);
             let task = git::require_task(cli, task_id.as_deref(), true)?;
-            let q = crate::commands::workspace::custom_task_query(cli, &task, '?')?;
+            let q = crate::commands::workspace::custom_task_query(cli, &task)?;
             client
                 .delete(&format!("/v2/task/{}/field/{}{}", task.id, field_id, q))
                 .await?;

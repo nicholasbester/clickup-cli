@@ -300,7 +300,7 @@ pub async fn execute(command: DocCommands, cli: &Cli) -> Result<(), CliError> {
             let upload_path = format!(
                 "/v2/task/{}/attachment{}",
                 task.id,
-                crate::commands::workspace::custom_task_query(cli, &task, '?')?
+                crate::commands::workspace::custom_task_query(cli, &task)?
             );
             let uploaded = client.upload_file(&upload_path, &file).await?;
             let url = uploaded

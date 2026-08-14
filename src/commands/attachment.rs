@@ -34,7 +34,7 @@ pub async fn execute(command: AttachmentCommands, cli: &Cli) -> Result<(), CliEr
     match command {
         AttachmentCommands::Upload { task, file } => {
             let task = git::require_task(cli, task.as_deref(), true)?;
-            let q = crate::commands::workspace::custom_task_query(cli, &task, '?')?;
+            let q = crate::commands::workspace::custom_task_query(cli, &task)?;
             let resp = client
                 .upload_file(&format!("/v2/task/{}/attachment{}", task.id, q), &file)
                 .await?;
@@ -45,7 +45,7 @@ pub async fn execute(command: AttachmentCommands, cli: &Cli) -> Result<(), CliEr
             // ClickUp has no dedicated list-attachments endpoint. The `attachments`
             // array is returned inline by GET /v2/task/{id}, per the API docs.
             let task = git::require_task(cli, task.as_deref(), true)?;
-            let q = crate::commands::workspace::custom_task_query(cli, &task, '?')?;
+            let q = crate::commands::workspace::custom_task_query(cli, &task)?;
             let resp = client.get(&format!("/v2/task/{}{}", task.id, q)).await?;
             let attachments = resp
                 .get("attachments")

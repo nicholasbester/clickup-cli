@@ -112,7 +112,7 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             } else if let Some(id) = view {
                 format!("/v2/view/{}/comment", id)
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                let q = crate::commands::workspace::custom_task_query(cli, &resolved, '?')?;
+                let q = crate::commands::workspace::custom_task_query(cli, &resolved)?;
                 format!("/v2/task/{}/comment{}", resolved.id, q)
             } else {
                 return Err(CliError::ClientError {
@@ -164,18 +164,16 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             assignee,
             notify_all,
         } => {
-            let (url, resp) = if let Some(id) = list {
+            let resp = if let Some(id) = list {
                 let body = serde_json::json!({ "comment_text": text });
-                let r = client
+                client
                     .post(&format!("/v2/list/{}/comment", id), &body)
-                    .await?;
-                (format!("/v2/list/{}/comment", id), r)
+                    .await?
             } else if let Some(id) = view {
                 let body = serde_json::json!({ "comment_text": text });
-                let r = client
+                client
                     .post(&format!("/v2/view/{}/comment", id), &body)
-                    .await?;
-                (format!("/v2/view/{}/comment", id), r)
+                    .await?
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
                 let mut body = serde_json::json!({
                     "comment_text": text,
@@ -184,18 +182,16 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
                 if let Some(a) = assignee {
                     body["assignee"] = serde_json::json!(a);
                 }
-                let q = crate::commands::workspace::custom_task_query(cli, &resolved, '?')?;
-                let r = client
+                let q = crate::commands::workspace::custom_task_query(cli, &resolved)?;
+                client
                     .post(&format!("/v2/task/{}/comment{}", resolved.id, q), &body)
-                    .await?;
-                (format!("/v2/task/{}/comment", resolved.id), r)
+                    .await?
             } else {
                 return Err(CliError::ClientError {
                     message: "One of --task, --list, or --view is required".to_string(),
                     status: 0,
                 });
             };
-            let _ = url;
             output.print_single(&resp, COMMENT_FIELDS, "id");
             Ok(())
         }

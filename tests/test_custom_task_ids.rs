@@ -238,3 +238,134 @@ async fn custom_id_without_workspace_errors_clearly() {
         .failure()
         .stderr(predicates::str::contains("setup"));
 }
+
+#[tokio::test]
+async fn task_add_tag_custom_id_appends_pair() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+    mock_custom(
+        &server,
+        "POST",
+        "/v2/task/PROJ-42/tag/urgent",
+        serde_json::json!({}),
+    )
+    .await;
+
+    clickup(dir.path(), &server)
+        .args(["task", "add-tag", "PROJ-42", "urgent"])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn task_remove_tag_custom_id_appends_pair() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+    mock_custom(
+        &server,
+        "DELETE",
+        "/v2/task/PROJ-42/tag/urgent",
+        serde_json::json!({}),
+    )
+    .await;
+
+    clickup(dir.path(), &server)
+        .args(["task", "remove-tag", "PROJ-42", "urgent"])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn task_add_dep_custom_id_appends_pair() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+    mock_custom(
+        &server,
+        "POST",
+        "/v2/task/PROJ-42/dependency",
+        serde_json::json!({}),
+    )
+    .await;
+
+    clickup(dir.path(), &server)
+        .args(["task", "add-dep", "PROJ-42", "--depends-on", "abc123"])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn task_remove_dep_custom_id_appends_pair() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+    mock_custom(
+        &server,
+        "DELETE",
+        "/v2/task/PROJ-42/dependency",
+        serde_json::json!({}),
+    )
+    .await;
+
+    clickup(dir.path(), &server)
+        .args(["task", "remove-dep", "PROJ-42", "--depends-on", "abc123"])
+        .assert()
+        .success();
+}
+
+/// time-in-status with no explicit ID resolves via env/branch; a custom
+/// resolved ID must carry the pair on the single-task request.
+#[tokio::test]
+async fn time_in_status_autodetected_custom_id_appends_pair() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+    mock_custom(
+        &server,
+        "GET",
+        "/v2/task/PROJ-42/time_in_status",
+        serde_json::json!({"current_status": {"status": "open", "total_time": {"by_minute": 1}}}),
+    )
+    .await;
+
+    let mut cmd = Command::cargo_bin("clickup-cli").unwrap();
+    cmd.current_dir(dir.path())
+        .env("CLICKUP_API_URL", server.uri())
+        .env("CLICKUP_TOKEN", "pk_test")
+        .env("CLICKUP_WORKSPACE", "99")
+        .env("CLICKUP_GIT_DETECT", "0")
+        .env("CLICKUP_TASK_ID", "PROJ-42");
+
+    cmd.args(["task", "time-in-status"]).assert().success();
+}
+
+/// Pins the boundary-separator logic: with a custom task ID the base URL
+/// already carries a query, so an explicit --start/--start-id pair must be
+/// joined with '&' — all four params must land on one request.
+#[tokio::test]
+async fn comment_list_custom_id_with_boundary_pair_joins_with_ampersand() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path_matcher("/v2/task/PROJ-42/comment"))
+        .and(query_param("custom_task_ids", "true"))
+        .and(query_param("team_id", "99"))
+        .and(query_param("start", "1700000000000"))
+        .and(query_param("start_id", "c9"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"comments": []})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "comment",
+            "list",
+            "--task",
+            "PROJ-42",
+            "--start",
+            "1700000000000",
+            "--start-id",
+            "c9",
+        ])
+        .assert()
+        .success();
+}
