@@ -125,7 +125,7 @@ To limit what the server exposes, pass `--profile {all|read|safe}`, `--read-only
 ## Exit Codes
 
 - 0: success
-- 1: client error (400, bad input)
+- 1: client error (400, bad input — includes CLI usage/parse errors)
 - 2: auth/permission error (401, 403)
 - 3: not found (404)
 - 4: rate limited (429)

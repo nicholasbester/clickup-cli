@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- CLI usage errors (unknown subcommand, unknown flag, missing required argument) now exit with code 1 — the documented "client error / bad input" code — instead of clap's default 2, which this CLI's exit-code contract reserves for auth/permission errors (401/403) (#109). Agents and scripts branching on exit codes previously misclassified every typo as an auth failure. `--help` and `--version` still print to stdout and exit 0, rendered by clap exactly as before. **Behavior change:** anything that specifically matched exit code 2 to detect malformed invocations must switch to 1.
+
+### Fixed
 - The repo Dockerfile had been broken since the binary rename in #41: it copied a binary named `clickup` that no longer exists (the crate ships `clickup-cli`/`clkup`), and its `rust:1.87-slim` build stage fell below the crate's MSRV once that was bumped to 1.88. This also broke Glama's hosted MCP-server build, whose inferred build spec mirrored the same wrong binary name. The build stage now major-pins `rust:1-slim-trixie` (tracks stable, stays above future MSRV bumps) with the runtime on the matching `debian:trixie-slim` (mismatched Debian suites between stages fail at runtime on glibc), builds `--bin clickup-cli`, and installs it under the image's historical command name `clickup`. Verified by building the image and driving the containerized MCP server over stdio.
 
 ## [0.15.3] - 2026-08-14

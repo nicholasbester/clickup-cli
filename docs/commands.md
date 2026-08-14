@@ -608,7 +608,7 @@ clickup-cli mcp serve
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Client error (bad input, 400) |
+| 1 | Client error (bad input, 400) — includes CLI usage/parse errors |
 | 2 | Auth/permission error (401, 403) |
 | 3 | Not found (404) |
 | 4 | Rate limited (429) |
