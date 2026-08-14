@@ -92,8 +92,12 @@ async fn member_list_cu_prefix_is_stripped() {
     let dir = TempDir::new().unwrap();
     let server = MockServer::start().await;
 
+    // path_matcher ignores query strings, so explicitly pin that CU-abc123
+    // is not misclassified as a custom ID (which would append the pair).
     Mock::given(method("GET"))
         .and(path_matcher("/v2/task/abc123/member"))
+        .and(query_param_is_missing("custom_task_ids"))
+        .and(query_param_is_missing("team_id"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "members": []
         })))

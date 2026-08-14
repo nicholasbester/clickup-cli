@@ -3054,6 +3054,8 @@ async fn dispatch_tool(
         }
 
         "clickup_member_list" => {
+            // Presence is pre-checked so resolve_task's missing-param error
+            // is unreachable and the list_id/neither branches are untouched.
             let path = if args.get("task_id").and_then(|v| v.as_str()).is_some() {
                 let (task_id, custom_q) = resolve_task(args, "task_id")?;
                 match custom_q {
