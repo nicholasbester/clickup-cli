@@ -652,7 +652,7 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
             let task = git::require_task(cli, id.as_deref(), true)?;
             if task.is_custom {
                 return Err(CliError::ClientError {
-                    message: git::custom_id_unsupported(&task.raw, "task move"),
+                    message: git::custom_id_unsupported(&task.raw, "task move", "task get"),
                     status: 0,
                 });
             }
@@ -680,6 +680,7 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                         message: git::custom_id_unsupported(
                             &task.raw,
                             "task set-estimate --assignee",
+                            "task get",
                         ),
                         status: 0,
                     });
@@ -720,7 +721,11 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
             let task = git::require_task(cli, id.as_deref(), true)?;
             if task.is_custom {
                 return Err(CliError::ClientError {
-                    message: git::custom_id_unsupported(&task.raw, "task replace-estimates"),
+                    message: git::custom_id_unsupported(
+                        &task.raw,
+                        "task replace-estimates",
+                        "task get",
+                    ),
                     status: 0,
                 });
             }

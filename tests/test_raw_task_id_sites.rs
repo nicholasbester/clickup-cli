@@ -212,3 +212,113 @@ async fn mcp_list_remove_task_rejects_custom_id_locally() {
         .success()
         .stdout(predicates::str::contains("requires the regular task id"));
 }
+
+#[tokio::test]
+async fn cli_task_move_strips_cu_prefix() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("PUT"))
+        .and(path_matcher("/v3/workspaces/99/tasks/abc123/home_list/9"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args(["task", "move", "CU-abc123", "--list", "9"])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn cli_set_estimate_assignee_rejects_custom_id_locally() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("PATCH"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "task",
+            "set-estimate",
+            "--id",
+            "PROJ-42",
+            "--assignee",
+            "1",
+            "--time",
+            "60000",
+        ])
+        .assert()
+        .code(1)
+        .stderr(predicates::str::contains("requires the regular task id"));
+}
+
+#[tokio::test]
+async fn cli_replace_estimates_rejects_custom_id_locally() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "task",
+            "replace-estimates",
+            "--id",
+            "PROJ-42",
+            "--estimate",
+            "1:60000",
+        ])
+        .assert()
+        .code(1)
+        .stderr(predicates::str::contains("requires the regular task id"));
+}
+
+/// The flag-less set-estimate path (v2, custom-ID capable) must keep
+/// working for custom IDs — the deliberately preserved branch.
+#[tokio::test]
+async fn cli_set_estimate_flagless_custom_id_still_works() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("PUT"))
+        .and(path_matcher("/v2/task/PROJ-42"))
+        .and(wiremock::matchers::query_param("custom_task_ids", "true"))
+        .and(wiremock::matchers::query_param("team_id", "99"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"id": "abc123", "name": "t"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args(["task", "set-estimate", "--id", "PROJ-42", "--time", "60000"])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn mcp_set_estimate_user_id_rejects_custom_id_locally() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    mcp_serve(dir.path(), &server)
+        .write_stdin(rpc_call(
+            "clickup_task_set_estimate",
+            serde_json::json!({"task_id": "PROJ-42", "user_id": 1, "time_estimate": 60000}),
+        ))
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("requires the regular task id"));
+}

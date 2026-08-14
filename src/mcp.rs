@@ -3309,6 +3309,7 @@ async fn dispatch_tool(
                 return Err(git::custom_id_unsupported(
                     &task.raw,
                     "clickup_list_add_task",
+                    "clickup_task_get",
                 ));
             }
             client
@@ -3318,7 +3319,7 @@ async fn dispatch_tool(
                 )
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(json!({"message": format!("Task {} added to list {}", task.raw, list_id)}))
+            Ok(json!({"message": format!("Task {} added to list {}", task.id, list_id)}))
         }
 
         "clickup_list_remove_task" => {
@@ -3336,13 +3337,14 @@ async fn dispatch_tool(
                 return Err(git::custom_id_unsupported(
                     &task.raw,
                     "clickup_list_remove_task",
+                    "clickup_task_get",
                 ));
             }
             client
                 .delete(&format!("/v2/list/{}/task/{}", list_id, task.id))
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(json!({"message": format!("Task {} removed from list {}", task.raw, list_id)}))
+            Ok(json!({"message": format!("Task {} removed from list {}", task.id, list_id)}))
         }
 
         "clickup_comment_update" => {
@@ -4461,7 +4463,11 @@ async fn dispatch_tool(
             // (issue #104): strip CU- prefixes, reject custom-format IDs.
             let task = git::parse_task_id(raw);
             if task.is_custom {
-                return Err(git::custom_id_unsupported(&task.raw, "clickup_task_move"));
+                return Err(git::custom_id_unsupported(
+                    &task.raw,
+                    "clickup_task_move",
+                    "clickup_task_get",
+                ));
             }
             let task_id = task.id;
             let list_id = args
@@ -4492,6 +4498,16 @@ async fn dispatch_tool(
                 .ok_or("Missing required parameter: time_estimate")?;
 
             if let Some(user_id) = user_id {
+                // The v3 per-user endpoint has no documented custom-ID
+                // support (issue #104); the flag-less v2 branch below keeps
+                // it via the query fragment.
+                if custom_query.is_some() {
+                    return Err(git::custom_id_unsupported(
+                        &task_id,
+                        "clickup_task_set_estimate with user_id",
+                        "clickup_task_get",
+                    ));
+                }
                 let team_id = resolve_workspace(args)?;
                 let body = json!({"time_estimates": [{"user_id": user_id, "time_estimate": time_estimate}]});
                 client
@@ -4527,6 +4543,7 @@ async fn dispatch_tool(
                 return Err(git::custom_id_unsupported(
                     &task.raw,
                     "clickup_task_replace_estimates",
+                    "clickup_task_get",
                 ));
             }
             let task_id = task.id;

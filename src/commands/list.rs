@@ -171,7 +171,11 @@ pub async fn execute(command: ListCommands, cli: &Cli) -> Result<(), CliError> {
             let task = crate::git::parse_task_id(&task_id);
             if task.is_custom {
                 return Err(CliError::ClientError {
-                    message: crate::git::custom_id_unsupported(&task.raw, "list add-task"),
+                    message: crate::git::custom_id_unsupported(
+                        &task.raw,
+                        "list add-task",
+                        "task get",
+                    ),
                     status: 0,
                 });
             }
@@ -188,7 +192,11 @@ pub async fn execute(command: ListCommands, cli: &Cli) -> Result<(), CliError> {
             let task = crate::git::parse_task_id(&task_id);
             if task.is_custom {
                 return Err(CliError::ClientError {
-                    message: crate::git::custom_id_unsupported(&task.raw, "list remove-task"),
+                    message: crate::git::custom_id_unsupported(
+                        &task.raw,
+                        "list remove-task",
+                        "task get",
+                    ),
                     status: 0,
                 });
             }

@@ -180,12 +180,14 @@ pub fn parse_task_id(arg: &str) -> ResolvedTask {
 
 /// Error message for operations whose endpoints have no documented
 /// `custom_task_ids` support (issue #104): sending a custom-format ID raw
-/// is a guaranteed, confusing upstream failure, so callers reject it
-/// locally with this guidance instead.
-pub fn custom_id_unsupported(raw: &str, operation: &str) -> String {
+/// produces a confusing upstream failure, so callers reject it locally
+/// with this guidance instead. `lookup` names the surface-appropriate way
+/// to obtain the regular ID (`"task get"` for the CLI,
+/// `"clickup_task_get"` for MCP).
+pub fn custom_id_unsupported(raw: &str, operation: &str, lookup: &str) -> String {
     format!(
         "'{raw}' is a custom task ID, but {operation} requires the regular task id \
-         (its endpoint has no custom-ID support) — find it with: task get {raw}"
+         (its endpoint has no custom-ID support) — find it with: {lookup} {raw}"
     )
 }
 
