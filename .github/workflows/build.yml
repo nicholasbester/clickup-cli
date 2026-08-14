@@ -169,8 +169,11 @@ jobs:
       # Configured on npmjs.com -> Package settings -> Publishing access ->
       # Trusted publisher = nicholasbester/clickup-cli, workflow build.yml.
       # NOTE: npm@latest's engine floor tracks upstream — npm 12 requires
-      # Node >= 22, which is why node-version above must stay a current LTS
-      # (Node 20 + npm 12 broke every release v0.15.0-v0.15.2, issue #105).
+      # Node >= 22, so node-version above must stay inside npm@latest's
+      # engine range (Node 20 + npm 12 broke every release v0.15.0-v0.15.2,
+      # issue #105). Node 24's bundled npm (>= 11.17) already meets the
+      # 11.5.1 Trusted-Publishing floor; this step only tracks latest for
+      # OIDC-flow fixes.
       - name: Upgrade npm to a Trusted-Publishing-capable version
         if: ${{ !contains(github.ref_name, '-') }}
         run: npm install -g npm@latest
