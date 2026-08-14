@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The repo Dockerfile had been broken since the binary rename in #41: it copied a binary named `clickup` that no longer exists (the crate ships `clickup-cli`/`clkup`), and its `rust:1.87-slim` build stage fell below the crate's MSRV once that was bumped to 1.88. This also broke Glama's hosted MCP-server build, whose inferred build spec mirrored the same wrong binary name. The build stage now major-pins `rust:1-slim-trixie` (tracks stable, stays above future MSRV bumps) with the runtime on the matching `debian:trixie-slim` (mismatched Debian suites between stages fail at runtime on glibc), builds `--bin clickup-cli`, and installs it under the image's historical command name `clickup`. Verified by building the image and driving the containerized MCP server over stdio.
+
 ## [0.15.3] - 2026-08-14
 
 ### Fixed
