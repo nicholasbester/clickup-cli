@@ -1,0 +1,31 @@
+# Guard for the Dockerfile: it is otherwise only ever built by external
+# platforms (e.g. Glama's MCP hosting), and it has silently broken twice —
+# at the binary rename (#41) and at the MSRV bump to 1.88 (see #108).
+name: Docker
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - Cargo.toml
+      - Cargo.lock
+      - src/**
+      - .github/workflows/docker.yml
+
+jobs:
+  build:
+    name: docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build -t clickup-cli-ci .
+      - name: Smoke-test CLI and MCP server
+        run: |
+          docker run --rm clickup-cli-ci --version
+          docker run --rm --entrypoint clickup-cli clickup-cli-ci --version
+          docker run --rm --entrypoint clkup clickup-cli-ci --version
+          echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | docker run --rm -i -e CLICKUP_TOKEN=pk_test -e CLICKUP_WORKSPACE=99 clickup-cli-ci \
+            | grep -q '"tools"'
