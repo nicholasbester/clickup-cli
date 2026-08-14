@@ -1,0 +1,5 @@
+# Keep the local `docker build` context small — target/ alone can be
+# multi-GB on a dev machine. Glama/CI build from clean clones.
+target/
+npm/node_modules/
+.git/

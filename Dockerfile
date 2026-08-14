@@ -14,6 +14,7 @@
 # Both stages MUST pin the same Debian suite (-trixie here): a builder on a
 # newer suite links against a newer glibc than the runtime image provides
 # (rust:1-slim on trixie/glibc 2.39 vs bookworm/glibc 2.36 fails at runtime).
+# At the next Debian stable, bump both -trixie references together.
 FROM rust:1-slim-trixie AS builder
 
 WORKDIR /app
@@ -32,6 +33,11 @@ FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/clickup-cli /usr/local/bin/clickup
+# Hardlink the documented binary names (docs/install.md: every install
+# method ships `clickup-cli` and `clkup`); `clickup` stays the image's
+# historical entrypoint name.
+RUN ln /usr/local/bin/clickup /usr/local/bin/clickup-cli \
+    && ln /usr/local/bin/clickup /usr/local/bin/clkup
 
 ENTRYPOINT ["clickup"]
 CMD ["mcp", "serve"]
