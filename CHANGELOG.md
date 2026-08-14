@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Custom-format task IDs (`PROJ-42`) now work on every task-scoped command, not just `task` and `doc` (#98). `field set`/`unset`, `comment list`/`create`, `checklist create`, `member list`, and `attachment upload`/`list` previously dropped the `custom_task_ids=true&team_id=<ws>` query pair, so a custom ID drew ClickUp's misleading 401 "Team not authorized". The pair is now appended by a shared helper (`custom_task_query`), which the existing hand-rolled copies in `task.rs`/`doc.rs` also use; regular task IDs produce byte-identical requests. When a custom ID is used with no workspace configured, the CLI fails locally with the setup hint instead of sending a request ClickUp will reject. Note: `time list --task`/`time create --task`/`time start --task` pass task IDs to team-scoped endpoints via a different mechanism and are not covered by this change.
+
 ## [0.15.1] - 2026-08-13
 
 ### Fixed

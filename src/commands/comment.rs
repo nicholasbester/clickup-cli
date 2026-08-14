@@ -112,13 +112,16 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             } else if let Some(id) = view {
                 format!("/v2/view/{}/comment", id)
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                format!("/v2/task/{}/comment", resolved.id)
+                let q = crate::commands::workspace::custom_task_query(cli, &resolved, '?')?;
+                format!("/v2/task/{}/comment{}", resolved.id, q)
             } else {
                 return Err(CliError::ClientError {
                     message: "One of --task, --list, or --view is required".to_string(),
                     status: 0,
                 });
             };
+            // The base may already carry the custom-task-id query pair.
+            let boundary_sep = if base.contains('?') { '&' } else { '?' };
             let comments = crate::commands::pagination::walk_start_id(
                 cli,
                 &client,
@@ -126,7 +129,9 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
                 start_id,
                 "comments",
                 |start, start_id| match (start, start_id) {
-                    (Some(s), Some(sid)) => format!("{}?start={}&start_id={}", base, s, sid),
+                    (Some(s), Some(sid)) => {
+                        format!("{}{}start={}&start_id={}", base, boundary_sep, s, sid)
+                    }
                     _ => base.clone(),
                 },
             )
@@ -179,8 +184,9 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
                 if let Some(a) = assignee {
                     body["assignee"] = serde_json::json!(a);
                 }
+                let q = crate::commands::workspace::custom_task_query(cli, &resolved, '?')?;
                 let r = client
-                    .post(&format!("/v2/task/{}/comment", resolved.id), &body)
+                    .post(&format!("/v2/task/{}/comment{}", resolved.id, q), &body)
                     .await?;
                 (format!("/v2/task/{}/comment", resolved.id), r)
             } else {

@@ -37,6 +37,24 @@ pub fn resolve_workspace(cli: &Cli) -> Result<String, CliError> {
     })
 }
 
+/// Query suffix for task-scoped `/v2/task/{id}/...` endpoints. Custom-format
+/// task IDs (`PROJ-42`) are only resolvable by ClickUp when
+/// `custom_task_ids=true&team_id=<workspace>` is appended (issue #98); the
+/// error otherwise is a misleading 401 "Team not authorized". Returns the
+/// pair with the given leading separator (`'?'` or `'&'`), or an empty
+/// string for regular task IDs.
+pub fn custom_task_query(
+    cli: &Cli,
+    task: &crate::git::ResolvedTask,
+    sep: char,
+) -> Result<String, CliError> {
+    if !task.is_custom {
+        return Ok(String::new());
+    }
+    let ws = resolve_workspace(cli)?;
+    Ok(format!("{}custom_task_ids=true&team_id={}", sep, ws))
+}
+
 pub async fn execute(command: WorkspaceCommands, cli: &Cli) -> Result<(), CliError> {
     let token = resolve_token(cli)?;
     let client = ClickUpClient::new(&token, cli.timeout)?;

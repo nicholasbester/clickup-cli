@@ -535,30 +535,22 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 }
                 body.insert("assignees".into(), serde_json::Value::Object(assignees));
             }
-            let path = if task.is_custom {
-                let ws_id = resolve_workspace(cli)?;
-                format!(
-                    "/v2/task/{}?custom_task_ids=true&team_id={}",
-                    task.id, ws_id
-                )
-            } else {
-                format!("/v2/task/{}", task.id)
-            };
+            let path = format!(
+                "/v2/task/{}{}",
+                task.id,
+                crate::commands::workspace::custom_task_query(cli, &task, '?')?
+            );
             let resp = client.put(&path, &serde_json::Value::Object(body)).await?;
             output.print_single(&resp, TASK_FIELDS, "id");
             Ok(())
         }
         TaskCommands::Delete { id } => {
             let task = git::require_task(cli, id.as_deref(), false)?;
-            let path = if task.is_custom {
-                let ws_id = resolve_workspace(cli)?;
-                format!(
-                    "/v2/task/{}?custom_task_ids=true&team_id={}",
-                    task.id, ws_id
-                )
-            } else {
-                format!("/v2/task/{}", task.id)
-            };
+            let path = format!(
+                "/v2/task/{}{}",
+                task.id,
+                crate::commands::workspace::custom_task_query(cli, &task, '?')?
+            );
             client.delete(&path).await?;
             output.print_message(&format!("Task {} deleted", task.raw));
             Ok(())
@@ -687,15 +679,11 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 let body = serde_json::json!({
                     "time_estimate": time
                 });
-                let path = if task.is_custom {
-                    let ws_id = resolve_workspace(cli)?;
-                    format!(
-                        "/v2/task/{}?custom_task_ids=true&team_id={}",
-                        task.id, ws_id
-                    )
-                } else {
-                    format!("/v2/task/{}", task.id)
-                };
+                let path = format!(
+                    "/v2/task/{}{}",
+                    task.id,
+                    crate::commands::workspace::custom_task_query(cli, &task, '?')?
+                );
                 client.put(&path, &body).await?
             };
             output.print_single(&resp, TASK_FIELDS, "id");

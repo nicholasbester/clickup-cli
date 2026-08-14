@@ -80,9 +80,10 @@ pub async fn execute(command: ChecklistCommands, cli: &Cli) -> Result<(), CliErr
     match command {
         ChecklistCommands::Create { task, name } => {
             let task = git::require_task(cli, task.as_deref(), true)?;
+            let q = crate::commands::workspace::custom_task_query(cli, &task, '?')?;
             let body = serde_json::json!({ "name": name });
             let resp = client
-                .post(&format!("/v2/task/{}/checklist", task.id), &body)
+                .post(&format!("/v2/task/{}/checklist{}", task.id, q), &body)
                 .await?;
             let checklist = resp.get("checklist").cloned().unwrap_or(resp);
             output.print_single(&checklist, &["id", "name", "task_id", "orderindex"], "id");
