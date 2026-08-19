@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dependencies
+- Bumped transitive `h2` 0.4.13 → 0.4.16 to clear a new RUSTSEC advisory ("unbounded empty DATA frames") flagged by the cargo-deny CI check.
+
 ### Added
 - `--subtasks` on `task list` and `task search`, and `--include-closed` on `task search` (both map to ClickUp's query params; `task list` already had `--include-closed`). The MCP `clickup_task_list` tool gains a matching `subtasks` argument (`clickup_task_search` already supported both).
 
