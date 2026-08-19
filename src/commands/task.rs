@@ -26,6 +26,9 @@ pub enum TaskCommands {
         /// Include closed tasks
         #[arg(long)]
         include_closed: bool,
+        /// Include subtasks
+        #[arg(long)]
+        subtasks: bool,
         /// Order by field
         #[arg(long)]
         order_by: Option<String>,
@@ -53,6 +56,12 @@ pub enum TaskCommands {
         /// Filter by tag
         #[arg(long)]
         tag: Option<Vec<String>>,
+        /// Include closed tasks
+        #[arg(long)]
+        include_closed: bool,
+        /// Include subtasks
+        #[arg(long)]
+        subtasks: bool,
     },
     /// Get task details
     Get {
@@ -251,12 +260,16 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
             assignee,
             tag,
             include_closed,
+            subtasks,
             order_by,
             reverse,
         } => {
             let mut params = Vec::new();
             if include_closed {
                 params.push("include_closed=true".to_string());
+            }
+            if subtasks {
+                params.push("subtasks=true".to_string());
             }
             if let Some(statuses) = &status {
                 for s in statuses {
@@ -279,63 +292,19 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
             if reverse {
                 params.push("reverse=true".to_string());
             }
-            if let Some(page) = cli.page {
-                params.push(format!("page={}", page));
-            }
-
-            let query = if params.is_empty() {
-                String::new()
-            } else {
-                format!("?{}", params.join("&"))
-            };
-
-            if cli.all {
-                // Auto-paginate
-                let mut all_tasks = Vec::new();
-                let mut page = 0u32;
-                loop {
-                    let mut page_params = params.clone();
-                    page_params.push(format!("page={}", page));
-                    let page_query = format!("?{}", page_params.join("&"));
-                    let resp = client
-                        .get(&format!("/v2/list/{}/task{}", list, page_query))
-                        .await?;
-                    let tasks = resp
-                        .get("tasks")
-                        .and_then(|t| t.as_array())
-                        .cloned()
-                        .unwrap_or_default();
-                    let is_last = resp
-                        .get("last_page")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true);
-                    all_tasks.extend(tasks);
-                    if is_last {
-                        break;
-                    }
-                    if let Some(limit) = cli.limit {
-                        if all_tasks.len() >= limit {
-                            all_tasks.truncate(limit);
-                            break;
-                        }
-                    }
-                    page += 1;
+            // The shared walker owns page/--all/--limit handling and the
+            // documented 100-page hard cap (the previous hand-rolled loop
+            // here had no cap).
+            let base_qs = params.join("&");
+            let tasks = crate::commands::pagination::walk_page(cli, &client, "tasks", |page| {
+                if base_qs.is_empty() {
+                    format!("/v2/list/{}/task?page={}", list, page)
+                } else {
+                    format!("/v2/list/{}/task?{}&page={}", list, base_qs, page)
                 }
-                output.print_items(&all_tasks, TASK_FIELDS, "id");
-            } else {
-                let resp = client
-                    .get(&format!("/v2/list/{}/task{}", list, query))
-                    .await?;
-                let mut tasks = resp
-                    .get("tasks")
-                    .and_then(|t| t.as_array())
-                    .cloned()
-                    .unwrap_or_default();
-                if let Some(limit) = cli.limit {
-                    tasks.truncate(limit);
-                }
-                output.print_items(&tasks, TASK_FIELDS, "id");
-            }
+            })
+            .await?;
+            output.print_items(&tasks, TASK_FIELDS, "id");
             Ok(())
         }
         TaskCommands::Search {
@@ -345,9 +314,17 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
             status,
             assignee,
             tag,
+            include_closed,
+            subtasks,
         } => {
             let ws_id = resolve_workspace(cli)?;
             let mut params = Vec::new();
+            if include_closed {
+                params.push("include_closed=true".to_string());
+            }
+            if subtasks {
+                params.push("subtasks=true".to_string());
+            }
             if let Some(s) = &space {
                 params.push(format!("space_ids[]={}", s));
             }
@@ -372,25 +349,18 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                     params.push(format!("tags[]={}", t));
                 }
             }
-            if let Some(page) = cli.page {
-                params.push(format!("page={}", page));
-            }
-            let query = if params.is_empty() {
-                String::new()
-            } else {
-                format!("?{}", params.join("&"))
-            };
-            let resp = client
-                .get(&format!("/v2/team/{}/task{}", ws_id, query))
-                .await?;
-            let mut tasks = resp
-                .get("tasks")
-                .and_then(|t| t.as_array())
-                .cloned()
-                .unwrap_or_default();
-            if let Some(limit) = cli.limit {
-                tasks.truncate(limit);
-            }
+            // Shared walker: honors --page/--all/--limit and the 100-page
+            // cap. Previously this was a single request that ignored --all,
+            // contradicting the documented pagination contract.
+            let base_qs = params.join("&");
+            let tasks = crate::commands::pagination::walk_page(cli, &client, "tasks", |page| {
+                if base_qs.is_empty() {
+                    format!("/v2/team/{}/task?page={}", ws_id, page)
+                } else {
+                    format!("/v2/team/{}/task?{}&page={}", ws_id, base_qs, page)
+                }
+            })
+            .await?;
             output.print_items(&tasks, TASK_FIELDS, "id");
             Ok(())
         }

@@ -239,6 +239,7 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "list_id": {"type": "string", "description": "ID of the list to read tasks from. Obtain from clickup_list_list (field: id)."},
+                    "subtasks": {"type": "boolean", "description": "true = include subtasks in the results (ClickUp's subtasks=true query param); false or omitted = top-level tasks only."},
                     "statuses": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -2435,6 +2436,7 @@ async fn dispatch_tool(
                 .to_string();
             // Capture filter values once; build_path is called per page.
             let include_closed = args.get("include_closed").and_then(|v| v.as_bool());
+            let subtasks = args.get("subtasks").and_then(|v| v.as_bool());
             let statuses: Vec<String> = args
                 .get("statuses")
                 .and_then(|v| v.as_array())
@@ -2471,6 +2473,9 @@ async fn dispatch_tool(
                     let mut qs = format!("page={}", page);
                     if let Some(ic) = include_closed {
                         qs.push_str(&format!("&include_closed={}", ic));
+                    }
+                    if let Some(st) = subtasks {
+                        qs.push_str(&format!("&subtasks={}", st));
                     }
                     for s in &statuses {
                         qs.push_str(&format!("&statuses[]={}", s));
