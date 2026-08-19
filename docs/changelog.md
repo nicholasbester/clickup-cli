@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--subtasks` on `task list` and `task search`, and `--include-closed` on `task search` (both map to ClickUp's query params; `task list` already had `--include-closed`). The MCP `clickup_task_list` tool gains a matching `subtasks` argument (`clickup_task_search` already supported both).
+
+### Fixed
+- `task search` now actually paginates: `--all` was silently ignored (a single request, client-side truncation — at most one page returned); it now walks pages via the shared walker alongside the already-working `--page`/`--limit`. `task list`'s hand-rolled pagination loop also moves onto the shared walker, which fixes three defects at once: the documented 100-page hard cap was missing, `--all --limit N` could return more than N items when the walk ended naturally (the limit was only enforced mid-walk, never on the final page), and `--all --page N` sent duplicate `page` params instead of starting the walk at page N.
+
 ## [0.15.5] - 2026-08-14
 
 ### Fixed
