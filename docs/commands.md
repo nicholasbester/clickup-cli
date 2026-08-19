@@ -158,8 +158,8 @@ clickup-cli list remove-task <LIST_ID> <TASK_ID>
 
 ```bash
 # List and search
-clickup-cli task list --list <ID> [--status S] [--assignee ID] [--tag T] [--include-closed] [--order-by field] [--reverse]
-clickup-cli task search [--space ID] [--folder ID] [--list ID] [--status S] [--assignee ID] [--tag T]
+clickup-cli task list --list <ID> [--status S] [--assignee ID] [--tag T] [--include-closed] [--subtasks] [--order-by field] [--reverse]
+clickup-cli task search [--space ID] [--folder ID] [--list ID] [--status S] [--assignee ID] [--tag T] [--include-closed] [--subtasks]
 
 # CRUD
 clickup-cli task get <ID> [--subtasks] [--custom-task-id] [--markdown]
