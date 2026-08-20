@@ -36,6 +36,7 @@ thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 comfy-table = "8"
 clap_complete = "4"
+pulldown-cmark = { version = "0.13", default-features = false }
 regex = "1"
 
 [dev-dependencies]

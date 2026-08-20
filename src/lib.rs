@@ -5,6 +5,7 @@ pub mod config;
 pub mod error;
 pub mod git;
 pub mod input;
+pub mod markdown_ops;
 pub mod mcp;
 pub mod models;
 pub mod output;
