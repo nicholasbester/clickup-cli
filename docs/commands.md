@@ -219,13 +219,13 @@ clickup-cli checklist delete-item <ID> <ITEM_ID>
 
 ```bash
 clickup-cli comment list --task <ID> [--start MS --start-id ID]   # also --list, --view
-clickup-cli comment create --task <ID> --text TEXT [--assignee ID] [--notify-all]
-clickup-cli comment create --list <ID> --text TEXT
-clickup-cli comment create --view <ID> --text TEXT
+clickup-cli comment create --task <ID> --text TEXT [--assignee ID] [--notify-all] [--markdown]
+clickup-cli comment create --list <ID> --text TEXT [--markdown]
+clickup-cli comment create --view <ID> --text TEXT [--markdown]
 clickup-cli comment update <ID> --text TEXT [--resolved] [--assignee ID]
 clickup-cli comment delete <ID>
 clickup-cli comment replies <ID> [--start MS --start-id ID]        # list threaded replies
-clickup-cli comment reply <ID> --text TEXT [--assignee ID]
+clickup-cli comment reply <ID> --text TEXT [--assignee ID] [--markdown]
 ```
 
 ---

@@ -421,12 +421,13 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_comment_create",
-            "description": "Post a new top-level comment on a ClickUp task. @mentions are recognised by ClickUp. Note: ClickUp's v2 comment API stores the body verbatim and does NOT render markdown. Tokens like `**bold**` appear as literal characters in the UI. Returns the created comment object including its new id, which you can pass to clickup_comment_reply, clickup_comment_update, etc.",
+            "description": "Post a new top-level comment on a ClickUp task. @mentions are recognised by ClickUp. Note: ClickUp's v2 comment API does not render markdown syntax in plain text comments; set markdown: true to submit rich formatting instead — otherwise tokens like `**bold**` appear as literal characters in the UI. Returns the created comment object including its new id, which you can pass to clickup_comment_reply, clickup_comment_update, etc.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task to comment on. Obtain from clickup_task_list (field: id) or clickup_task_search."},
-                    "text": {"type": "string", "description": "Comment body. @mentions (e.g. '@username') are rendered. Markdown is NOT rendered by ClickUp's v2 comment API. Markdown syntax is stored as literal text."},
+                    "text": {"type": "string", "description": "Comment body. @mentions (e.g. '@username') are rendered. Markdown is NOT rendered by ClickUp's v2 comment API. Markdown syntax is stored as literal text, unless markdown is true."},
+                    "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the comment to — they will receive a notification. Obtain from clickup_member_list."},
                     "notify_all": {"type": "boolean", "description": "true = send a notification to every assignee of the task; false or omitted = only notify people mentioned or the explicit assignee."}
                 },
@@ -2687,7 +2688,11 @@ async fn dispatch_tool(
                 .get("text")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: text")?;
-            let mut body = json!({"comment_text": text});
+            let markdown = args
+                .get("markdown")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let mut body = crate::markdown_ops::comment_body(markdown, text);
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {
                 body["assignee"] = json!(assignee);
             }
