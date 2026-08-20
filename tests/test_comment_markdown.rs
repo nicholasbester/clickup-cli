@@ -86,6 +86,71 @@ async fn comment_create_markdown_omits_comment_text() {
 }
 
 #[tokio::test]
+async fn comment_create_list_markdown_sends_ops_array() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_matcher("/v2/list/9/comment"))
+        .and(body_partial_json(serde_json::json!({
+            "comment": [
+                {"text": "hello "},
+                {"text": "bold", "attributes": {"bold": true}},
+                {"text": "\n"}
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "comment",
+            "create",
+            "--list",
+            "9",
+            "--markdown",
+            "--text",
+            "hello **bold**",
+        ])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn comment_create_view_markdown_sends_ops_array() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_matcher("/v2/view/v1/comment"))
+        .and(body_partial_json(serde_json::json!({
+            "comment": [
+                {"text": "ls", "attributes": {"code": true}},
+                {"text": "\n"}
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "comment",
+            "create",
+            "--view",
+            "v1",
+            "--markdown",
+            "--text",
+            "`ls`",
+        ])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
 async fn comment_reply_markdown_sends_ops_array() {
     let dir = TempDir::new().unwrap();
     let server = MockServer::start().await;

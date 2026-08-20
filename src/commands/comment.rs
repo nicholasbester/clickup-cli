@@ -176,44 +176,18 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             markdown,
         } => {
             let resp = if let Some(id) = list {
-                let body = if markdown {
-                    let ops = crate::markdown_ops::markdown_to_ops(&text);
-                    if ops.is_empty() {
-                        serde_json::json!({ "comment_text": text })
-                    } else {
-                        serde_json::json!({ "comment": ops })
-                    }
-                } else {
-                    serde_json::json!({ "comment_text": text })
-                };
+                let body = crate::markdown_ops::comment_body(markdown, &text);
                 client
                     .post(&format!("/v2/list/{}/comment", id), &body)
                     .await?
             } else if let Some(id) = view {
-                let body = if markdown {
-                    let ops = crate::markdown_ops::markdown_to_ops(&text);
-                    if ops.is_empty() {
-                        serde_json::json!({ "comment_text": text })
-                    } else {
-                        serde_json::json!({ "comment": ops })
-                    }
-                } else {
-                    serde_json::json!({ "comment_text": text })
-                };
+                let body = crate::markdown_ops::comment_body(markdown, &text);
                 client
                     .post(&format!("/v2/view/{}/comment", id), &body)
                     .await?
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                let mut body = if markdown {
-                    let ops = crate::markdown_ops::markdown_to_ops(&text);
-                    if ops.is_empty() {
-                        serde_json::json!({ "comment_text": text, "notify_all": notify_all })
-                    } else {
-                        serde_json::json!({ "comment": ops, "notify_all": notify_all })
-                    }
-                } else {
-                    serde_json::json!({ "comment_text": text, "notify_all": notify_all })
-                };
+                let mut body = crate::markdown_ops::comment_body(markdown, &text);
+                body["notify_all"] = serde_json::json!(notify_all);
                 if let Some(a) = assignee {
                     body["assignee"] = serde_json::json!(a);
                 }
@@ -280,16 +254,7 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             assignee,
             markdown,
         } => {
-            let mut body = if markdown {
-                let ops = crate::markdown_ops::markdown_to_ops(&text);
-                if ops.is_empty() {
-                    serde_json::json!({ "comment_text": text })
-                } else {
-                    serde_json::json!({ "comment": ops })
-                }
-            } else {
-                serde_json::json!({ "comment_text": text })
-            };
+            let mut body = crate::markdown_ops::comment_body(markdown, &text);
             if let Some(a) = assignee {
                 body["assignee"] = serde_json::json!(a);
             }

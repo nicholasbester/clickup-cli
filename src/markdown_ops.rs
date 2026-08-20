@@ -18,6 +18,11 @@ enum ListKind {
     Ordered,
 }
 
+/// ClickUp's `indent` attribute (used for both nested lists and the
+/// blockquote degradation) tops out at 8 levels; deeper nesting clamps
+/// rather than emitting an ever-growing number the UI won't render further.
+const MAX_INDENT: usize = 8;
+
 /// Convert CommonMark to ClickUp comment ops. Never fails; an input with
 /// no expressible content yields an empty vec (callers fall back to
 /// comment_text).
@@ -32,6 +37,13 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
     let mut bold: u32 = 0;
     let mut italic: u32 = 0;
     let mut link: Option<String> = None;
+    // The link (if any) that was in scope when an image started — images
+    // clobber `link` with an internal `__IMG__` marker while reconstructing
+    // themselves as literal text, so the enclosing link (e.g.
+    // `[![alt](img.png)](https://dest)`) must be parked here and restored
+    // on `TagEnd::Image`, and used in place of the marker while the image
+    // is being reconstructed.
+    let mut saved_link: Option<Option<String>> = None;
     // Block state
     let mut list_stack: Vec<ListKind> = Vec::new();
     let mut item_task_state: Option<bool> = None; // Some(checked) from TaskListMarker
@@ -94,10 +106,16 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
             };
             attrs.insert("list".into(), json!({ "list": list_name }));
             if list_stack.len() > 1 {
-                attrs.insert("indent".into(), json!(list_stack.len() - 1));
+                attrs.insert(
+                    "indent".into(),
+                    json!((list_stack.len() - 1).min(MAX_INDENT)),
+                );
             }
         } else if blockquote_depth > 0 {
-            attrs.insert("indent".into(), json!(blockquote_depth));
+            attrs.insert(
+                "indent".into(),
+                json!(blockquote_depth.min(MAX_INDENT as u32)),
+            );
         }
         if attrs.is_empty() {
             ops.push(json!({"text": "\n"}));
@@ -114,8 +132,15 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                 Tag::Strikethrough => {} // degrade: text passes through plain
                 Tag::Link { dest_url, .. } => link = Some(dest_url.to_string()),
                 Tag::Image { dest_url, .. } => {
-                    // Literal passthrough: reconstruct as markdown text.
-                    push_text(&mut ops, "![", bold, italic, &None, false, heading_depth);
+                    // Save whatever link is currently in scope (e.g. the
+                    // outer `https://dest` of `[![alt](img.png)](https://dest)`)
+                    // so it survives the `__IMG__` marker below and can be
+                    // restored — and reused on the reconstructed text — on
+                    // TagEnd::Image.
+                    saved_link = Some(link.clone());
+                    // Literal passthrough: reconstruct as markdown text,
+                    // carrying the outer link (if any) along with it.
+                    push_text(&mut ops, "![", bold, italic, &link, false, heading_depth);
                     // alt text arrives as Text events; the closing is
                     // emitted on TagEnd::Image below.
                     link = Some(format!("__IMG__{}", dest_url));
@@ -123,6 +148,20 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                 Tag::Heading { .. } => heading_depth += 1,
                 Tag::BlockQuote(_) => blockquote_depth += 1,
                 Tag::CodeBlock(kind) => {
+                    // A loose list item's paragraph is followed by a
+                    // sibling code block (not another Paragraph), so
+                    // TagEnd::Paragraph never fires the flush (it's
+                    // suppressed inside lists, deferred to TagEnd::Item) —
+                    // without this, the pending text run merges straight
+                    // into the code block's first line. As with the
+                    // Tag::Paragraph flush above, this is a plain "\n": the
+                    // code block terminates its own lines with its own
+                    // code-block attribute, so this separator must not
+                    // carry the list's bullet.
+                    if !list_stack.is_empty() && terminator_pending {
+                        ops.push(json!({"text": "\n"}));
+                        terminator_pending = false;
+                    }
                     in_code_block = true;
                     let _ = kind; // language fences degrade to "plain"
                 }
@@ -147,6 +186,17 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                     // needs a separator from the first — a plain "\n" with
                     // no attributes, since a list-attributed terminator
                     // here would read as starting a new bullet.
+                    //
+                    // Known trade-off: the ClickUp ops format has exactly
+                    // one `list` attribute slot, carried on the "\n" that
+                    // terminates a line — it can't be attached to an
+                    // earlier line and "held over" for a later one. So in
+                    // a multi-block list item, the *last* line is the one
+                    // that ends up carrying the list attribute, meaning the
+                    // bullet visually renders next to the final block while
+                    // the earlier paragraph(s) show up as plain lines above
+                    // it with no bullet at all. This is the best available
+                    // approximation given the format, not a bug to fix.
                     if !list_stack.is_empty() && terminator_pending {
                         ops.push(json!({"text": "\n"}));
                         terminator_pending = false;
@@ -166,15 +216,20 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                         .take()
                         .and_then(|l| l.strip_prefix("__IMG__").map(str::to_string))
                         .unwrap_or_default();
+                    // Restore whatever link was in scope before the image
+                    // (None if the image wasn't itself inside a link), and
+                    // carry it onto the closing text run too.
+                    let outer = saved_link.take().flatten();
                     push_text(
                         &mut ops,
                         &format!("]({})", url),
                         bold,
                         italic,
-                        &None,
+                        &outer,
                         false,
                         heading_depth,
                     );
+                    link = outer;
                 }
                 TagEnd::Heading(_) => {
                     heading_depth = heading_depth.saturating_sub(1);
@@ -218,9 +273,11 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                     }
                 } else {
                     // Image alt-text arrives while `link` holds the __IMG__
-                    // marker; render it plain (part of the literal form).
+                    // marker; substitute the outer link (if any) so text
+                    // wrapped like `[![alt](img.png)](https://dest)` keeps
+                    // it, instead of dropping it as part of the literal form.
                     let effective_link = match &link {
-                        Some(l) if l.starts_with("__IMG__") => None,
+                        Some(l) if l.starts_with("__IMG__") => saved_link.clone().flatten(),
                         other => other.clone(),
                     };
                     push_text(
@@ -261,6 +318,18 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
         }
     }
     ops
+}
+
+/// Build the comment POST body: rich ops when markdown is set and the
+/// input is expressible, plain comment_text otherwise.
+pub fn comment_body(markdown: bool, text: &str) -> Value {
+    if markdown {
+        let ops = markdown_to_ops(text);
+        if !ops.is_empty() {
+            return json!({ "comment": ops });
+        }
+    }
+    json!({ "comment_text": text })
 }
 
 #[cfg(test)]
@@ -457,5 +526,43 @@ mod tests {
     fn empty_input_yields_empty_ops() {
         assert!(markdown_to_ops("").is_empty());
         assert!(markdown_to_ops("   \n").is_empty());
+    }
+
+    #[test]
+    fn loose_item_paragraph_then_code_block_separated() {
+        assert_eq!(
+            markdown_to_ops("- para\n\n  ```\n  code\n  ```"),
+            vec![
+                json!({"text": "para"}),
+                json!({"text": "\n"}),
+                json!({"text": "code"}),
+                json!({"text": "\n", "attributes": {"code-block": {"code-block": "plain"}}}),
+            ]
+        );
+    }
+
+    #[test]
+    fn image_inside_link_keeps_link_url() {
+        assert_eq!(
+            markdown_to_ops("[![alt](img.png)](https://dest)"),
+            vec![
+                json!({"text": "![", "attributes": {"link": "https://dest"}}),
+                json!({"text": "alt", "attributes": {"link": "https://dest"}}),
+                json!({"text": "](img.png)", "attributes": {"link": "https://dest"}}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn deep_blockquote_indent_clamped_to_eight() {
+        let bq = "> ".repeat(10) + "deep";
+        assert_eq!(
+            markdown_to_ops(&bq),
+            vec![
+                json!({"text": "deep"}),
+                json!({"text": "\n", "attributes": {"indent": 8}}),
+            ]
+        );
     }
 }
