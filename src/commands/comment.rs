@@ -38,7 +38,7 @@ pub enum CommentCommands {
         /// View ID
         #[arg(long, conflicts_with_all = ["task", "list"])]
         view: Option<String>,
-        /// Comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
+        /// Comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text unless --markdown is set.
         #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Assignee user ID (task comments only)
@@ -47,6 +47,11 @@ pub enum CommentCommands {
         /// Notify all watchers (task comments only)
         #[arg(long)]
         notify_all: bool,
+        /// Parse --text as markdown and submit ClickUp rich formatting
+        /// (bold/italic/code/links, lists, code blocks; headings render
+        /// bold, blockquotes indent, tables/strikethrough degrade to text)
+        #[arg(long)]
+        markdown: bool,
     },
     /// Update a comment
     Update {
@@ -83,12 +88,17 @@ pub enum CommentCommands {
     Reply {
         /// Comment ID
         id: String,
-        /// Reply text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
+        /// Reply text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text unless --markdown is set.
         #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Assignee user ID
         #[arg(long)]
         assignee: Option<i64>,
+        /// Parse --text as markdown and submit ClickUp rich formatting
+        /// (bold/italic/code/links, lists, code blocks; headings render
+        /// bold, blockquotes indent, tables/strikethrough degrade to text)
+        #[arg(long)]
+        markdown: bool,
     },
 }
 
@@ -163,22 +173,47 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             text,
             assignee,
             notify_all,
+            markdown,
         } => {
             let resp = if let Some(id) = list {
-                let body = serde_json::json!({ "comment_text": text });
+                let body = if markdown {
+                    let ops = crate::markdown_ops::markdown_to_ops(&text);
+                    if ops.is_empty() {
+                        serde_json::json!({ "comment_text": text })
+                    } else {
+                        serde_json::json!({ "comment": ops })
+                    }
+                } else {
+                    serde_json::json!({ "comment_text": text })
+                };
                 client
                     .post(&format!("/v2/list/{}/comment", id), &body)
                     .await?
             } else if let Some(id) = view {
-                let body = serde_json::json!({ "comment_text": text });
+                let body = if markdown {
+                    let ops = crate::markdown_ops::markdown_to_ops(&text);
+                    if ops.is_empty() {
+                        serde_json::json!({ "comment_text": text })
+                    } else {
+                        serde_json::json!({ "comment": ops })
+                    }
+                } else {
+                    serde_json::json!({ "comment_text": text })
+                };
                 client
                     .post(&format!("/v2/view/{}/comment", id), &body)
                     .await?
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                let mut body = serde_json::json!({
-                    "comment_text": text,
-                    "notify_all": notify_all,
-                });
+                let mut body = if markdown {
+                    let ops = crate::markdown_ops::markdown_to_ops(&text);
+                    if ops.is_empty() {
+                        serde_json::json!({ "comment_text": text, "notify_all": notify_all })
+                    } else {
+                        serde_json::json!({ "comment": ops, "notify_all": notify_all })
+                    }
+                } else {
+                    serde_json::json!({ "comment_text": text, "notify_all": notify_all })
+                };
                 if let Some(a) = assignee {
                     body["assignee"] = serde_json::json!(a);
                 }
@@ -239,8 +274,22 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             output.print_items(&comments, COMMENT_FIELDS, "id");
             Ok(())
         }
-        CommentCommands::Reply { id, text, assignee } => {
-            let mut body = serde_json::json!({ "comment_text": text });
+        CommentCommands::Reply {
+            id,
+            text,
+            assignee,
+            markdown,
+        } => {
+            let mut body = if markdown {
+                let ops = crate::markdown_ops::markdown_to_ops(&text);
+                if ops.is_empty() {
+                    serde_json::json!({ "comment_text": text })
+                } else {
+                    serde_json::json!({ "comment": ops })
+                }
+            } else {
+                serde_json::json!({ "comment_text": text })
+            };
             if let Some(a) = assignee {
                 body["assignee"] = serde_json::json!(a);
             }
