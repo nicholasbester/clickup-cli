@@ -142,7 +142,17 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                     });
                 }
                 Tag::Item => item_task_state = None,
-                Tag::Paragraph | Tag::HtmlBlock => {}
+                Tag::Paragraph => {
+                    // A loose list item's second (and later) paragraph
+                    // needs a separator from the first — a plain "\n" with
+                    // no attributes, since a list-attributed terminator
+                    // here would read as starting a new bullet.
+                    if !list_stack.is_empty() && terminator_pending {
+                        ops.push(json!({"text": "\n"}));
+                        terminator_pending = false;
+                    }
+                }
+                Tag::HtmlBlock => {}
                 _ => {}
             },
             Event::End(tag_end) => match tag_end {
@@ -237,6 +247,10 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                 push_text(&mut ops, " ", bold, italic, &None, false, heading_depth);
                 terminator_pending = true;
             }
+            // Deliberately leaves `terminator_pending` untouched: a hard
+            // break is a mid-line/mid-item visual break, not a block
+            // terminator, so it must not suppress (or fake) the item's
+            // own pending line-end bookkeeping.
             Event::HardBreak => ops.push(json!({"text": "\n"})),
             Event::Rule => {
                 ops.push(json!({"text": "---"}));
@@ -349,6 +363,19 @@ mod tests {
                 json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
                 json!({"text": "nested"}),
                 json!({"text": "\n", "attributes": {"list": {"list": "bullet"}, "indent": 1}}),
+            ]
+        );
+    }
+
+    #[test]
+    fn multi_paragraph_list_item_gets_line_break_separator() {
+        assert_eq!(
+            markdown_to_ops("- a\n\n  b"),
+            vec![
+                json!({"text": "a"}),
+                json!({"text": "\n"}),
+                json!({"text": "b"}),
+                json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
             ]
         );
     }
