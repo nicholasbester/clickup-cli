@@ -427,6 +427,7 @@ pub fn tool_list() -> Value {
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task to comment on. Obtain from clickup_task_list (field: id) or clickup_task_search."},
                     "text": {"type": "string", "description": "Comment body. @mentions (e.g. '@username') are rendered. Markdown is NOT rendered by ClickUp's v2 comment API. Markdown syntax is stored as literal text."},
+                    "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the comment to — they will receive a notification. Obtain from clickup_member_list."},
                     "notify_all": {"type": "boolean", "description": "true = send a notification to every assignee of the task; false or omitted = only notify people mentioned or the explicit assignee."}
                 },
@@ -2687,7 +2688,20 @@ async fn dispatch_tool(
                 .get("text")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: text")?;
-            let mut body = json!({"comment_text": text});
+            let markdown = args
+                .get("markdown")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let mut body = if markdown {
+                let ops = crate::markdown_ops::markdown_to_ops(text);
+                if ops.is_empty() {
+                    json!({"comment_text": text})
+                } else {
+                    json!({"comment": ops})
+                }
+            } else {
+                json!({"comment_text": text})
+            };
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {
                 body["assignee"] = json!(assignee);
             }

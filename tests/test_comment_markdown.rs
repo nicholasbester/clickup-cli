@@ -143,6 +143,47 @@ async fn comment_create_without_flag_unchanged() {
     assert!(body.get("comment").is_none(), "body: {body}");
 }
 
+#[tokio::test]
+async fn mcp_comment_create_markdown_sends_ops() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_matcher("/v2/task/t1/comment"))
+        .and(body_partial_json(serde_json::json!({
+            "comment": [
+                {"text": "x", "attributes": {"bold": true}},
+                {"text": "\n"}
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut cmd = Command::cargo_bin("clickup-cli").unwrap();
+    cmd.current_dir(dir.path())
+        .args(["mcp", "serve"])
+        .env("CLICKUP_API_URL", server.uri())
+        .env("CLICKUP_TOKEN", "pk_test")
+        .env("CLICKUP_WORKSPACE", "99");
+    cmd.write_stdin(
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "clickup_comment_create", "arguments": {
+                "task_id": "t1", "text": "**x**", "markdown": true
+            }}
+        })
+        .to_string()
+            + "\n",
+    )
+    .assert()
+    .success()
+    .stdout(predicates::str::contains("Comment created"));
+}
+
 /// Ops-empty fallback: input that reduces to nothing still posts a
 /// non-empty comment via comment_text.
 #[tokio::test]
