@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-20
+
 ### Dependencies
 - Bumped transitive `h2` 0.4.13 → 0.4.16 to clear a new RUSTSEC advisory ("unbounded empty DATA frames") flagged by the cargo-deny CI check.
 
