@@ -2,7 +2,6 @@
 //! ClickUp's documented rich-comment ops array instead of comment_text.
 
 use assert_cmd::Command;
-use predicates::prelude::*;
 use std::path::Path;
 use tempfile::TempDir;
 use wiremock::matchers::{body_partial_json, method, path as path_matcher};
@@ -174,7 +173,3 @@ async fn comment_create_markdown_empty_ops_falls_back_to_text() {
         .assert()
         .success();
 }
-
-// Silence unused-import warnings if predicates ends up unused after edits.
-#[allow(unused)]
-fn _keep(p: impl Predicate<str>) {}
