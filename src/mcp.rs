@@ -421,7 +421,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_comment_create",
-            "description": "Post a new top-level comment on a ClickUp task. @mentions are recognised by ClickUp. Note: ClickUp's v2 comment API stores the body verbatim and does NOT render markdown. Tokens like `**bold**` appear as literal characters in the UI. Returns the created comment object including its new id, which you can pass to clickup_comment_reply, clickup_comment_update, etc.",
+            "description": "Post a new top-level comment on a ClickUp task. @mentions are recognised by ClickUp. Note: ClickUp's v2 comment API does not render markdown syntax in plain text comments; set markdown: true to submit rich formatting instead — otherwise tokens like `**bold**` appear as literal characters in the UI. Returns the created comment object including its new id, which you can pass to clickup_comment_reply, clickup_comment_update, etc.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
