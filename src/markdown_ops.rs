@@ -248,13 +248,11 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                     }
                     item_task_state = None;
                 }
-                TagEnd::Paragraph => {
-                    // Inside a list item the Item end emits the terminator;
-                    // a bare paragraph terminates its own line.
-                    if list_stack.is_empty() {
-                        line_end(&mut ops, &list_stack, None, blockquote_depth);
-                        terminator_pending = false;
-                    }
+                // Inside a list item the Item end emits the terminator;
+                // a bare paragraph terminates its own line.
+                TagEnd::Paragraph if list_stack.is_empty() => {
+                    line_end(&mut ops, &list_stack, None, blockquote_depth);
+                    terminator_pending = false;
                 }
                 _ => {}
             },
