@@ -460,3 +460,41 @@ async fn comment_create_markdown_mention_sends_tag_op() {
         .assert()
         .success();
 }
+
+/// Review nit: assignee insertion must apply alongside the ops-shaped body.
+#[tokio::test]
+async fn mcp_comment_reply_markdown_with_assignee() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_matcher("/v2/comment/c1/reply"))
+        .and(body_partial_json(serde_json::json!({
+            "comment": [{"text": "hi"}, {"text": "\n"}],
+            "assignee": 77
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c2"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut cmd = Command::cargo_bin("clickup-cli").unwrap();
+    cmd.current_dir(dir.path())
+        .args(["mcp", "serve"])
+        .env("CLICKUP_API_URL", server.uri())
+        .env("CLICKUP_TOKEN", "pk_test")
+        .env("CLICKUP_WORKSPACE", "99");
+    cmd.write_stdin(
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "clickup_comment_reply", "arguments": {
+                "comment_id": "c1", "text": "hi", "markdown": true, "assignee": 77
+            }}
+        })
+        .to_string() + "\n",
+    )
+    .assert()
+    .success();
+}
