@@ -473,9 +473,7 @@ async fn mcp_comment_reply_markdown_with_assignee() {
             "comment": [{"text": "hi"}, {"text": "\n"}],
             "assignee": 77
         })))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c2"})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c2"})))
         .expect(1)
         .mount(&server)
         .await;
@@ -493,7 +491,8 @@ async fn mcp_comment_reply_markdown_with_assignee() {
                 "comment_id": "c1", "text": "hi", "markdown": true, "assignee": 77
             }}
         })
-        .to_string() + "\n",
+        .to_string()
+            + "\n",
     )
     .assert()
     .success();
