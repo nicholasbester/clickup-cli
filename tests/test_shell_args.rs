@@ -80,6 +80,46 @@ fn find_powershell() -> Option<&'static str> {
     None
 }
 
+/// Markdown comment content that exercises every PowerShell-hostile
+/// character class at once: backticks (PowerShell's escape character —
+/// silently eaten in double-quoted arguments), `**` (wildcard-ish), a
+/// multiline body (the #70 splitting failure), and the `[@Name](user:N)`
+/// mention syntax. The `@file` route must deliver all of it verbatim.
+const MARKDOWN_FILE_CONTENT: &str = "**bold** with `code`\n\nping [@Nick](user:81618)\n";
+
+/// Start a mock that only returns 200 when `comment create --markdown`
+/// posts the exact ops the markdown above parses to — so a successful exit
+/// proves the markdown crossed the shell boundary intact AND was converted,
+/// backticks and mention included.
+async fn mount_markdown_comment_mock(server: &MockServer) {
+    Mock::given(method("POST"))
+        .and(path_matcher("/v2/task/t1/comment"))
+        .and(body_json(serde_json::json!({
+            "comment": [
+                {"text": "bold", "attributes": {"bold": true}},
+                {"text": " with "},
+                {"text": "code", "attributes": {"code": true}},
+                {"text": "\n"},
+                {"text": "ping "},
+                {"type": "tag", "user": {"id": 81618}},
+                {"text": "\n"}
+            ],
+            "notify_all": false
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "c1"
+        })))
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+fn write_markdown_file(dir: &Path) -> std::path::PathBuf {
+    let p = dir.join("comment.md");
+    std::fs::write(&p, MARKDOWN_FILE_CONTENT).unwrap();
+    p
+}
+
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn at_file_survives_posix_shell_boundary() {
@@ -146,6 +186,72 @@ async fn at_file_survives_powershell_boundary() {
     assert!(
         out.status.success(),
         "PowerShell ({ps}) invocation failed: status={:?}\nstdout={}\nstderr={}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn markdown_comment_at_file_survives_posix_shell_boundary() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let server = MockServer::start().await;
+    mount_markdown_comment_mock(&server).await;
+    let md = write_markdown_file(dir.path());
+
+    let mut cmd = Command::new("sh");
+    with_env(&mut cmd, &server);
+    cmd.arg("-c")
+        .arg(r#""$1" comment create --task t1 --markdown --text "@$2""#)
+        .arg("sh")
+        .arg(binary())
+        .arg(&md);
+
+    let out = cmd.output().expect("failed to run sh");
+    assert!(
+        out.status.success(),
+        "sh invocation failed: status={:?}\nstdout={}\nstderr={}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn markdown_comment_at_file_survives_powershell_boundary() {
+    let Some(ps) = find_powershell() else {
+        eprintln!("skipping: no PowerShell (powershell/pwsh) found on PATH");
+        return;
+    };
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let server = MockServer::start().await;
+    mount_markdown_comment_mock(&server).await;
+    let md = write_markdown_file(dir.path());
+
+    let script = dir.path().join("invoke-md.ps1");
+    std::fs::write(
+        &script,
+        "param([string]$Bin,[string]$MdFile)\n\
+         & $Bin comment create --task t1 --markdown --text \"@$MdFile\"\n\
+         exit $LASTEXITCODE\n",
+    )
+    .unwrap();
+
+    let mut cmd = Command::new(ps);
+    with_env(&mut cmd, &server);
+    cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(&script)
+        .arg("-Bin")
+        .arg(binary())
+        .arg("-MdFile")
+        .arg(&md);
+
+    let out = cmd.output().expect("failed to run PowerShell");
+    assert!(
+        out.status.success(),
+        "PowerShell ({ps}) markdown invocation failed: status={:?}\nstdout={}\nstderr={}",
         out.status,
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr),
