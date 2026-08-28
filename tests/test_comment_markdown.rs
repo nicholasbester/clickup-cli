@@ -324,3 +324,106 @@ async fn mcp_comment_reply_markdown_sends_ops() {
     .success()
     .stdout(predicates::str::contains("Reply posted"));
 }
+
+// ---------- v2: comment update --markdown (CLI + MCP) ----------
+
+#[tokio::test]
+async fn cli_comment_update_markdown_sends_ops_with_resolved() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("PUT"))
+        .and(path_matcher("/v2/comment/c1"))
+        .and(body_partial_json(serde_json::json!({
+            "comment": [
+                {"text": "done", "attributes": {"bold": true}},
+                {"text": "\n"}
+            ],
+            "resolved": true
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "comment", "update", "c1", "--markdown", "--resolved", "--text", "**done**",
+        ])
+        .assert()
+        .success();
+}
+
+/// No-flag update stays byte-identical: comment_text present, no comment key.
+#[tokio::test]
+async fn cli_comment_update_without_flag_unchanged() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("PUT"))
+        .and(path_matcher("/v2/comment/c1"))
+        .and(body_partial_json(serde_json::json!({
+            "comment_text": "**done**"
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args(["comment", "update", "c1", "--text", "**done**"])
+        .assert()
+        .success();
+
+    let requests = server.received_requests().await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert!(body.get("comment").is_none(), "body: {body}");
+}
+
+#[tokio::test]
+async fn mcp_comment_update_markdown_sends_ops() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("PUT"))
+        .and(path_matcher("/v2/comment/c1"))
+        .and(body_partial_json(serde_json::json!({
+            "comment": [
+                {"text": "ls", "attributes": {"code": true}},
+                {"text": "\n"}
+            ],
+            "resolved": true
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut cmd = Command::cargo_bin("clickup-cli").unwrap();
+    cmd.current_dir(dir.path())
+        .args(["mcp", "serve"])
+        .env("CLICKUP_API_URL", server.uri())
+        .env("CLICKUP_TOKEN", "pk_test")
+        .env("CLICKUP_WORKSPACE", "99");
+    cmd.write_stdin(
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "clickup_comment_update", "arguments": {
+                "comment_id": "c1", "text": "`ls`", "markdown": true, "resolved": true
+            }}
+        })
+        .to_string()
+            + "\n",
+    )
+    .assert()
+    .success()
+    .stdout(predicates::str::contains("updated"));
+}
