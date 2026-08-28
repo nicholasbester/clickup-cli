@@ -228,6 +228,8 @@ clickup-cli comment replies <ID> [--start MS --start-id ID]        # list thread
 clickup-cli comment reply <ID> --text TEXT [--assignee ID] [--markdown]
 ```
 
+`--markdown` parses the text as CommonMark and submits ClickUp's native rich formatting (bold/italic/code/links, bullet/ordered/checked lists, code blocks; headings render bold, blockquotes indent, tables/strikethrough degrade to plain text). A link with a `user:` scheme — `[@Name](user:123)` — becomes a native @mention that notifies that user (find IDs with `member list`); the link text is informational, ClickUp renders the member's real name.
+
 ---
 
 ## tag
