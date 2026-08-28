@@ -1687,7 +1687,8 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "comment_id": {"type": "string", "description": "ID of the parent comment to reply to. Obtain from clickup_comment_list (field: id)."},
-                    "text": {"type": "string", "description": "Reply body. @mentions are rendered. Markdown is NOT rendered by ClickUp's v2 comment API; markdown syntax is stored as literal text."},
+                    "text": {"type": "string", "description": "Reply body. Markdown is NOT rendered by ClickUp's v2 comment API unless markdown is true; without it, markdown syntax is stored as literal text."},
+                    "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the reply to — they receive a notification. Obtain from clickup_member_list."}
                 },
                 "required": ["comment_id", "text"]
@@ -4642,7 +4643,11 @@ async fn dispatch_tool(
                 .get("text")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: text")?;
-            let mut body = json!({"comment_text": text});
+            let markdown = args
+                .get("markdown")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let mut body = crate::markdown_ops::comment_body(markdown, text);
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {
                 body["assignee"] = json!(assignee);
             }
