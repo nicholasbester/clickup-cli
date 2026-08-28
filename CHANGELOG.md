@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-28
+
 ### Added
 - Comment formatting v2 (#120): the MCP `clickup_comment_reply` tool gains the `markdown` argument (parity with CLI `comment reply --markdown`); `comment update --markdown` (CLI) and a `markdown` argument on `clickup_comment_update` (MCP) — ClickUp's comment-formatting docs confirm the ops format applies to updates, un-parking the v1 out-of-scope item; and native @mentions in markdown mode: a CommonMark link with a `user:` scheme (`[@Nick](user:81618)`) becomes ClickUp's documented mention op `{"type": "tag", "user": {"id": ...}}`, which notifies the user — the link text is informational (ClickUp renders the member's real name), a non-numeric id degrades to a normal link, and styling around a mention is dropped (mention ops carry no attributes).
 
