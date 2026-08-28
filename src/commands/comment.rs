@@ -57,7 +57,7 @@ pub enum CommentCommands {
     Update {
         /// Comment ID
         id: String,
-        /// New comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text.
+        /// New comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text unless --markdown is set.
         #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Mark as resolved
@@ -66,6 +66,11 @@ pub enum CommentCommands {
         /// Assignee user ID
         #[arg(long)]
         assignee: Option<i64>,
+        /// Parse --text as markdown and submit ClickUp rich formatting
+        /// (bold/italic/code/links, lists, code blocks; headings render
+        /// bold, blockquotes indent, tables/strikethrough degrade to text)
+        #[arg(long)]
+        markdown: bool,
     },
     /// Delete a comment
     Delete {
@@ -209,8 +214,9 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             text,
             resolved,
             assignee,
+            markdown,
         } => {
-            let mut body = serde_json::json!({ "comment_text": text });
+            let mut body = crate::markdown_ops::comment_body(markdown, &text);
             if resolved {
                 body["resolved"] = serde_json::Value::Bool(true);
             }

@@ -37,6 +37,10 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
     let mut bold: u32 = 0;
     let mut italic: u32 = 0;
     let mut link: Option<String> = None;
+    // True while inside a `[text](user:<id>)` mention link: the tag op has
+    // already been emitted and the display text is dropped (ClickUp renders
+    // the member's real name).
+    let mut in_mention = false;
     // The link (if any) that was in scope when an image started — images
     // clobber `link` with an internal `__IMG__` marker while reconstructing
     // themselves as literal text, so the enclosing link (e.g.
@@ -130,8 +134,23 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                 Tag::Strong => bold += 1,
                 Tag::Emphasis => italic += 1,
                 Tag::Strikethrough => {} // degrade: text passes through plain
-                Tag::Link { dest_url, .. } => link = Some(dest_url.to_string()),
-                Tag::Image { dest_url, .. } => {
+                Tag::Link { dest_url, .. } => {
+                    if let Some(id) = dest_url
+                        .strip_prefix("user:")
+                        .and_then(|rest| rest.parse::<u64>().ok())
+                        .filter(|id| *id > 0)
+                    {
+                        // Documented mention op; notifies the user. Inline
+                        // styling around it is ignored (tag ops carry no
+                        // attributes).
+                        ops.push(json!({"type": "tag", "user": {"id": id}}));
+                        terminator_pending = true;
+                        in_mention = true;
+                    } else {
+                        link = Some(dest_url.to_string());
+                    }
+                }
+                Tag::Image { dest_url, .. } if !in_mention => {
                     // Save whatever link is currently in scope (e.g. the
                     // outer `https://dest` of `[![alt](img.png)](https://dest)`)
                     // so it survives the `__IMG__` marker below and can be
@@ -209,8 +228,14 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                 TagEnd::Strong => bold = bold.saturating_sub(1),
                 TagEnd::Emphasis => italic = italic.saturating_sub(1),
                 TagEnd::Strikethrough => {}
-                TagEnd::Link => link = None,
-                TagEnd::Image => {
+                TagEnd::Link => {
+                    if in_mention {
+                        in_mention = false;
+                    } else {
+                        link = None;
+                    }
+                }
+                TagEnd::Image if !in_mention => {
                     // close the literal image reconstruction
                     let url = link
                         .take()
@@ -257,7 +282,9 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                 _ => {}
             },
             Event::Text(t) => {
-                if in_code_block {
+                if in_mention {
+                    // Mention display text is informational only; dropped.
+                } else if in_code_block {
                     // Code block text can contain multiple lines; each line
                     // gets its own op + code-block terminator.
                     for line in t.lines() {
@@ -291,14 +318,16 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                 }
             }
             Event::Code(t) => {
-                push_text(&mut ops, &t, bold, italic, &link, true, heading_depth);
-                terminator_pending = true;
+                if !in_mention {
+                    push_text(&mut ops, &t, bold, italic, &link, true, heading_depth);
+                    terminator_pending = true;
+                }
             }
-            Event::Html(t) | Event::InlineHtml(t) => {
+            Event::Html(t) | Event::InlineHtml(t) if !in_mention => {
                 push_text(&mut ops, &t, bold, italic, &None, false, heading_depth);
                 terminator_pending = true;
             }
-            Event::SoftBreak => {
+            Event::SoftBreak if !in_mention => {
                 push_text(&mut ops, " ", bold, italic, &None, false, heading_depth);
                 terminator_pending = true;
             }
@@ -306,7 +335,7 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
             // break is a mid-line/mid-item visual break, not a block
             // terminator, so it must not suppress (or fake) the item's
             // own pending line-end bookkeeping.
-            Event::HardBreak => ops.push(json!({"text": "\n"})),
+            Event::HardBreak if !in_mention => ops.push(json!({"text": "\n"})),
             Event::Rule => {
                 ops.push(json!({"text": "---"}));
                 ops.push(json!({"text": "\n"}));
@@ -560,6 +589,120 @@ mod tests {
             vec![
                 json!({"text": "deep"}),
                 json!({"text": "\n", "attributes": {"indent": 8}}),
+            ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod mention_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn user_scheme_link_emits_tag_op() {
+        assert_eq!(
+            markdown_to_ops("hi [@Nick](user:81618)!"),
+            vec![
+                json!({"text": "hi "}),
+                json!({"type": "tag", "user": {"id": 81618}}),
+                json!({"text": "!"}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn non_numeric_user_scheme_degrades_to_normal_link() {
+        assert_eq!(
+            markdown_to_ops("[x](user:abc)"),
+            vec![
+                json!({"text": "x", "attributes": {"link": "user:abc"}}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn styled_mention_drops_styling() {
+        // Tag ops carry no attributes; bold wrapping is ignored.
+        assert_eq!(
+            markdown_to_ops("**[@Nick](user:7)**"),
+            vec![
+                json!({"type": "tag", "user": {"id": 7}}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn mention_in_list_item() {
+        assert_eq!(
+            markdown_to_ops("- ping [@N](user:5) today"),
+            vec![
+                json!({"text": "ping "}),
+                json!({"type": "tag", "user": {"id": 5}}),
+                json!({"text": " today"}),
+                json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
+            ]
+        );
+    }
+
+    #[test]
+    fn normal_links_unaffected_by_mention_support() {
+        assert_eq!(
+            markdown_to_ops("[site](https://x.io)"),
+            vec![
+                json!({"text": "site", "attributes": {"link": "https://x.io"}}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod mention_hardening_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn user_zero_degrades_to_normal_link() {
+        assert_eq!(
+            markdown_to_ops("[x](user:0)"),
+            vec![
+                json!({"text": "x", "attributes": {"link": "user:0"}}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn breaks_and_html_inside_mention_text_are_dropped() {
+        // Soft break, hard break, and inline HTML in the display text must
+        // not leak literal ops — the tag op is the whole mention.
+        assert_eq!(
+            markdown_to_ops("[@a\nb](user:5)"),
+            vec![
+                json!({"type": "tag", "user": {"id": 5}}),
+                json!({"text": "\n"}),
+            ]
+        );
+        assert_eq!(
+            markdown_to_ops("[@<b>N</b>](user:5)"),
+            vec![
+                json!({"type": "tag", "user": {"id": 5}}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn image_inside_mention_text_is_dropped() {
+        assert_eq!(
+            markdown_to_ops("[![a](x.png)](user:5)"),
+            vec![
+                json!({"type": "tag", "user": {"id": 5}}),
+                json!({"text": "\n"}),
             ]
         );
     }
