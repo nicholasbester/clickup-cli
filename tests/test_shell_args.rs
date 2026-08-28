@@ -80,11 +80,16 @@ fn find_powershell() -> Option<&'static str> {
     None
 }
 
-/// Markdown comment content that exercises every PowerShell-hostile
-/// character class at once: backticks (PowerShell's escape character —
-/// silently eaten in double-quoted arguments), `**` (wildcard-ish), a
+/// Markdown comment content full of characters a user could never safely
+/// type inline in PowerShell: backticks (its escape character), `**`, a
 /// multiline body (the #70 splitting failure), and the `[@Name](user:N)`
-/// mention syntax. The `@file` route must deliver all of it verbatim.
+/// mention syntax. None of it touches the shell's argument parser — only
+/// the `@path` token does — which is exactly the property under test: the
+/// `@file` route must deliver all of it verbatim regardless of shell.
+///
+/// The trailing newline is stripped once by the `@file` read helper; the
+/// `"\n"` ops the mock expects are unrelated — `markdown_to_ops` appends a
+/// terminator op per paragraph regardless of source newlines.
 const MARKDOWN_FILE_CONTENT: &str = "**bold** with `code`\n\nping [@Nick](user:81618)\n";
 
 /// Start a mock that only returns 200 when `comment create --markdown`
