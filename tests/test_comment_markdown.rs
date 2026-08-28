@@ -295,9 +295,7 @@ async fn mcp_comment_reply_markdown_sends_ops() {
                 {"text": "\n"}
             ]
         })))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c2"})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c2"})))
         .expect(1)
         .mount(&server)
         .await;
@@ -341,16 +339,20 @@ async fn cli_comment_update_markdown_sends_ops_with_resolved() {
             ],
             "resolved": true
         })))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})))
         .expect(1)
         .mount(&server)
         .await;
 
     clickup(dir.path(), &server)
         .args([
-            "comment", "update", "c1", "--markdown", "--resolved", "--text", "**done**",
+            "comment",
+            "update",
+            "c1",
+            "--markdown",
+            "--resolved",
+            "--text",
+            "**done**",
         ])
         .assert()
         .success();
@@ -367,9 +369,7 @@ async fn cli_comment_update_without_flag_unchanged() {
         .and(body_partial_json(serde_json::json!({
             "comment_text": "**done**"
         })))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})))
         .expect(1)
         .mount(&server)
         .await;
@@ -398,9 +398,7 @@ async fn mcp_comment_update_markdown_sends_ops() {
             ],
             "resolved": true
         })))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})))
         .expect(1)
         .mount(&server)
         .await;
@@ -426,4 +424,39 @@ async fn mcp_comment_update_markdown_sends_ops() {
     .assert()
     .success()
     .stdout(predicates::str::contains("updated"));
+}
+
+// ---------- v2: @mentions via the user: link scheme ----------
+
+#[tokio::test]
+async fn comment_create_markdown_mention_sends_tag_op() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_matcher("/v2/task/t1/comment"))
+        .and(body_partial_json(serde_json::json!({
+            "comment": [
+                {"text": "ping "},
+                {"type": "tag", "user": {"id": 81618}},
+                {"text": "\n"}
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"id": "c1"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    clickup(dir.path(), &server)
+        .args([
+            "comment",
+            "create",
+            "--task",
+            "t1",
+            "--markdown",
+            "--text",
+            "ping [@Nick](user:81618)",
+        ])
+        .assert()
+        .success();
 }
