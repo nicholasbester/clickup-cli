@@ -226,6 +226,8 @@ clickup-cli comment update <ID> [--markdown] --text TEXT [--resolved] [--assigne
 clickup-cli comment delete <ID>
 clickup-cli comment replies <ID> [--start MS --start-id ID]        # list threaded replies
 clickup-cli comment reply <ID> --text TEXT [--assignee ID] [--markdown]
+
+Mentions: ClickUp does not treat `@Name` in `comment_text` as a ping. Write `@Display Name` (the person's ClickUp username — spaces are fine), `<@user_id>`, or `@user_id`. The CLI looks up workspace members and submits `type: "tag"` ops. `--assignee` assigns the comment thread; it is not an @mention. Unresolved `@foo` stays literal. Do not put mentions inside backticks.
 ```
 
 `--markdown` parses the text as CommonMark and submits ClickUp's native rich formatting (bold/italic/code/links, bullet/ordered/checked lists, code blocks; headings render bold, blockquotes indent, tables/strikethrough degrade to plain text). A link with a `user:` scheme — `[@Name](user:123)` — becomes a native @mention that notifies that user (find IDs with `member list`); the link text is informational, ClickUp renders the member's real name.

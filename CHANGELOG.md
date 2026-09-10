@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Display-name @mentions on `comment create`, `comment reply`, and `comment update` (CLI and the `clickup_comment_*` MCP tools), in plain and `--markdown` mode: `@Display Name` (exact ClickUp username, spaces OK), `<@user_id>`, and `@user_id` are resolved against `GET /v2/team` into ClickUp's `type: "tag"` op with a numeric user id, which notifies the member. This complements the v0.17.0 `[@Name](user:id)` markdown link, which still requires the caller to know the id and to opt into markdown; existing tag ops are never re-resolved. Names match longest username first; unmatched `@tokens` stay plain text; inline and fenced code are not rewritten; a plain `comment_text` body is promoted to a `comment` ops array only when a mention resolves, so requests without a resolving mention are byte-identical to before. On update the whole body is replaced, so every mention that should stay must be restated. `--assignee` still only assigns the comment thread.
+
 ## [0.17.0] - 2026-08-28
 
 ### Added
