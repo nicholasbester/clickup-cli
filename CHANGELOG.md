@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `task create --due-date` and `list create --due-date` interpreted `YYYY-MM-DD` as midnight **UTC**. ClickUp snaps a date-only due date to 04:00 in the workspace timezone of whatever calendar day that instant falls on, so every user west of UTC got the previous day stored (#126). The date is now anchored at **local noon** on the requested day (the machine's timezone via chrono `Local`), which lands inside the intended day for any realistic machine/workspace offset and also sidesteps DST transitions where local midnight does not exist. `due_date` is now sent as a JSON integer rather than a numeric string.
+
+### Added
+- `--due-date` on `task update`, so an existing (or previously mis-stored) due date can be corrected from the CLI.
+- `--due-date` (task create/update, list create) accepts more than `YYYY-MM-DD`: `YYYY-MM-DDTHH:MM[:SS]` (local wall-clock), the same with a `Z` or `±HH:MM` suffix (exact instant), or a bare Unix-millisecond integer (passed through). Any form carrying a time-of-day also sets `due_date_time: true` so ClickUp keeps the exact instant. Invalid input fails locally (exit 1) with the accepted forms listed.
+
 ## [0.17.0] - 2026-08-28
 
 ### Added

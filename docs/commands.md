@@ -164,7 +164,7 @@ clickup-cli task search [--space ID] [--folder ID] [--list ID] [--status S] [--a
 # CRUD
 clickup-cli task get <ID> [--subtasks] [--custom-task-id] [--markdown]
 clickup-cli task create --list <ID> --name NAME [--description TEXT] [--status S] [--priority 1-4] [--assignee ID] [--tag NAME] [--due-date DATE] [--parent TASK_ID]
-clickup-cli task update <ID> [--name X] [--status X] [--priority N] [--add-assignee ID] [--rem-assignee ID] [--description TEXT] [--parent TASK_ID]
+clickup-cli task update <ID> [--name X] [--status X] [--priority N] [--add-assignee ID] [--rem-assignee ID] [--description TEXT] [--due-date DATE] [--parent TASK_ID]
 clickup-cli task delete <ID>
 
 # Relationships and tags
@@ -192,7 +192,18 @@ clickup-cli task replace-estimates <ID> --assignee USER_ID --time MS
 +-----------+-----------------------------------------+-------------+----------+-------------+------------+
 ```
 
-Priority values: 1=Urgent, 2=High, 3=Normal, 4=Low. Dates: YYYY-MM-DD format.
+Priority values: 1=Urgent, 2=High, 3=Normal, 4=Low.
+
+`--due-date DATE` (on `task create`, `task update`, `list create`) accepts:
+
+| Form | Meaning | `due_date_time` |
+|------|---------|-----------------|
+| `2026-12-31` | that calendar day in the machine's local timezone (sent as local noon) | omitted |
+| `2026-12-31T09:30` / `2026-12-31T09:30:00` | that wall-clock time in the local timezone | `true` |
+| `2026-12-31T09:30Z` / `2026-12-31T09:30-05:00` | that exact instant | `true` |
+| `1798693200000` | Unix milliseconds, passed through unchanged | omitted |
+
+ClickUp stores a date-only due date as 04:00 in the *workspace* timezone of whichever calendar day the sent instant falls on. Anchoring `YYYY-MM-DD` at local noon keeps it inside the intended day for any realistic offset between your machine and the workspace (earlier versions sent midnight UTC, which landed on the previous day for users west of UTC — #126). Pass an explicit time or offset when you need a precise instant.
 
 `--markdown` on `task get` requests the raw `markdown_description` from ClickUp, preserving inline link URLs (e.g. `[label](https://…)`) that the flattened `description`/`text_content` fields drop. It is added to the displayed columns and appears verbatim in `--output json`.
 
