@@ -300,7 +300,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_task_update",
-            "description": "Update fields on an existing ClickUp task — name, description, status, priority, and incrementally add/remove assignees. Only provided fields are changed; omitted fields keep their current value. For tags use clickup_task_add_tag/remove_tag; for moving between lists use clickup_task_move. Returns the updated task object.",
+            "description": "Update fields on an existing ClickUp task — name, description, status, priority, due date, and incrementally add/remove assignees. Only provided fields are changed; omitted fields keep their current value. For tags use clickup_task_add_tag/remove_tag; for moving between lists use clickup_task_move. Returns the updated task object.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -320,6 +320,7 @@ pub fn tool_list() -> Value {
                         "description": "User IDs to remove from assignees (no-op if the user is not currently assigned)."
                     },
                     "time_estimate": {"type": "integer", "description": "New total time estimate in milliseconds. Omit to keep current estimate."},
+                    "due_date": {"type": "integer", "description": "New due date as a Unix timestamp in milliseconds (e.g. 1735689600000 for 2025-01-01). ClickUp snaps a due date with no `due_date_time` to 04:00 in the workspace timezone of whichever day the instant falls on, so pass an instant inside the intended local day (midday is safest). Omit to keep the current due date."},
                     "parent": {"type": "string", "description": "ID of a parent task to re-parent this task under, converting a top-level task into a subtask or moving a subtask between parents. Obtain from clickup_task_list/clickup_task_search. Omit to leave the task's position unchanged. ClickUp does not support detaching a subtask back to top-level via this field."}
                 },
                 "required": ["task_id"]
@@ -2591,6 +2592,9 @@ async fn dispatch_tool(
             }
             if let Some(te) = args.get("time_estimate").and_then(|v| v.as_i64()) {
                 body["time_estimate"] = json!(te);
+            }
+            if let Some(due_date) = args.get("due_date").and_then(|v| v.as_i64()) {
+                body["due_date"] = json!(due_date);
             }
             if let Some(parent) = args.get("parent").and_then(|v| v.as_str()) {
                 body["parent"] = json!(parent);
@@ -5732,6 +5736,24 @@ mod tests {
             .find(|t| t.get("name").and_then(|n| n.as_str()) == Some(name))
             .unwrap_or_else(|| panic!("tool {name} not found"))
             .clone()
+    }
+
+    #[test]
+    fn task_create_and_update_expose_due_date() {
+        for name in ["clickup_task_create", "clickup_task_update"] {
+            let tool = find_tool(name);
+            let props = tool["inputSchema"]["properties"]
+                .as_object()
+                .unwrap_or_else(|| panic!("{name} has no properties object"));
+            assert!(
+                props.contains_key("due_date"),
+                "{name} should expose a `due_date` parameter (GH #126)"
+            );
+            assert_eq!(
+                props["due_date"]["type"], "integer",
+                "{name} due_date param should be Unix milliseconds"
+            );
+        }
     }
 
     #[test]
