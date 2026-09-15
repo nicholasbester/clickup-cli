@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.18.0] - 2026-09-15
 
+### Dependencies
+- Bumped transitive `rustls` 0.23.39 → 0.23.45 to clear RUSTSEC-2026-0285 ("TLS 1.3 handshake messages incorrectly accepted across encryption level boundaries"), newly flagged by the cargo-deny CI check. Pulls `aws-lc-rs` 1.16.3 → 1.18.1 and `rustls-webpki` 0.103.13 → 0.103.15 with it. A plain `cargo update -p rustls` only reaches 0.23.43, which is still affected; the lock is pinned to 0.23.45.
+
 ### Fixed
 - `task create --due-date` and `list create --due-date` interpreted `YYYY-MM-DD` as midnight **UTC**. ClickUp snaps a date-only due date to 04:00 in the workspace timezone of whatever calendar day that instant falls on, so every user west of UTC got the previous day stored (#126). The date is now anchored at **local noon** on the requested day (the machine's timezone via chrono `Local`), which lands inside the intended day for any realistic machine/workspace offset and also sidesteps DST transitions where local midnight does not exist. `due_date` is now sent as a JSON integer rather than a numeric string.
 
