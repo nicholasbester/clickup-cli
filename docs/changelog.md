@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-15
+
+### Dependencies
+- Bumped transitive `rustls` 0.23.39 → 0.23.45 to clear RUSTSEC-2026-0285 ("TLS 1.3 handshake messages incorrectly accepted across encryption level boundaries"), newly flagged by the cargo-deny CI check. Pulls `aws-lc-rs` 1.16.3 → 1.18.1 and `rustls-webpki` 0.103.13 → 0.103.15 with it. A plain `cargo update -p rustls` only reaches 0.23.43, which is still affected; the lock is pinned to 0.23.45.
+
 ### Fixed
 - `task create --due-date` and `list create --due-date` interpreted `YYYY-MM-DD` as midnight **UTC**. ClickUp snaps a date-only due date to 04:00 in the workspace timezone of whatever calendar day that instant falls on, so every user west of UTC got the previous day stored (#126). The date is now anchored at **local noon** on the requested day (the machine's timezone via chrono `Local`), which lands inside the intended day for any realistic machine/workspace offset and also sidesteps DST transitions where local midnight does not exist. `due_date` is now sent as a JSON integer rather than a numeric string.
 
@@ -244,7 +249,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Release notes for 0.6.7 and earlier are auto-generated from commit history on the
 [GitHub Releases page](https://github.com/nicholasbester/clickup-cli/releases).
 
-[Unreleased]: https://github.com/nicholasbester/clickup-cli/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/nicholasbester/clickup-cli/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.17.0...v0.18.0
+[0.17.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.15.5...v0.16.0
+[0.15.5]: https://github.com/nicholasbester/clickup-cli/compare/v0.15.4...v0.15.5
+[0.15.4]: https://github.com/nicholasbester/clickup-cli/compare/v0.15.3...v0.15.4
+[0.15.3]: https://github.com/nicholasbester/clickup-cli/compare/v0.15.2...v0.15.3
+[0.15.2]: https://github.com/nicholasbester/clickup-cli/compare/v0.15.1...v0.15.2
+[0.15.1]: https://github.com/nicholasbester/clickup-cli/compare/v0.15.0...v0.15.1
+[0.15.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/nicholasbester/clickup-cli/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.10.0...v0.11.0
