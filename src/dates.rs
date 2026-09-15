@@ -154,7 +154,7 @@ fn invalid(input: &str) -> CliError {
         message: format!(
             "Invalid date '{}'. Use YYYY-MM-DD (local day), YYYY-MM-DDTHH:MM[:SS] (local time), \
              YYYY-MM-DDTHH:MM[:SS]Z or ±HH:MM (exact instant), or a Unix millisecond \
-             timestamp (13 digits).",
+             timestamp (12+ digits).",
             input
         ),
         status: 0,
