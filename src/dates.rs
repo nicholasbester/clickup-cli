@@ -14,7 +14,7 @@
 //!
 //! | input                          | interpretation                     | `due_date_time` |
 //! |--------------------------------|------------------------------------|-----------------|
-//! | `1798693200000`                | Unix ms, passed through            | omitted         |
+//! | `1798693200000`                | Unix ms (>= 12 digits), passed through | omitted     |
 //! | `2026-12-31`                   | local noon on that day             | omitted         |
 //! | `2026-12-31T09:30[:00]`        | that wall-clock time, local zone   | `true`          |
 //! | `2026-12-31T09:30[:00]Z`       | that instant                       | `true`          |
@@ -59,7 +59,13 @@ pub fn parse_due_date(input: &str) -> Result<DueDate, CliError> {
 pub fn parse_due_date_in<Tz: TimeZone>(input: &str, tz: &Tz) -> Result<DueDate, CliError> {
     let s = input.trim();
 
-    if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {
+    // Only a full-width millisecond timestamp is taken as a raw instant. A
+    // shorter all-digit value is far more likely a compact date (`20261231`)
+    // or a seconds-based timestamp than a genuine 1970 instant, and reading
+    // one as milliseconds would be a silent wrong value of exactly the kind
+    // #126 was. Anything shorter falls through to the format error.
+    const MS_DIGITS: usize = 12; // 12 digits ≈ 2001-09 onwards
+    if s.len() >= MS_DIGITS && s.bytes().all(|b| b.is_ascii_digit()) {
         if let Ok(ms) = s.parse::<i64>() {
             return Ok(DueDate {
                 ms,
@@ -147,7 +153,8 @@ fn invalid(input: &str) -> CliError {
     CliError::ClientError {
         message: format!(
             "Invalid date '{}'. Use YYYY-MM-DD (local day), YYYY-MM-DDTHH:MM[:SS] (local time), \
-             YYYY-MM-DDTHH:MM[:SS]Z or ±HH:MM (exact instant), or a Unix millisecond timestamp.",
+             YYYY-MM-DDTHH:MM[:SS]Z or ±HH:MM (exact instant), or a Unix millisecond \
+             timestamp (13 digits).",
             input
         ),
         status: 0,
@@ -215,6 +222,19 @@ mod tests {
         assert!(d.has_time);
         let plus = parse_due_date_in("2026-12-31T06:00+01:00", &Utc).unwrap();
         assert_eq!(plus.ms, NY_MIDNIGHT_2026_12_31); // 05:00Z == 00:00-05:00
+    }
+
+    #[test]
+    fn compact_yyyymmdd_is_rejected_not_read_as_milliseconds() {
+        // `20261231` is a plausible typo for a compact date. Read as Unix ms it
+        // is 1970-08-23, a silent wrong value of exactly the kind #126 was.
+        for bad in ["20261231", "261231", "1798693200"] {
+            let err = parse_due_date_in(bad, &Utc).unwrap_err();
+            assert!(
+                err.to_string().contains("Invalid date"),
+                "{bad} should be rejected, got {err}"
+            );
+        }
     }
 
     #[test]
