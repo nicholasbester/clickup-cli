@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `comment create`, `update`, and `reply` accept `--link-preview inline|card` to turn bare HTTP(S) URLs into ClickUp link mentions or bookmark cards, with or without `--markdown` (#132). The matching MCP tools accept `link_preview`.
+
 ## [0.18.0] - 2026-09-15
 
 ### Dependencies
