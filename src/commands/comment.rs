@@ -2,6 +2,7 @@ use crate::client::ClickUpClient;
 use crate::commands::auth::resolve_token;
 use crate::error::CliError;
 use crate::git;
+use crate::markdown_ops::LinkPreview;
 use crate::output::OutputConfig;
 use crate::Cli;
 use clap::Subcommand;
@@ -52,6 +53,10 @@ pub enum CommentCommands {
         /// bold, blockquotes indent, tables/strikethrough degrade to text)
         #[arg(long)]
         markdown: bool,
+        /// Turn bare HTTP(S) URLs into inline link mentions or preview cards.
+        /// Works with or without --markdown; Markdown links and code stay unchanged.
+        #[arg(long, value_enum)]
+        link_preview: Option<LinkPreview>,
     },
     /// Update a comment
     Update {
@@ -71,6 +76,10 @@ pub enum CommentCommands {
         /// bold, blockquotes indent, tables/strikethrough degrade to text)
         #[arg(long)]
         markdown: bool,
+        /// Turn bare HTTP(S) URLs into inline link mentions or preview cards.
+        /// Works with or without --markdown; Markdown links and code stay unchanged.
+        #[arg(long, value_enum)]
+        link_preview: Option<LinkPreview>,
     },
     /// Delete a comment
     Delete {
@@ -104,6 +113,10 @@ pub enum CommentCommands {
         /// bold, blockquotes indent, tables/strikethrough degrade to text)
         #[arg(long)]
         markdown: bool,
+        /// Turn bare HTTP(S) URLs into inline link mentions or preview cards.
+        /// Works with or without --markdown; Markdown links and code stay unchanged.
+        #[arg(long, value_enum)]
+        link_preview: Option<LinkPreview>,
     },
 }
 
@@ -179,19 +192,18 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             assignee,
             notify_all,
             markdown,
+            link_preview,
         } => {
+            let mut body = crate::markdown_ops::comment_body(markdown, &text, link_preview);
             let resp = if let Some(id) = list {
-                let body = crate::markdown_ops::comment_body(markdown, &text);
                 client
                     .post(&format!("/v2/list/{}/comment", id), &body)
                     .await?
             } else if let Some(id) = view {
-                let body = crate::markdown_ops::comment_body(markdown, &text);
                 client
                     .post(&format!("/v2/view/{}/comment", id), &body)
                     .await?
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                let mut body = crate::markdown_ops::comment_body(markdown, &text);
                 body["notify_all"] = serde_json::json!(notify_all);
                 if let Some(a) = assignee {
                     body["assignee"] = serde_json::json!(a);
@@ -215,8 +227,9 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             resolved,
             assignee,
             markdown,
+            link_preview,
         } => {
-            let mut body = crate::markdown_ops::comment_body(markdown, &text);
+            let mut body = crate::markdown_ops::comment_body(markdown, &text, link_preview);
             if resolved {
                 body["resolved"] = serde_json::Value::Bool(true);
             }
@@ -259,8 +272,9 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             text,
             assignee,
             markdown,
+            link_preview,
         } => {
-            let mut body = crate::markdown_ops::comment_body(markdown, &text);
+            let mut body = crate::markdown_ops::comment_body(markdown, &text, link_preview);
             if let Some(a) = assignee {
                 body["assignee"] = serde_json::json!(a);
             }
