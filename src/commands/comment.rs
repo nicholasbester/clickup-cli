@@ -223,17 +223,23 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
         } => {
             let ws = crate::commands::workspace::resolve_workspace(cli).ok();
             let resp = if let Some(id) = list {
-                let body = comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
+                let body =
+                    comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview)
+                        .await;
                 client
                     .post(&format!("/v2/list/{}/comment", id), &body)
                     .await?
             } else if let Some(id) = view {
-                let body = comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
+                let body =
+                    comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview)
+                        .await;
                 client
                     .post(&format!("/v2/view/{}/comment", id), &body)
                     .await?
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                let mut body = comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
+                let mut body =
+                    comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview)
+                        .await;
                 body["notify_all"] = serde_json::json!(notify_all);
                 if let Some(a) = assignee {
                     body["assignee"] = serde_json::json!(a);
@@ -262,7 +268,8 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             // Same @mention resolution as create/reply. The body is replaced
             // whole, so mentions that should stay must be restated.
             let ws = crate::commands::workspace::resolve_workspace(cli).ok();
-            let mut body = comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
+            let mut body =
+                comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
             if resolved {
                 body["resolved"] = serde_json::Value::Bool(true);
             }
@@ -308,7 +315,8 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             link_preview,
         } => {
             let ws = crate::commands::workspace::resolve_workspace(cli).ok();
-            let mut body = comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
+            let mut body =
+                comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
             if let Some(a) = assignee {
                 body["assignee"] = serde_json::json!(a);
             }
