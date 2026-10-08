@@ -13,6 +13,7 @@ fn test_config_save_and_load() {
         let config = Config {
             auth: clickup_cli::config::AuthConfig {
                 token: "pk_test_123".into(),
+                ..Default::default()
             },
             defaults: clickup_cli::config::DefaultsConfig {
                 workspace_id: Some("12345".into()),
@@ -87,10 +88,63 @@ fn test_config_save_creates_parent_dirs() {
     let config = Config {
         auth: clickup_cli::config::AuthConfig {
             token: "pk_test".into(),
+            ..Default::default()
         },
         defaults: clickup_cli::config::DefaultsConfig::default(),
         git: Default::default(),
     };
     config.save_to(&path).unwrap();
     assert!(path.exists());
+}
+
+#[test]
+fn token_kind_and_storage_roundtrip_and_legacy_defaults() {
+    use clickup_cli::auth_token::TokenKind;
+    use clickup_cli::config::TokenStorage;
+    let legacy: Config = toml::from_str("[auth]\ntoken = 'pk_old'").unwrap();
+    assert_eq!(legacy.auth.kind, TokenKind::Personal);
+    assert_eq!(legacy.auth.storage, TokenStorage::File);
+    for text in [
+        "[auth]\ntoken='fixture'\nkind='oauth'",
+        "[auth]\nkind='oauth'\nstorage='keychain'",
+    ] {
+        let config: Config = toml::from_str(text).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        config.save_to(&path).unwrap();
+        let loaded = Config::load_from(&path).unwrap();
+        assert_eq!(loaded.auth.kind, TokenKind::Oauth);
+        assert_eq!(loaded.auth.storage, config.auth.storage);
+    }
+    assert!(toml::from_str::<Config>("[auth]\nkind='oath'").is_err());
+    assert!(toml::from_str::<Config>("[auth]\nstorage='plaintext-fallback'").is_err());
+}
+
+#[test]
+fn invalid_config_does_not_echo_credentials() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "[auth]\ntoken = 'secret-value' invalid").unwrap();
+    assert!(!Config::load_from(&path)
+        .unwrap_err()
+        .to_string()
+        .contains("secret-value"));
+}
+
+#[cfg(unix)]
+#[test]
+fn saved_credentials_are_private_and_symlinks_rejected() {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "old").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    Config::default().save_to(&path).unwrap();
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    let link = dir.path().join("link.toml");
+    symlink(&path, &link).unwrap();
+    assert!(Config::default().save_to(&link).is_err());
 }

@@ -1,9 +1,12 @@
+use crate::auth_token::TokenKind;
 use crate::error::CliError;
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Config {
+    #[serde(default)]
     pub auth: AuthConfig,
     #[serde(default)]
     pub defaults: DefaultsConfig,
@@ -11,9 +14,38 @@ pub struct Config {
     pub git: GitConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct AuthConfig {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub token: String,
+    #[serde(default, skip_serializing_if = "TokenKind::is_personal")]
+    pub kind: TokenKind,
+    #[serde(default, skip_serializing_if = "TokenStorage::is_file")]
+    pub storage: TokenStorage,
+}
+
+impl std::fmt::Debug for AuthConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthConfig")
+            .field("token", &"[REDACTED]")
+            .field("kind", &self.kind)
+            .field("storage", &self.storage)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TokenStorage {
+    #[default]
+    File,
+    Keychain,
+}
+
+impl TokenStorage {
+    pub fn is_file(&self) -> bool {
+        *self == Self::File
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -34,6 +66,14 @@ pub struct GitConfig {
 
 impl Config {
     pub fn config_path() -> Result<PathBuf, CliError> {
+        if let Some(path) = std::env::var_os("CLICKUP_CONFIG") {
+            if path.is_empty() {
+                return Err(CliError::ConfigError(
+                    "CLICKUP_CONFIG must not be empty".into(),
+                ));
+            }
+            return Ok(PathBuf::from(path));
+        }
         let config_dir = dirs::config_dir()
             .ok_or_else(|| CliError::ConfigError("Could not determine config directory".into()))?;
         Ok(config_dir.join("clickup-cli").join("config.toml"))
@@ -49,16 +89,24 @@ impl Config {
 
     /// Load config: nearest .clickup.toml walking up from CWD, then global config
     pub fn load() -> Result<Self, CliError> {
-        if let Ok(cwd) = std::env::current_dir() {
-            if let Some(project_path) = Self::find_project_config(&cwd) {
-                let project_config = Self::load_from(&project_path)?;
-                if !project_config.auth.token.is_empty() {
-                    return Ok(project_config);
+        Self::load_from(&Self::active_path()?)
+    }
+
+    /// An explicit config path isolates all config access, including ancestor lookup.
+    pub fn active_path() -> Result<PathBuf, CliError> {
+        if std::env::var_os("CLICKUP_CONFIG").is_none() {
+            if let Ok(cwd) = std::env::current_dir() {
+                if let Some(path) = Self::find_project_config(&cwd) {
+                    let config = Self::load_from(&path)?;
+                    if !config.auth.token.is_empty()
+                        || config.auth.storage == TokenStorage::Keychain
+                    {
+                        return Ok(path);
+                    }
                 }
             }
         }
-        let path = Self::config_path()?;
-        Self::load_from(&path)
+        Self::config_path()
     }
 
     pub fn load_from(path: &std::path::Path) -> Result<Self, CliError> {
@@ -66,8 +114,9 @@ impl Config {
             return Err(CliError::ConfigError("Not configured".into()));
         }
         let contents = std::fs::read_to_string(path)?;
-        toml::from_str(&contents)
-            .map_err(|e| CliError::ConfigError(format!("Invalid config file: {}", e)))
+        toml::from_str(&contents).map_err(|_| {
+            CliError::ConfigError("Invalid config file (check TOML and auth kind/storage)".into())
+        })
     }
 
     pub fn save(&self) -> Result<(), CliError> {
@@ -76,12 +125,26 @@ impl Config {
     }
 
     pub fn save_to(&self, path: &std::path::Path) -> Result<(), CliError> {
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)?;
         }
         let contents = toml::to_string_pretty(self)
             .map_err(|e| CliError::ConfigError(format!("Failed to serialize config: {}", e)))?;
-        std::fs::write(path, contents)?;
+        // A same-directory atomic replacement prevents partial credentials and starts
+        // with private permissions (0600 on Unix), including when replacing older files.
+        if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(CliError::ConfigError(
+                "Refusing to replace a symlinked config".into(),
+            ));
+        }
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(std::path::Path::new("."));
+        let mut file = tempfile::NamedTempFile::new_in(parent)?;
+        file.write_all(contents.as_bytes())?;
+        file.as_file().sync_all()?;
+        file.persist(path).map_err(|e| CliError::IoError(e.error))?;
         Ok(())
     }
 }

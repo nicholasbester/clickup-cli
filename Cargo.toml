@@ -24,9 +24,13 @@ path = "src/main.rs"
 name = "clkup"
 path = "src/main.rs"
 
+[features]
+default = ["keyring"]
+keyring = ["dep:keyring"]
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "multipart"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "multipart", "form"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
@@ -38,9 +42,22 @@ comfy-table = "8"
 clap_complete = "4"
 pulldown-cmark = { version = "0.13", default-features = false }
 regex = "1"
+url = "2"
+httparse = "1"
+rand = "0.8"
+open = "5"
+tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", optional = true, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", optional = true, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", optional = true, features = ["async-secret-service", "async-io", "crypto-rust"] }
 
 [dev-dependencies]
 wiremock = "0.6"
-tempfile = "3"
 assert_cmd = "2"
 predicates = "3"

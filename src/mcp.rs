@@ -5558,25 +5558,22 @@ async fn dispatch_tool(
 // ── Main server loop ──────────────────────────────────────────────────────────
 
 pub async fn serve(filter: filter::Filter) -> Result<(), Box<dyn std::error::Error>> {
-    // Resolve token: CLICKUP_TOKEN env > config file
-    let token = std::env::var("CLICKUP_TOKEN")
-        .ok()
-        .filter(|t| !t.is_empty())
-        .or_else(|| {
-            Config::load()
-                .ok()
-                .map(|c| c.auth.token)
-                .filter(|t| !t.is_empty())
-        })
-        .ok_or("No API token. Set CLICKUP_TOKEN env var or run `clickup setup`.")?;
+    let token = crate::commands::auth::resolve_credentials(None, None)?.token;
+    serve_with_credentials(filter, token, 30).await
+}
 
+pub async fn serve_with_credentials(
+    filter: filter::Filter,
+    token: crate::auth_token::AuthToken,
+    timeout: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Resolve workspace: CLICKUP_WORKSPACE env > config file
     let workspace_id = std::env::var("CLICKUP_WORKSPACE")
         .ok()
         .filter(|w| !w.is_empty())
         .or_else(|| Config::load().ok().and_then(|c| c.defaults.workspace_id));
 
-    let client = ClickUpClient::new(&token, 30)
+    let client = ClickUpClient::new(&token, timeout)
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let stdin = tokio::io::stdin();

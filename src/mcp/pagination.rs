@@ -666,7 +666,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn test_client(server: &MockServer) -> ClickUpClient {
-        ClickUpClient::new("pk_test", 30)
+        ClickUpClient::new(&crate::auth_token::AuthToken::personal("pk_test"), 30)
             .expect("client")
             .with_base_url(&server.uri())
     }

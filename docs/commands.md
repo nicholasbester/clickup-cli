@@ -52,9 +52,16 @@ Config saved to ~/.config/clickup-cli/config.toml
 
 ## auth
 
+See [OAuth registration, storage and outstanding live acceptance](../authentication/).
+
 ```bash
 clickup-cli auth whoami    # Show current user
 clickup-cli auth check     # Validate token (exit code only)
+clickup-cli auth login     # BYO app; set CLICKUP_OAUTH_CLIENT_ID and CLICKUP_OAUTH_CLIENT_SECRET
+clickup-cli auth login --no-browser  # Print URL; still waits for loopback callback
+clickup-cli auth login --keyring     # Opt-in OS credential storage
+clickup-cli auth status    # Validate identity and report kind/source/workspace
+clickup-cli auth logout    # Clear stored credentials (not server-side revocation)
 ```
 
 ```
