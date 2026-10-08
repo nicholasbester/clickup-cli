@@ -295,3 +295,7 @@ Use MCP when your tool requires native tool integration (e.g., Claude Desktop do
 Both modes deliver ~98% token reduction compared to raw API JSON. Both use the same authentication and config file.
 
 [← Command Reference](commands)  ·  [Home →](.)
+
+### OAuth credentials
+
+MCP shares the CLI resolver: `--token` / `--token-kind`, then `CLICKUP_TOKEN`, then `CLICKUP_OAUTH_TOKEN`, then configured file/keychain storage. Use [BYO app login](../authentication/) to persist an OAuth credential first. OAuth uses a Bearer header on every request, including uploads. Tokens are process-wide; per-request multi-tenant OAuth is not implemented.

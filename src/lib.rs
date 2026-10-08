@@ -1,7 +1,9 @@
 #![recursion_limit = "512"]
+pub mod auth_token;
 pub mod client;
 pub mod commands;
 pub mod config;
+pub mod credentials;
 pub mod dates;
 pub mod error;
 pub mod git;
@@ -19,6 +21,10 @@ pub struct Cli {
     /// API token (overrides config file)
     #[arg(long, global = true)]
     pub token: Option<String>,
+
+    /// Kind of the --token value (defaults to personal; never inferred from its prefix)
+    #[arg(long, global = true, value_enum, requires = "token")]
+    pub token_kind: Option<auth_token::TokenKind>,
 
     /// Workspace ID (overrides config default)
     #[arg(long, global = true)]
