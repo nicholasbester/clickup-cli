@@ -15,6 +15,9 @@ pub enum FolderCommands {
         /// Include archived
         #[arg(long)]
         archived: bool,
+        /// Only direct subfolders of this folder (filtered locally)
+        #[arg(long)]
+        parent: Option<String>,
     },
     /// Get folder details
     Get {
@@ -29,6 +32,9 @@ pub enum FolderCommands {
         /// Folder name
         #[arg(long)]
         name: String,
+        /// Parent folder in the same space (requires workspace subfolder support)
+        #[arg(long)]
+        parent: Option<String>,
     },
     /// Update a folder
     Update {
@@ -51,7 +57,11 @@ pub async fn execute(command: FolderCommands, cli: &Cli) -> Result<(), CliError>
     let output = OutputConfig::from_cli(&cli.output, &cli.fields, cli.no_header, cli.quiet);
 
     match command {
-        FolderCommands::List { space, archived } => {
+        FolderCommands::List {
+            space,
+            archived,
+            parent,
+        } => {
             let resp = client
                 .get(&format!("/v2/space/{}/folder?archived={}", space, archived))
                 .await?;
@@ -60,24 +70,33 @@ pub async fn execute(command: FolderCommands, cli: &Cli) -> Result<(), CliError>
                 .and_then(|f| f.as_array())
                 .cloned()
                 .unwrap_or_default();
-            // Flatten: extract list_count from lists array length
+            // Derive list_count from the lists array length.
             let items: Vec<serde_json::Value> = folders
                 .iter()
+                .filter(|f| {
+                    parent.as_deref().is_none_or(|id| {
+                        f.get("parent_folder").and_then(|v| v.as_str()) == Some(id)
+                    })
+                })
                 .map(|f| {
                     let list_count = f
                         .get("lists")
                         .and_then(|l| l.as_array())
                         .map(|a| a.len())
                         .unwrap_or(0);
-                    serde_json::json!({
-                        "id": f.get("id"),
-                        "name": f.get("name"),
-                        "task_count": f.get("task_count"),
-                        "list_count": list_count,
-                    })
+                    // Retain API fields for --output json and custom --fields.
+                    let mut item = f.clone();
+                    if let Some(obj) = item.as_object_mut() {
+                        obj.insert("list_count".into(), serde_json::json!(list_count));
+                    }
+                    item
                 })
                 .collect();
-            output.print_items(&items, &["id", "name", "task_count", "list_count"], "id");
+            output.print_items(
+                &items,
+                &["id", "name", "parent_folder", "task_count", "list_count"],
+                "id",
+            );
             Ok(())
         }
         FolderCommands::Get { id } => {
@@ -90,11 +109,22 @@ pub async fn execute(command: FolderCommands, cli: &Cli) -> Result<(), CliError>
             let mut item = resp.clone();
             item.as_object_mut()
                 .map(|o| o.insert("list_count".into(), serde_json::json!(list_count)));
-            output.print_single(&item, &["id", "name", "task_count", "list_count"], "id");
+            output.print_single(
+                &item,
+                &["id", "name", "parent_folder", "task_count", "list_count"],
+                "id",
+            );
             Ok(())
         }
-        FolderCommands::Create { space, name } => {
-            let body = serde_json::json!({ "name": name });
+        FolderCommands::Create {
+            space,
+            name,
+            parent,
+        } => {
+            let mut body = serde_json::json!({ "name": name });
+            if let Some(parent) = parent {
+                body["parent_folder_id"] = serde_json::json!(parent);
+            }
             let resp = client
                 .post(&format!("/v2/space/{}/folder", space), &body)
                 .await?;
