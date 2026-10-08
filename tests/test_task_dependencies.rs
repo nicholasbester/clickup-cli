@@ -198,21 +198,26 @@ async fn mcp_remove_dependency_rejects_invalid_directions_without_http() {
 #[tokio::test]
 async fn remove_dependency_custom_id_requires_workspace_without_http() {
     let dir = TempDir::new().unwrap();
-    // A project config with its own token prevents fallback to the user's config.
+    // Select this fixture explicitly: CLICKUP_CONFIG overrides project discovery.
+    // A token without a workspace keeps the missing-workspace check self-contained.
+    let config_path = dir.path().join(".clickup.toml");
     std::fs::write(
-        dir.path().join(".clickup.toml"),
+        &config_path,
         "[auth]\ntoken = \"pk_test\"\n",
     )
     .unwrap();
     let server = MockServer::start().await;
     command(&dir, &server)
+        .env("CLICKUP_CONFIG", &config_path)
         .env_remove("CLICKUP_WORKSPACE")
         .args(["task", "remove-dep", "PROJ-42", "--depends-on", "PROJ-43"])
         .assert()
         .code(1)
         .stderr(predicates::str::contains("workspace"));
     let response = call_mcp(
-        command(&dir, &server).env_remove("CLICKUP_WORKSPACE"),
+        command(&dir, &server)
+            .env("CLICKUP_CONFIG", &config_path)
+            .env_remove("CLICKUP_WORKSPACE"),
         "clickup_task_remove_dep",
         json!({"task_id": "PROJ-42", "dependency_of": "PROJ-43"}),
     );
