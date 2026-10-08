@@ -41,7 +41,7 @@ pub enum ListCommands {
         /// Priority (1-4)
         #[arg(long)]
         priority: Option<u8>,
-        /// Due date (YYYY-MM-DD)
+        /// Due date: YYYY-MM-DD (local day), YYYY-MM-DDTHH:MM[:SS][Z|±HH:MM], or Unix ms
         #[arg(long)]
         due_date: Option<String>,
     },
@@ -139,7 +139,11 @@ pub async fn execute(command: ListCommands, cli: &Cli) -> Result<(), CliError> {
                 body["priority"] = serde_json::json!(p);
             }
             if let Some(d) = due_date {
-                body["due_date"] = serde_json::Value::String(date_to_ms(&d)?);
+                let due = crate::dates::parse_due_date(&d)?;
+                body["due_date"] = serde_json::json!(due.ms);
+                if due.has_time {
+                    body["due_date_time"] = serde_json::Value::Bool(true);
+                }
             }
             let resp = client.post(&path, &body).await?;
             output.print_single(&resp, default_fields, "id");
@@ -207,15 +211,4 @@ pub async fn execute(command: ListCommands, cli: &Cli) -> Result<(), CliError> {
             Ok(())
         }
     }
-}
-
-fn date_to_ms(date_str: &str) -> Result<String, CliError> {
-    let naive = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d").map_err(|_| {
-        CliError::ClientError {
-            message: format!("Invalid date '{}'. Use YYYY-MM-DD format.", date_str),
-            status: 0,
-        }
-    })?;
-    let dt = naive.and_hms_opt(0, 0, 0).unwrap().and_utc();
-    Ok((dt.timestamp_millis()).to_string())
 }
