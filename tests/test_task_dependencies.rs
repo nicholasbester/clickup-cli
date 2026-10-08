@@ -201,11 +201,7 @@ async fn remove_dependency_custom_id_requires_workspace_without_http() {
     // Select this fixture explicitly: CLICKUP_CONFIG overrides project discovery.
     // A token without a workspace keeps the missing-workspace check self-contained.
     let config_path = dir.path().join(".clickup.toml");
-    std::fs::write(
-        &config_path,
-        "[auth]\ntoken = \"pk_test\"\n",
-    )
-    .unwrap();
+    std::fs::write(&config_path, "[auth]\ntoken = \"pk_test\"\n").unwrap();
     let server = MockServer::start().await;
     command(&dir, &server)
         .env("CLICKUP_CONFIG", &config_path)
