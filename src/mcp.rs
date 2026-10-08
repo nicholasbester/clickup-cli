@@ -1,4 +1,4 @@
-use crate::client::ClickUpClient;
+use crate::client::{encode_query_value, ClickUpClient};
 use crate::config::Config;
 use crate::git;
 use crate::output::{compact_items, flatten_value};
@@ -25,18 +25,6 @@ fn tool_result(text: String) -> Value {
 
 fn tool_error(msg: String) -> Value {
     json!({"content":[{"type":"text","text":msg}],"isError":true})
-}
-
-fn encode_query_value(value: &str) -> String {
-    value
-        .bytes()
-        .flat_map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                vec![byte as char]
-            }
-            _ => format!("%{:02X}", byte).chars().collect(),
-        })
-        .collect()
 }
 
 fn push_query_param(params: &mut Vec<String>, name: &str, value: impl ToString) {
@@ -3421,21 +3409,23 @@ async fn dispatch_tool(
 
         "clickup_task_remove_dep" => {
             let (task_id, custom_q) = resolve_task(args, "task_id")?;
-            let mut body = json!({});
-            if let Some(dep) = args.get("depends_on").and_then(|v| v.as_str()) {
-                body["depends_on"] = json!(dep);
-            }
-            if let Some(dep) = args.get("dependency_of").and_then(|v| v.as_str()) {
-                body["dependency_of"] = json!(dep);
-            }
-            let path = match custom_q {
-                Some(q) => format!("/v2/task/{}/dependency?{}", task_id, q),
-                None => format!("/v2/task/{}/dependency", task_id),
+            let (direction, other) = match (args.get("depends_on"), args.get("dependency_of")) {
+                (Some(Value::String(other)), None) => ("depends_on", other),
+                (None, Some(Value::String(other))) => ("dependency_of", other),
+                _ => {
+                    return Err(
+                        "Specify exactly one of depends_on or dependency_of as a string".into(),
+                    );
+                }
             };
-            client
-                .delete_with_body(&path, &body)
-                .await
-                .map_err(|e| e.to_string())?;
+            // Delete Dependency reads the relationship from the query, not JSON.
+            let mut params = Vec::new();
+            if let Some(q) = custom_q {
+                params.push(q);
+            }
+            push_query_param(&mut params, direction, other);
+            let path = format!("/v2/task/{}/dependency?{}", task_id, params.join("&"));
+            client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Dependency removed from task {}", task_id)}))
         }
 
