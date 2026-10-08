@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `task remove-dep` and MCP `clickup_task_remove_dep` now send the dependency direction and task ID as encoded query parameters, as required by ClickUp's Delete Dependency endpoint, instead of an ignored JSON body that could report success without removing the relationship (#135). Custom task ID/workspace handling is preserved. The MCP tool now enforces its documented requirement for exactly one string-valued `depends_on` or `dependency_of`; invalid inputs fail before sending a request.
+- Comment mentions (#125 review R1–R3): unmatched Unicode text no longer panics; markdown angle-ID and escaped/entity-containing names resolve as complete tokens; ambiguous display names stay literal instead of selecting a roster member arbitrarily. Use an explicit numeric user ID to disambiguate.
+
+### Added
+- Display-name @mentions on `comment create`, `comment reply`, and `comment update` (CLI and the `clickup_comment_*` MCP tools), in plain and `--markdown` mode: `@Display Name` (exact ClickUp username, spaces OK), `<@user_id>`, and `@user_id` are resolved against `GET /v2/team` into ClickUp's `type: "tag"` op with a numeric user id, which notifies the member. This complements the v0.17.0 `[@Name](user:id)` markdown link, which still requires the caller to know the id and to opt into markdown; existing tag ops are never re-resolved. Names match longest username first; unmatched `@tokens` stay plain text; inline and fenced code are not rewritten; a plain `comment_text` body is promoted to a `comment` ops array only when a mention resolves, so requests without a resolving mention are byte-identical to before. On update the whole body is replaced, so every mention that should stay must be restated. `--assignee` still only assigns the comment thread.
+- `comment create`, `update`, and `reply` accept `--link-preview inline|card` to turn bare HTTP(S) URLs into ClickUp link mentions or bookmark cards, with or without `--markdown` (#132). The matching MCP tools accept `link_preview`.
+
 ## [0.18.0] - 2026-09-15
 
 ### Dependencies
@@ -25,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `--due-date` on `task update`, so an existing (or previously mis-stored) due date can be corrected from the CLI. The MCP `clickup_task_update` tool gains the matching `due_date` argument (it previously had none, unlike `clickup_task_create`), restoring CLI/MCP parity.
 - `--due-date` (task create/update, list create) accepts more than `YYYY-MM-DD`: `YYYY-MM-DDTHH:MM[:SS]` (local wall-clock), the same with a `Z` or `±HH:MM` suffix (exact instant), or a bare Unix-millisecond integer of at least 12 digits (passed through). A shorter all-digit value is rejected rather than read as milliseconds, so a compact date like `20261231` cannot silently become a 1970 instant. Any form carrying a time-of-day also sets `due_date_time: true` so ClickUp keeps the exact instant. Invalid input fails locally (exit 1) with the accepted forms listed.
+
+### Fixed
+- Markdown comments (`--markdown` / MCP `markdown: true`) keep their line layout in ClickUp. A blank line between top-level blocks (paragraph, list, heading, code block, blockquote, rule) now emits one extra plain `"\n"` op, so ClickUp shows a visible blank line instead of running the blocks together; consecutive list items stay tight, blocks written back to back stay adjacent, and no leading or trailing blank line is added. A single newline (CommonMark soft break) outside a list now ends the line instead of becoming a space, matching how comment authors write (`**Heading:**\nbody` no longer collapses onto one line); inside a list item it is still a space so the bullet stays on the item's line.
 
 ## [0.17.0] - 2026-08-28
 
