@@ -1,3 +1,4 @@
+use crate::auth_token::AuthToken;
 use crate::error::CliError;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -6,13 +7,13 @@ use tokio::time::{sleep, Duration};
 pub struct ClickUpClient {
     http: reqwest::Client,
     base_url: String,
-    token: String,
+    token: reqwest::header::HeaderValue,
     rate_limit_remaining: Arc<AtomicU64>,
     rate_limit_reset: Arc<AtomicU64>,
 }
 
 impl ClickUpClient {
-    pub fn new(token: &str, timeout_secs: u64) -> Result<Self, CliError> {
+    pub fn new(token: &AuthToken, timeout_secs: u64) -> Result<Self, CliError> {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(timeout_secs))
             .build()
@@ -25,7 +26,7 @@ impl ClickUpClient {
         Ok(Self {
             http,
             base_url,
-            token: token.to_string(),
+            token: token.header()?,
             rate_limit_remaining: Arc::new(AtomicU64::new(100)),
             rate_limit_reset: Arc::new(AtomicU64::new(0)),
         })

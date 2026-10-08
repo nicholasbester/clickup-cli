@@ -149,6 +149,8 @@ clickup-cli completions fish > ~/.config/fish/completions/clickup-cli.fish
 clickup-cli completions powershell > clickup-cli.ps1
 ```
 
+For BYO OAuth, use `clickup-cli auth login`. Read [authentication](../authentication/) for exact redirect registration, optional keychain storage, `--no-default-features` builds, and outstanding live verification.
+
 ## Project-Level Config
 
 For per-project settings (different workspace, different token), create a `.clickup.toml` in the project root:
@@ -174,13 +176,16 @@ For CI/CD and scripting:
 
 | Variable | Description |
 |----------|-------------|
-| `CLICKUP_TOKEN` | API token |
+| `CLICKUP_TOKEN` | Personal API token (takes precedence over OAuth env) |
+| `CLICKUP_OAUTH_TOKEN` | Raw OAuth access token |
+| `CLICKUP_OAUTH_CLIENT_ID` / `CLICKUP_OAUTH_CLIENT_SECRET` | BYO app credentials for `auth login` |
+| `CLICKUP_CONFIG` | Explicit config file; disables project/global discovery |
 | `CLICKUP_WORKSPACE` | Default workspace ID |
 
 ## Resolution Order (highest priority wins)
 
 1. `--flag` CLI argument
-2. Environment variable (`CLICKUP_TOKEN`, `CLICKUP_WORKSPACE`)
+2. Environment variable (`CLICKUP_TOKEN`, then `CLICKUP_OAUTH_TOKEN`; `CLICKUP_WORKSPACE` for workspace)
 3. Project config (`.clickup.toml`)
 4. Global config (`~/.config/clickup-cli/config.toml`)
 
