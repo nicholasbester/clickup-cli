@@ -9,7 +9,7 @@
 //! strikethrough → plain, tables/HTML/images → literal text). Only
 //! documented ops are emitted.
 
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, TextMergeStream};
 use serde_json::{json, Map, Value};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -30,7 +30,10 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TASKLISTS);
     options.insert(Options::ENABLE_STRIKETHROUGH);
-    let parser = Parser::new_ext(text, options);
+    // Entities, escapes and angle brackets can split one logical text run.
+    // Merge only consecutive Text events: formatting, code, HTML and semantic
+    // tag boundaries remain intact before conversion to comment ops.
+    let parser = TextMergeStream::new(Parser::new_ext(text, options));
 
     let mut ops: Vec<Value> = Vec::new();
     // Inline state
@@ -459,28 +462,37 @@ fn match_mention(rest: &str, users: &[MentionUser]) -> Option<(i64, String, usiz
 
     let mut ranked: Vec<&MentionUser> = users.iter().collect();
     ranked.sort_by_key(|u| std::cmp::Reverse(u.username.len()));
-    for u in ranked {
-        if u.username.len() < 2 {
-            continue;
-        }
-        let n = u.username.len();
-        if rest.len() >= n && rest[..n].eq_ignore_ascii_case(&u.username) {
-            let next_ok = rest[n..].chars().next().map(is_boundary).unwrap_or(true);
-            if next_ok {
-                return Some((u.id, format!("@{}", u.username), n));
+    let matches: Vec<_> = ranked
+        .into_iter()
+        .filter_map(|u| {
+            if u.username.len() < 2 {
+                return None;
             }
-        }
-        if !u.email.is_empty() {
-            let n = u.email.len();
-            if rest.len() >= n && rest[..n].eq_ignore_ascii_case(&u.email) {
-                let next_ok = rest[n..].chars().next().map(is_boundary).unwrap_or(true);
-                if next_ok {
-                    return Some((u.id, format!("@{}", u.username), n));
+            [&u.username, &u.email].into_iter().find_map(|token| {
+                let n = token.len();
+                if n > 0
+                    && rest
+                        .get(..n)
+                        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(token))
+                    && rest[n..].chars().next().map(is_boundary).unwrap_or(true)
+                {
+                    Some((u, n))
+                } else {
+                    None
                 }
-            }
-        }
-    }
-    None
+            })
+        })
+        .collect();
+    let &(user, consumed) = matches.first()?;
+    // Count distinct identities for the chosen token, not roster appearances:
+    // the same member may occur in several workspaces. Do not fall back to a
+    // shorter name when the longest match is ambiguous.
+    let identities: std::collections::HashSet<_> = matches
+        .iter()
+        .filter(|(_, n)| *n == consumed)
+        .map(|(u, _)| u.id)
+        .collect();
+    (identities.len() == 1).then(|| (user.id, format!("@{}", user.username), consumed))
 }
 
 fn split_text_mentions(text: &str, users: &[MentionUser]) -> Vec<Value> {
@@ -1101,6 +1113,147 @@ mod mention_hardening_tests {
                 json!({"type": "tag", "user": {"id": 5}}),
                 json!({"text": "\n"}),
             ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod review_regressions {
+    use super::*;
+
+    fn user(id: i64, username: &str, email: &str) -> MentionUser {
+        MentionUser {
+            id,
+            username: username.into(),
+            email: email.into(),
+        }
+    }
+
+    #[test]
+    fn unmatched_unicode_username_prefix_is_safe() {
+        for text in ["hey @😀", "hey @éé", "hey @a😀"] {
+            let ops = vec![json!({"text": text})];
+            assert_eq!(apply_mentions(ops.clone(), &[user(111, "Ada", "")]), ops);
+        }
+    }
+
+    #[test]
+    fn unmatched_unicode_email_prefix_is_safe() {
+        // Username is safely checked first; the email length falls inside 😀.
+        let ops = vec![json!({"text": "hey @abcdef😀"})];
+        assert_eq!(
+            apply_mentions(ops.clone(), &[user(111, "Al", "a@b.com")]),
+            ops
+        );
+    }
+
+    #[test]
+    fn markdown_fragments_resolve_complete_tokens() {
+        let users = [user(111, "Ada & Bob", "a@example.com")];
+        for text in ["hi <@111>", "hi @Ada &amp; Bob", "hi @Ada \\& Bob"] {
+            assert_eq!(
+                apply_mentions(markdown_to_ops(text), &users),
+                vec![
+                    json!({"text":"hi "}),
+                    tag_op(111, "@Ada & Bob"),
+                    json!({"text":"\n"})
+                ],
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn merging_does_not_cross_parser_boundaries() {
+        let users = [user(111, "Ada & Bob", "")];
+        for text in [
+            "@Ada **&** Bob",
+            "@Ada ~~&~~ Bob",
+            "@Ada `&` Bob",
+            "@Ada <span>&</span> Bob",
+            "@Ada [x](user:222) & Bob",
+            "`@Ada & Bob`",
+            "```\n@Ada & Bob\n```",
+        ] {
+            let ops = markdown_to_ops(text);
+            assert_eq!(apply_mentions(ops.clone(), &users), ops, "{text}");
+        }
+    }
+
+    #[test]
+    fn semantic_ops_are_preserved() {
+        let ops = vec![
+            json!({"text":"@Ada "}),
+            json!({"type":"tag", "text":"@Ada & Bob", "user":{"id":222}}),
+            json!({"type":"emoticon", "text":"@Ada & Bob"}),
+            json!({"type":"bookmark", "bookmark":{"url":"https://example.com/@Ada"}}),
+            json!({"text":"& Bob"}),
+        ];
+        assert_eq!(
+            apply_mentions(ops.clone(), &[user(111, "Ada & Bob", "")]),
+            ops
+        );
+    }
+
+    #[test]
+    fn ambiguous_names_stay_literal_regardless_of_roster_order() {
+        let mut users = vec![
+            user(111, "Ada", "one@example.com"),
+            user(222, "ada", "two@example.com"),
+        ];
+        for _ in 0..2 {
+            assert_eq!(
+                apply_mentions(vec![json!({"text":"hi @Ada"})], &users),
+                vec![json!({"text":"hi @Ada"})]
+            );
+            assert_eq!(
+                apply_mentions(vec![json!({"text":"hi <@222>"})], &users),
+                vec![json!({"text":"hi "}), tag_op(222, "@ada")]
+            );
+            users.reverse();
+        }
+    }
+
+    #[test]
+    fn repeated_identity_is_unique_but_distinct_cross_workspace_ids_are_not() {
+        for second_id in [111, 222] {
+            let roster = json!({"teams":[
+                {"id":"99", "members":[{"user":{"id":111,"username":"Ada"}}]},
+                {"id":"100", "members":[{"user":{"id":second_id,"username":"Ada"}}]}
+            ]});
+            for workspace in [None, Some("missing")] {
+                let users = users_from_teams(&roster, workspace);
+                let expected = if second_id == 111 {
+                    vec![tag_op(111, "@Ada")]
+                } else {
+                    vec![json!({"text":"@Ada"})]
+                };
+                assert_eq!(
+                    apply_mentions(vec![json!({"text":"@Ada"})], &users),
+                    expected
+                );
+            }
+            assert_eq!(
+                apply_mentions(
+                    vec![json!({"text":"@Ada"})],
+                    &users_from_teams(&roster, Some("99"))
+                ),
+                vec![tag_op(111, "@Ada")]
+            );
+        }
+    }
+
+    #[test]
+    fn longest_name_wins_without_ambiguous_fallback() {
+        let mut users = vec![user(111, "Ada", ""), user(222, "Ada Lovelace", "")];
+        assert_eq!(
+            apply_mentions(vec![json!({"text":"@Ada Lovelace"})], &users),
+            vec![tag_op(222, "@Ada Lovelace")]
+        );
+        users.push(user(333, "ADA LOVELACE", ""));
+        assert_eq!(
+            apply_mentions(vec![json!({"text":"@Ada Lovelace"})], &users),
+            vec![json!({"text":"@Ada Lovelace"})]
         );
     }
 }

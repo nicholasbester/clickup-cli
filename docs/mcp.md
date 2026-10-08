@@ -13,7 +13,7 @@ The `clickup-cli` CLI (or `clkup` for short) includes a built-in [Model Context 
 
 ### Comments / @mentions
 
-ClickUp does not ping a user just because the comment string contains `@Name`. `clickup_comment_create`, `clickup_comment_reply`, and `clickup_comment_update` resolve `@Display Name`, `<@user_id>`, and `@user_id` against workspace members and submit `type: "tag"` ops, in plain and markdown mode. An update replaces the whole body, so restate every mention that should stay. `assignee` assigns the comment thread; it is not an @mention. Unresolved `@tokens` stay literal.
+ClickUp does not ping a user just because the comment string contains `@Name`. `clickup_comment_create`, `clickup_comment_reply`, and `clickup_comment_update` resolve `@Display Name`, `<@user_id>`, and `@user_id` against workspace members and submit `type: "tag"` ops, in plain and markdown mode. An update replaces the whole body, so restate every mention that should stay. `assignee` assigns the comment thread; it is not an @mention. Unresolved `@tokens` stay literal. If a display name matches multiple distinct user IDs, it also stays literal; use `<@user_id>` (or a known `@user_id`) to disambiguate. Repeated appearances of the same user ID count as one identity.
 
 ## Setup
 
