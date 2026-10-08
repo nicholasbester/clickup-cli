@@ -206,11 +206,12 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_folder_list",
-            "description": "List all folders in a ClickUp space. Folders are optional groupings that contain lists; a space may also have folderless lists (use clickup_list_list with space_id for those). Returns a compact array of folder objects (id, name, task_count, archived).",
+            "description": "List all folders in a ClickUp space. Folders are optional groupings that contain lists; a space may also have folderless lists (use clickup_list_list with space_id for those). Returns a compact array of folder objects (id, name, parent_folder, task_count, list_count).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "space_id": {"type": "string", "description": "ID of the parent space. Obtain from clickup_space_list (field: id)."},
+                    "parent_folder_id": {"type": "string", "description": "Only return direct subfolders of this folder. Filters the space response locally; omit to return all folders."},
                     "archived": {"type": "boolean", "description": "true = include archived folders; false or omitted = only active folders. Defaults to false."}
                 },
                 "required": ["space_id"]
@@ -764,7 +765,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_folder_get",
-            "description": "Fetch the full object for a single ClickUp folder — name, task_count (a string, per API), archived status, and its child lists. Returns the folder object. Use clickup_list_list with folder_id to get just the lists.",
+            "description": "Fetch a compact ClickUp folder object: id, name, parent_folder, and task_count (a string, per API). Use clickup_list_list with folder_id to get just the lists.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -780,6 +781,7 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "space_id": {"type": "string", "description": "ID of the parent space. Obtain from clickup_space_list (field: id)."},
+                    "parent_folder_id": {"type": "string", "description": "Create a subfolder inside this existing folder in the same space. Requires subfolder support enabled for the workspace. Omit for a top-level folder."},
                     "name": {"type": "string", "description": "Display name for the folder. Must be non-empty and unique within the space."}
                 },
                 "required": ["space_id", "name"]
@@ -787,7 +789,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_folder_update",
-            "description": "Rename a ClickUp folder. Only the folder's display name can be changed via this endpoint — to move the folder to a different space, delete and recreate. Returns the updated folder object.",
+            "description": "Rename a ClickUp folder. Only the folder's display name can be changed via this endpoint; parent_folder_id is ignored by the API. Moving folders is not exposed by this tool. Returns the updated folder object.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2386,8 +2388,14 @@ async fn dispatch_tool(
                 .and_then(|f| f.as_array())
                 .cloned()
                 .unwrap_or_default();
+            let parent = args.get("parent_folder_id").and_then(|v| v.as_str());
             let items: Vec<Value> = folders
                 .iter()
+                .filter(|f| {
+                    parent.is_none_or(|id| {
+                        f.get("parent_folder").and_then(|v| v.as_str()) == Some(id)
+                    })
+                })
                 .map(|f| {
                     let list_count = f
                         .get("lists")
@@ -2397,6 +2405,7 @@ async fn dispatch_tool(
                     json!({
                         "id": f.get("id"),
                         "name": f.get("name"),
+                        "parent_folder": f.get("parent_folder"),
                         "task_count": f.get("task_count"),
                         "list_count": list_count,
                     })
@@ -2404,7 +2413,7 @@ async fn dispatch_tool(
                 .collect();
             Ok(compact_items(
                 &items,
-                &["id", "name", "task_count", "list_count"],
+                &["id", "name", "parent_folder", "task_count", "list_count"],
             ))
         }
 
@@ -3180,7 +3189,10 @@ async fn dispatch_tool(
                 .get(&format!("/v2/folder/{}", folder_id))
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(compact_items(&[resp], &["id", "name", "task_count"]))
+            Ok(compact_items(
+                &[resp],
+                &["id", "name", "parent_folder", "task_count"],
+            ))
         }
 
         "clickup_folder_create" => {
@@ -3192,7 +3204,10 @@ async fn dispatch_tool(
                 .get("name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: name")?;
-            let body = json!({"name": name});
+            let mut body = json!({"name": name});
+            if let Some(parent) = args.get("parent_folder_id").and_then(|v| v.as_str()) {
+                body["parent_folder_id"] = json!(parent);
+            }
             let resp = client
                 .post(&format!("/v2/space/{}/folder", space_id), &body)
                 .await

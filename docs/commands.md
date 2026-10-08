@@ -110,22 +110,41 @@ clickup-cli space delete <ID>
 ## folder
 
 ```bash
-clickup-cli folder list --space <ID> [--archived]
+clickup-cli folder list --space <ID> [--archived] [--parent <FOLDER_ID>]
 clickup-cli folder get <ID>
-clickup-cli folder create --space <ID> --name NAME
+clickup-cli folder create --space <ID> --name NAME [--parent <FOLDER_ID>]
 clickup-cli folder update <ID> --name NAME
 clickup-cli folder delete <ID>
 ```
 
+Create a subfolder with `--parent`: this sends `parent_folder_id` to the
+[Create Folder API](https://developer.clickup.com/reference/createfolder).
+The parent must belong to the specified space, and the workspace must have
+subfolder support enabled. Omit `--parent` to create a top-level folder.
+The MCP `clickup_folder_create` tool accepts the same optional `parent_folder_id`.
+
+List/get tables and `json-compact` include `parent_folder` (the parent folder ID,
+or `-` when absent/null). `--output json` retains API fields, including nested
+lists, plus the existing derived `list_count`. The API returns folders as a flat
+list; `folder list --parent <FOLDER_ID>` filters it locally to direct children.
+MCP `clickup_folder_list` accepts `parent_folder_id` for the same local filter;
+MCP list/get results also include `parent_folder`.
+
+```text
+id    name             parent_folder  task_count  list_count
+2001  Q1 Initiatives   -              45          6
+2002  Sprint Backlog   2001           128         4
+2003  Product Roadmap  -              32          3
 ```
-+-------+-----------------+------------+------------+
-| id    | name            | task_count | list_count |
-+====================================================+
-| 2001  | Q1 Initiatives  | 45         | 6          |
-| 2002  | Sprint Backlog  | 128        | 4          |
-| 2003  | Product Roadmap | 32         | 3          |
-+-------+-----------------+------------+------------+
-```
+
+`folder update` only renames. The current
+[Update Folder reference](https://developer.clickup.com/reference/updatefolder)
+states that `parent_folder_id` is ignored there and refers to a separate Move
+Folder endpoint. This CLI does not currently expose folder moving.
+The public folder create/update schemas and folder response schemas reviewed
+on 2026-10-08 do not document a folder color field (status/list colors are
+separate). Folder color controls are therefore not exposed here; use ClickUp's
+UI. These limitations are based on the public documentation, not live API tests.
 
 ---
 
