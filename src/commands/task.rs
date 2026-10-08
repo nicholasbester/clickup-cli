@@ -1,4 +1,4 @@
-use crate::client::ClickUpClient;
+use crate::client::{encode_query_value, ClickUpClient};
 use crate::commands::auth::resolve_token;
 use crate::commands::workspace::resolve_workspace;
 use crate::error::CliError;
@@ -595,10 +595,10 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
             dependency_of,
         } => {
             let task = git::require_task(cli, id.as_deref(), true)?;
-            let body = if let Some(other) = depends_on {
-                serde_json::json!({ "depends_on": other })
+            let (direction, other) = if let Some(other) = depends_on {
+                ("depends_on", other)
             } else if let Some(other) = dependency_of {
-                serde_json::json!({ "dependency_of": other })
+                ("dependency_of", other)
             } else {
                 return Err(CliError::ClientError {
                     message: "Specify --depends-on or --dependency-of".into(),
@@ -606,8 +606,17 @@ pub async fn execute(command: TaskCommands, cli: &Cli) -> Result<(), CliError> {
                 });
             };
             let q = crate::commands::workspace::custom_task_query(cli, &task)?;
+            // Delete Dependency uses query parameters, unlike Add Dependency.
+            let separator = if q.is_empty() { "?" } else { "&" };
             client
-                .delete_with_body(&format!("/v2/task/{}/dependency{}", task.id, q), &body)
+                .delete(&format!(
+                    "/v2/task/{}/dependency{}{}{}={}",
+                    task.id,
+                    q,
+                    separator,
+                    direction,
+                    encode_query_value(&other)
+                ))
                 .await?;
             output.print_message(&format!("Dependency removed from task {}", task.raw));
             Ok(())

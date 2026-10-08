@@ -1,55 +1,25 @@
+use crate::commands::auth::resolve_credentials;
 use crate::config::Config;
 use crate::error::CliError;
 use crate::Cli;
 
 pub async fn execute(cli: &Cli) -> Result<(), CliError> {
-    println!("clickup-cli v{}", env!("CARGO_PKG_VERSION"));
-    println!();
-
-    // Config
-    match Config::config_path() {
-        Ok(path) => println!("Config:    {}", path.display()),
-        Err(_) => println!("Config:    (unknown path)"),
+    println!("clickup-cli v{}\n", env!("CARGO_PKG_VERSION"));
+    if let Ok(path) = Config::active_path() {
+        println!("Config:    {}", path.display());
     }
-
-    // Auth
-    match Config::load() {
-        Ok(config) => {
-            let token = &config.auth.token;
-            if token.is_empty() {
-                println!("Token:     (not set)");
-            } else {
-                let masked = format!(
-                    "{}...{}",
-                    &token[..6.min(token.len())],
-                    &token[token.len().saturating_sub(4)..]
-                );
-                println!("Token:     {}", masked);
-            }
-            match &config.defaults.workspace_id {
-                Some(ws) => println!("Workspace: {}", ws),
-                None => println!("Workspace: (not set)"),
-            }
+    match resolve_credentials(cli.token.as_deref(), cli.token_kind) {
+        Ok(auth) => {
+            println!("Token:     (configured; not validated)");
+            println!("Auth:      {}", auth.token.kind.as_str());
+            println!("Source:    {}", auth.source);
         }
-        Err(_) => {
-            println!("Token:     (not configured)");
-            println!("Workspace: (not configured)");
-            println!();
-            println!("Run 'clickup setup' to configure.");
-            return Ok(());
-        }
+        Err(err) => println!("Auth:      {}", err),
     }
-
-    // Env overrides
-    if std::env::var("CLICKUP_TOKEN").is_ok() {
-        println!("           (CLICKUP_TOKEN env var set — overrides config)");
+    match super::workspace::resolve_workspace(cli) {
+        Ok(ws) => println!("Workspace: {}", ws),
+        Err(_) => println!("Workspace: (not configured)"),
     }
-    if std::env::var("CLICKUP_WORKSPACE").is_ok() {
-        println!("           (CLICKUP_WORKSPACE env var set — overrides config)");
-    }
-    if cli.token.is_some() {
-        println!("           (--token flag set — overrides all)");
-    }
-
+    println!("Use 'clickup-cli auth status' to validate the effective credentials.");
     Ok(())
 }

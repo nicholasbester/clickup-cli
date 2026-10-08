@@ -21,6 +21,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build
       - run: cargo test
+      - name: Auth without OS keyring support
+        run: cargo test --no-default-features --lib --test test_auth_cli --test test_auth_storage --test test_config
 
   lint:
     runs-on: ubuntu-latest

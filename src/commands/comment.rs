@@ -2,6 +2,7 @@ use crate::client::ClickUpClient;
 use crate::commands::auth::resolve_token;
 use crate::error::CliError;
 use crate::git;
+use crate::markdown_ops::LinkPreview;
 use crate::output::OutputConfig;
 use crate::Cli;
 use clap::Subcommand;
@@ -38,7 +39,7 @@ pub enum CommentCommands {
         /// View ID
         #[arg(long, conflicts_with_all = ["task", "list"])]
         view: Option<String>,
-        /// Comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text unless --markdown is set.
+        /// Comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). `@Display Name` / `<@user_id>` resolve to real ClickUp mentions (tag ops). Markdown is literal unless --markdown is set.
         #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Assignee user ID (task comments only)
@@ -52,12 +53,16 @@ pub enum CommentCommands {
         /// bold, blockquotes indent, tables/strikethrough degrade to text)
         #[arg(long)]
         markdown: bool,
+        /// Turn bare HTTP(S) URLs into inline link mentions or preview cards.
+        /// Works with or without --markdown; Markdown links and code stay unchanged.
+        #[arg(long, value_enum)]
+        link_preview: Option<LinkPreview>,
     },
     /// Update a comment
     Update {
         /// Comment ID
         id: String,
-        /// New comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text unless --markdown is set.
+        /// New comment text (use @path to read from a file, @- for stdin, @@ for a literal leading @). `@Display Name` / `<@user_id>` resolve to real ClickUp mentions (tag ops); the whole body is replaced, so restate every mention to keep. Markdown is literal unless --markdown is set.
         #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Mark as resolved
@@ -71,6 +76,10 @@ pub enum CommentCommands {
         /// bold, blockquotes indent, tables/strikethrough degrade to text)
         #[arg(long)]
         markdown: bool,
+        /// Turn bare HTTP(S) URLs into inline link mentions or preview cards.
+        /// Works with or without --markdown; Markdown links and code stay unchanged.
+        #[arg(long, value_enum)]
+        link_preview: Option<LinkPreview>,
     },
     /// Delete a comment
     Delete {
@@ -93,7 +102,7 @@ pub enum CommentCommands {
     Reply {
         /// Comment ID
         id: String,
-        /// Reply text (use @path to read from a file, @- for stdin, @@ for a literal leading @). Note: ClickUp's v2 comment API does not render markdown; markdown syntax is stored as literal text unless --markdown is set.
+        /// Reply text (use @path to read from a file, @- for stdin, @@ for a literal leading @). `@Display Name` / `<@user_id>` resolve to real ClickUp mentions (tag ops). Markdown is literal unless --markdown is set.
         #[arg(long, value_parser = crate::input::resolve_value_arg)]
         text: String,
         /// Assignee user ID
@@ -104,10 +113,41 @@ pub enum CommentCommands {
         /// bold, blockquotes indent, tables/strikethrough degrade to text)
         #[arg(long)]
         markdown: bool,
+        /// Turn bare HTTP(S) URLs into inline link mentions or preview cards.
+        /// Works with or without --markdown; Markdown links and code stay unchanged.
+        #[arg(long, value_enum)]
+        link_preview: Option<LinkPreview>,
     },
 }
 
 const COMMENT_FIELDS: &[&str] = &["id", "user", "date", "comment_text"];
+
+/// Load workspace members for @mention resolution. Empty on fetch failure
+/// so a comment still posts (as plain `@Name` text).
+pub(crate) async fn mention_users(
+    client: &ClickUpClient,
+    workspace_id: Option<&str>,
+) -> Vec<crate::markdown_ops::MentionUser> {
+    match client.get("/v2/team").await {
+        Ok(resp) => crate::markdown_ops::users_from_teams(&resp, workspace_id),
+        Err(_) => Vec::new(),
+    }
+}
+
+pub(crate) async fn comment_body_enriched(
+    client: &ClickUpClient,
+    workspace_id: Option<&str>,
+    markdown: bool,
+    text: &str,
+    link_preview: Option<crate::markdown_ops::LinkPreview>,
+) -> serde_json::Value {
+    let mut body = crate::markdown_ops::comment_body(markdown, text, link_preview);
+    if text.contains('@') {
+        let users = mention_users(client, workspace_id).await;
+        body = crate::markdown_ops::apply_mentions_to_body(body, &users);
+    }
+    body
+}
 
 pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError> {
     let token = resolve_token(cli)?;
@@ -179,19 +219,27 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             assignee,
             notify_all,
             markdown,
+            link_preview,
         } => {
+            let ws = crate::commands::workspace::resolve_workspace(cli).ok();
             let resp = if let Some(id) = list {
-                let body = crate::markdown_ops::comment_body(markdown, &text);
+                let body =
+                    comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview)
+                        .await;
                 client
                     .post(&format!("/v2/list/{}/comment", id), &body)
                     .await?
             } else if let Some(id) = view {
-                let body = crate::markdown_ops::comment_body(markdown, &text);
+                let body =
+                    comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview)
+                        .await;
                 client
                     .post(&format!("/v2/view/{}/comment", id), &body)
                     .await?
             } else if let Some(resolved) = git::resolve_task(cli, task.as_deref(), true)? {
-                let mut body = crate::markdown_ops::comment_body(markdown, &text);
+                let mut body =
+                    comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview)
+                        .await;
                 body["notify_all"] = serde_json::json!(notify_all);
                 if let Some(a) = assignee {
                     body["assignee"] = serde_json::json!(a);
@@ -215,8 +263,13 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             resolved,
             assignee,
             markdown,
+            link_preview,
         } => {
-            let mut body = crate::markdown_ops::comment_body(markdown, &text);
+            // Same @mention resolution as create/reply. The body is replaced
+            // whole, so mentions that should stay must be restated.
+            let ws = crate::commands::workspace::resolve_workspace(cli).ok();
+            let mut body =
+                comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
             if resolved {
                 body["resolved"] = serde_json::Value::Bool(true);
             }
@@ -259,8 +312,11 @@ pub async fn execute(command: CommentCommands, cli: &Cli) -> Result<(), CliError
             text,
             assignee,
             markdown,
+            link_preview,
         } => {
-            let mut body = crate::markdown_ops::comment_body(markdown, &text);
+            let ws = crate::commands::workspace::resolve_workspace(cli).ok();
+            let mut body =
+                comment_body_enriched(&client, ws.as_deref(), markdown, &text, link_preview).await;
             if let Some(a) = assignee {
                 body["assignee"] = serde_json::json!(a);
             }

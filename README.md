@@ -235,7 +235,7 @@ verbose = false    # suppress the "resolved task X from branch Y" breadcrumb
 | Group | Commands |
 |-------|----------|
 | `setup` | Configure token and workspace |
-| `auth` | whoami, check |
+| `auth` | whoami, check, login, logout, status |
 | `workspace` | list, seats, plan |
 | `space` | list, get, create, update, delete |
 | `folder` | list, get, create, update, delete |
@@ -368,12 +368,21 @@ clickup-cli agent-config init --token pk_xxx --workspace 12345
 
 This creates `.clickup.toml` in the current directory. Add it to `.gitignore` if it contains a token. Project config takes priority over global config.
 
+### OAuth (bring your own app)
+
+`clickup-cli auth login` supports a BYO ClickUp app using `CLICKUP_OAUTH_CLIENT_ID` and `CLICKUP_OAUTH_CLIENT_SECRET` (or `--client-id` / `--client-secret`). Register the exact redirect `http://127.0.0.1:53682/callback`; `--redirect-port` changes the port. Use `--no-browser` to print the URL, `--keyring` for opt-in OS storage, `auth status` for the effective identity/kind/source/workspace, and `auth logout` to remove stored credentials. No maintainer secret or proxy is shipped.
+
+**Live loopback acceptance and token-response verification remain outstanding.** See [authentication and storage](docs/authentication.md) for registration, headless/SSH limitations, keyring build features, logout scope and owner acceptance requirements.
+
 ### Token Resolution (highest priority wins)
 
-1. `--token` CLI flag
-2. `CLICKUP_TOKEN` environment variable
-3. `.clickup.toml` (project-level)
-4. `~/.config/clickup-cli/config.toml` (global)
+1. `--token` CLI flag (personal by default; `--token-kind oauth` selects OAuth)
+2. `CLICKUP_TOKEN` environment variable (personal)
+3. `CLICKUP_OAUTH_TOKEN` environment variable (OAuth)
+4. Nearest ancestor `.clickup.toml` with credentials
+5. OS global config (`~/.config/clickup-cli/config.toml` on Linux)
+
+`[auth] kind = "oauth"` selects OAuth; omitted kind defaults to personal. File storage is default; `storage = "keychain"` explicitly selects the OS keychain and fails if unavailable. Personal tokens send `Authorization: <token>`; OAuth tokens send `Authorization: Bearer <token>`, including uploads and MCP. `CLICKUP_CONFIG` selects a single config path and disables discovery, useful for isolated environments.
 
 ### Workspace Resolution
 

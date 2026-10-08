@@ -52,9 +52,16 @@ Config saved to ~/.config/clickup-cli/config.toml
 
 ## auth
 
+See [OAuth registration, storage and outstanding live acceptance](../authentication/).
+
 ```bash
 clickup-cli auth whoami    # Show current user
 clickup-cli auth check     # Validate token (exit code only)
+clickup-cli auth login     # BYO app; set CLICKUP_OAUTH_CLIENT_ID and CLICKUP_OAUTH_CLIENT_SECRET
+clickup-cli auth login --no-browser  # Print URL; still waits for loopback callback
+clickup-cli auth login --keyring     # Opt-in OS credential storage
+clickup-cli auth status    # Validate identity and report kind/source/workspace
+clickup-cli auth logout    # Clear stored credentials (not server-side revocation)
 ```
 
 ```
@@ -110,22 +117,41 @@ clickup-cli space delete <ID>
 ## folder
 
 ```bash
-clickup-cli folder list --space <ID> [--archived]
+clickup-cli folder list --space <ID> [--archived] [--parent <FOLDER_ID>]
 clickup-cli folder get <ID>
-clickup-cli folder create --space <ID> --name NAME
+clickup-cli folder create --space <ID> --name NAME [--parent <FOLDER_ID>]
 clickup-cli folder update <ID> --name NAME
 clickup-cli folder delete <ID>
 ```
 
+Create a subfolder with `--parent`: this sends `parent_folder_id` to the
+[Create Folder API](https://developer.clickup.com/reference/createfolder).
+The parent must belong to the specified space, and the workspace must have
+subfolder support enabled. Omit `--parent` to create a top-level folder.
+The MCP `clickup_folder_create` tool accepts the same optional `parent_folder_id`.
+
+List/get tables and `json-compact` include `parent_folder` (the parent folder ID,
+or `-` when absent/null). `--output json` retains API fields, including nested
+lists, plus the existing derived `list_count`. The API returns folders as a flat
+list; `folder list --parent <FOLDER_ID>` filters it locally to direct children.
+MCP `clickup_folder_list` accepts `parent_folder_id` for the same local filter;
+MCP list/get results also include `parent_folder`.
+
+```text
+id    name             parent_folder  task_count  list_count
+2001  Q1 Initiatives   -              45          6
+2002  Sprint Backlog   2001           128         4
+2003  Product Roadmap  -              32          3
 ```
-+-------+-----------------+------------+------------+
-| id    | name            | task_count | list_count |
-+====================================================+
-| 2001  | Q1 Initiatives  | 45         | 6          |
-| 2002  | Sprint Backlog  | 128        | 4          |
-| 2003  | Product Roadmap | 32         | 3          |
-+-------+-----------------+------------+------------+
-```
+
+`folder update` only renames. The current
+[Update Folder reference](https://developer.clickup.com/reference/updatefolder)
+states that `parent_folder_id` is ignored there and refers to a separate Move
+Folder endpoint. This CLI does not currently expose folder moving.
+The public folder create/update schemas and folder response schemas reviewed
+on 2026-10-08 do not document a folder color field (status/list colors are
+separate). Folder color controls are therefore not exposed here; use ClickUp's
+UI. These limitations are based on the public documentation, not live API tests.
 
 ---
 
@@ -230,16 +256,20 @@ clickup-cli checklist delete-item <ID> <ITEM_ID>
 
 ```bash
 clickup-cli comment list --task <ID> [--start MS --start-id ID]   # also --list, --view
-clickup-cli comment create --task <ID> --text TEXT [--assignee ID] [--notify-all] [--markdown]
-clickup-cli comment create --list <ID> --text TEXT [--markdown]
-clickup-cli comment create --view <ID> --text TEXT [--markdown]
-clickup-cli comment update <ID> [--markdown] --text TEXT [--resolved] [--assignee ID]
+clickup-cli comment create --task <ID> --text TEXT [--assignee ID] [--notify-all] [--markdown] [--link-preview inline|card]
+clickup-cli comment create --list <ID> --text TEXT [--markdown] [--link-preview inline|card]
+clickup-cli comment create --view <ID> --text TEXT [--markdown] [--link-preview inline|card]
+clickup-cli comment update <ID> [--markdown] [--link-preview inline|card] --text TEXT [--resolved] [--assignee ID]
 clickup-cli comment delete <ID>
 clickup-cli comment replies <ID> [--start MS --start-id ID]        # list threaded replies
-clickup-cli comment reply <ID> --text TEXT [--assignee ID] [--markdown]
+clickup-cli comment reply <ID> --text TEXT [--assignee ID] [--markdown] [--link-preview inline|card]
+
+Mentions: ClickUp does not treat `@Name` in `comment_text` as a ping. Write `@Display Name` (the person's ClickUp username — spaces are fine), `<@user_id>`, or `@user_id`. The CLI looks up workspace members and submits `type: "tag"` ops. `--assignee` assigns the comment thread; it is not an @mention. Unresolved `@foo` stays literal. If a display name matches multiple distinct user IDs, it also stays literal; use `<@user_id>` (or a known `@user_id`) to disambiguate. Repeated appearances of the same user ID count as one identity. Do not put mentions inside backticks.
 ```
 
 `--markdown` parses the text as CommonMark and submits ClickUp's native rich formatting (bold/italic/code/links, bullet/ordered/checked lists, code blocks; headings render bold, blockquotes indent, tables/strikethrough degrade to plain text). A link with a `user:` scheme — `[@Name](user:123)` — becomes a native @mention that notifies that user (find IDs with `member list`); the link text is informational, ClickUp renders the member's real name.
+
+`--link-preview inline|card` turns bare HTTP(S) URLs into inline link mentions or bookmark cards, with or without `--markdown` (Markdown links and code are left alone). MCP tools take `link_preview`.
 
 ---
 
@@ -509,10 +539,18 @@ clickup-cli shared list    # Tasks, lists, and folders shared with you
 ## audit-log (Enterprise, v3)
 
 ```bash
-clickup-cli audit-log query --type TYPE [--user-id ID] [--start-date DATE] [--end-date DATE]
+clickup-cli audit-log query --applicability auth-and-security
+clickup-cli audit-log query --applicability auth-and-security \
+  --event-type USER_LOGIN --event-status failed --user-id 123 \
+  --start-time 1718754539000 --end-time 1727221739000 \
+  --page-rows 10 --page-timestamp 1727221739000 --page-direction before
 ```
 
-Types: `AUTH`, `CUSTOM_FIELDS`, `HIERARCHY`, `USER`, `AGENT`, `OTHER`
+Use an Enterprise Workspace owner account. Applicability values: `auth-and-security`, `custom-fields`, `hierarchy-activity`, `user-activity`, `agent-settings-activity`, `other-activity`.
+
+`--user-id` and `--user-email` are repeatable. Time flags accept Unix milliseconds; replace the illustrative dates above with a recent window. For the first page, ClickUp documents the current timestamp. Directions are `before` (recommended) and `after`; legacy `PREVIOUS` and `NEXT` map to those wire values respectively. Omission leaves the API default unchanged.
+
+`--all` walks pages (maximum 100); `--limit N` caps returned items. Response shape and timestamp continuation still need real Enterprise verification. See the [contract findings and owner checklist](audit-log-verification.md) before relying on a complete export.
 
 ---
 

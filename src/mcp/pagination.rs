@@ -160,9 +160,9 @@ impl StartIdArgs {
 /// Parsed body-pagination input. ClickUp's v3 audit-log endpoint
 /// (`POST /v3/workspaces/{ws}/auditlogs`) puts pagination state inside the
 /// request **body** as `pagination: { pageRows, pageTimestamp, pageDirection }`,
-/// not in query params. `pageDirection` is `"NEXT"` or `"PREVIOUS"` —
-/// `--all` walks in whatever direction the caller passes, defaulting to
-/// `"NEXT"` (newer events) if unspecified.
+/// not in query params. The API documents `before` / `after`; legacy
+/// `PREVIOUS` / `NEXT` inputs are translated on the wire. An omitted direction
+/// leaves the server default unchanged. Response continuation is unverified (#59).
 #[derive(Debug, Clone, Default)]
 pub struct BodyPaginationArgs {
     pub page_rows: Option<i64>,
@@ -564,7 +564,10 @@ where
             pagination.insert("pageTimestamp".into(), json!(t));
         }
         if let Some(d) = args.page_direction.as_deref() {
-            pagination.insert("pageDirection".into(), json!(d));
+            pagination.insert(
+                "pageDirection".into(),
+                json!(crate::commands::audit_log::wire_page_direction(d)),
+            );
         }
         if !pagination.is_empty() {
             body["pagination"] = Value::Object(pagination);
@@ -663,7 +666,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn test_client(server: &MockServer) -> ClickUpClient {
-        ClickUpClient::new("pk_test", 30)
+        ClickUpClient::new(&crate::auth_token::AuthToken::personal("pk_test"), 30)
             .expect("client")
             .with_base_url(&server.uri())
     }
@@ -1041,7 +1044,7 @@ mod tests {
             "/v3/workspaces/W1/auditlogs",
             &["data"],
             &["id", "eventTime"],
-            || json!({"applicability": "AUTH"}),
+            || json!({"applicability": "auth-and-security"}),
             |item| item.get("eventTime").and_then(|v| v.as_i64()),
         )
         .await
@@ -1060,7 +1063,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v3/workspaces/W1/auditlogs"))
             .and(wiremock::matchers::body_partial_json(
-                json!({"applicability": "AUTH"}),
+                json!({"applicability": "auth-and-security"}),
             ))
             .and(wiremock::matchers::body_partial_json(
                 json!({"pagination": {"pageTimestamp": 1700000020_i64}}),
@@ -1105,7 +1108,7 @@ mod tests {
             "/v3/workspaces/W1/auditlogs",
             &["data"],
             &["id"],
-            || json!({"applicability": "AUTH"}),
+            || json!({"applicability": "auth-and-security"}),
             |item| item.get("eventTime").and_then(|v| v.as_i64()),
         )
         .await
@@ -1145,7 +1148,7 @@ mod tests {
             "/v3/workspaces/W1/auditlogs",
             &["data"],
             &["id"],
-            || json!({"applicability": "AUTH"}),
+            || json!({"applicability": "auth-and-security"}),
             |item| item.get("eventTime").and_then(|v| v.as_i64()),
         )
         .await

@@ -1,4 +1,4 @@
-use crate::client::ClickUpClient;
+use crate::client::{encode_query_value, ClickUpClient};
 use crate::config::Config;
 use crate::git;
 use crate::output::{compact_items, flatten_value};
@@ -8,6 +8,15 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 pub mod classify;
 pub mod filter;
 pub mod pagination;
+
+fn comment_link_preview(args: &Value) -> Result<Option<crate::markdown_ops::LinkPreview>, String> {
+    args.get("link_preview")
+        .map(|value| {
+            serde_json::from_value(value.clone())
+                .map_err(|_| "link_preview must be inline or card".to_string())
+        })
+        .transpose()
+}
 
 // ── JSON-RPC helpers ──────────────────────────────────────────────────────────
 
@@ -25,18 +34,6 @@ fn tool_result(text: String) -> Value {
 
 fn tool_error(msg: String) -> Value {
     json!({"content":[{"type":"text","text":msg}],"isError":true})
-}
-
-fn encode_query_value(value: &str) -> String {
-    value
-        .bytes()
-        .flat_map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                vec![byte as char]
-            }
-            _ => format!("%{:02X}", byte).chars().collect(),
-        })
-        .collect()
 }
 
 fn push_query_param(params: &mut Vec<String>, name: &str, value: impl ToString) {
@@ -209,11 +206,12 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_folder_list",
-            "description": "List all folders in a ClickUp space. Folders are optional groupings that contain lists; a space may also have folderless lists (use clickup_list_list with space_id for those). Returns a compact array of folder objects (id, name, task_count, archived).",
+            "description": "List all folders in a ClickUp space. Folders are optional groupings that contain lists; a space may also have folderless lists (use clickup_list_list with space_id for those). Returns a compact array of folder objects (id, name, parent_folder, task_count, list_count).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "space_id": {"type": "string", "description": "ID of the parent space. Obtain from clickup_space_list (field: id)."},
+                    "parent_folder_id": {"type": "string", "description": "Only return direct subfolders of this folder. Filters the space response locally; omit to return all folders."},
                     "archived": {"type": "boolean", "description": "true = include archived folders; false or omitted = only active folders. Defaults to false."}
                 },
                 "required": ["space_id"]
@@ -427,8 +425,9 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "ID of the task to comment on. Obtain from clickup_task_list (field: id) or clickup_task_search."},
-                    "text": {"type": "string", "description": "Comment body. @mentions (e.g. '@username') are rendered. Markdown is NOT rendered by ClickUp's v2 comment API. Markdown syntax is stored as literal text, unless markdown is true."},
+                    "text": {"type": "string", "description": "Comment body. To ping someone, write `@Display Name` (exact ClickUp username, spaces OK) or `<@user_id>`; these resolve to real tag ops that notify the member. Unresolved @tokens stay plain text and notify nobody. Markdown is NOT rendered by ClickUp's v2 comment API. Markdown syntax is stored as literal text, unless markdown is true."},
                     "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
+                    "link_preview": {"type": "string", "enum": ["inline", "card"], "description": "Turn bare HTTP(S) URLs in text into inline link mentions or preview cards. Works with or without markdown; Markdown links, images, code and mentions stay unchanged."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the comment to — they will receive a notification. Obtain from clickup_member_list."},
                     "notify_all": {"type": "boolean", "description": "true = send a notification to every assignee of the task; false or omitted = only notify people mentioned or the explicit assignee."}
                 },
@@ -766,7 +765,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_folder_get",
-            "description": "Fetch the full object for a single ClickUp folder — name, task_count (a string, per API), archived status, and its child lists. Returns the folder object. Use clickup_list_list with folder_id to get just the lists.",
+            "description": "Fetch a compact ClickUp folder object: id, name, parent_folder, and task_count (a string, per API). Use clickup_list_list with folder_id to get just the lists.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -782,6 +781,7 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "space_id": {"type": "string", "description": "ID of the parent space. Obtain from clickup_space_list (field: id)."},
+                    "parent_folder_id": {"type": "string", "description": "Create a subfolder inside this existing folder in the same space. Requires subfolder support enabled for the workspace. Omit for a top-level folder."},
                     "name": {"type": "string", "description": "Display name for the folder. Must be non-empty and unique within the space."}
                 },
                 "required": ["space_id", "name"]
@@ -789,7 +789,7 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_folder_update",
-            "description": "Rename a ClickUp folder. Only the folder's display name can be changed via this endpoint — to move the folder to a different space, delete and recreate. Returns the updated folder object.",
+            "description": "Rename a ClickUp folder. Only the folder's display name can be changed via this endpoint; parent_folder_id is ignored by the API. Moving folders is not exposed by this tool. Returns the updated folder object.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -894,8 +894,9 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "comment_id": {"type": "string", "description": "ID of the comment to edit. Obtain from clickup_comment_list (field: id)."},
-                    "text": {"type": "string", "description": "Replacement body for the comment. Markdown is NOT rendered by ClickUp's v2 comment API unless markdown is true; without it, markdown syntax is stored as literal text. The previous body is overwritten entirely."},
+                    "text": {"type": "string", "description": "Replacement body for the comment. The previous body is overwritten entirely, so restate every @mention that should stay. To ping someone, write `@Display Name` (exact ClickUp username) or `<@user_id>`; these resolve to real tag ops. Markdown is NOT rendered by ClickUp's v2 comment API unless markdown is true; without it, markdown syntax is stored as literal text."},
                     "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
+                    "link_preview": {"type": "string", "enum": ["inline", "card"], "description": "Turn bare HTTP(S) URLs in text into inline link mentions or preview cards. Works with or without markdown; Markdown links, images, code and mentions stay unchanged."},
                     "assignee": {"type": "integer", "description": "Reassign the comment to this user ID, who will receive a notification. Obtain from clickup_member_list."},
                     "resolved": {"type": "boolean", "description": "true = mark the comment thread resolved/closed; false = reopen it."}
                 },
@@ -1689,8 +1690,9 @@ pub fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "comment_id": {"type": "string", "description": "ID of the parent comment to reply to. Obtain from clickup_comment_list (field: id)."},
-                    "text": {"type": "string", "description": "Reply body. Markdown is NOT rendered by ClickUp's v2 comment API unless markdown is true; without it, markdown syntax is stored as literal text."},
+                    "text": {"type": "string", "description": "Reply body. To ping someone, write `@Display Name` (exact ClickUp username) or `<@user_id>`; these resolve to real tag ops. Unresolved @tokens stay plain text and notify nobody. Markdown is NOT rendered by ClickUp's v2 comment API unless markdown is true; without it, markdown syntax is stored as literal text."},
                     "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
+                    "link_preview": {"type": "string", "enum": ["inline", "card"], "description": "Turn bare HTTP(S) URLs in text into inline link mentions or preview cards. Works with or without markdown; Markdown links, images, code and mentions stay unchanged."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the reply to — they receive a notification. Obtain from clickup_member_list."}
                 },
                 "required": ["comment_id", "text"]
@@ -2163,14 +2165,14 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_audit_log_query",
-            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires Enterprise plan. Uses body-based pagination — pagination state lives inside the POST body. Returns a compact array of event objects (id, eventType, eventStatus, userId, eventTime). Pass `page_rows`/`page_timestamp`/`page_direction`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. With `all=true` the helper walks pages in the chosen direction (default NEXT) until the server returns an empty page or limit is reached.",
+            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires an Enterprise Workspace owner. Uses body-based pagination — pagination state lives inside the POST body. Returns a compact array of event objects (id, eventType, eventStatus, userId, eventTime). Pass `page_rows`/`page_timestamp`/`page_direction`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. With `all=true` the helper walks pages until an empty page, missing timestamp, limit, or 100-page cap. Response fields and continuation remain unverified against Enterprise (#59); pagination metadata is best-effort.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "applicability": {"type": "string", "description": "Required. Scope of the query. ClickUp's documented values: WORKSPACE, TEAMS, USERS."},
-                    "event_type": {"type": "string", "description": "Optional filter on event category. ClickUp's documented categories include AUTH, HIERARCHY, USER, CUSTOM_FIELDS, AGENT, OTHER. Maps to filter.eventType."},
-                    "event_status": {"type": "string", "description": "Optional filter on event status (e.g. SUCCESS, FAILURE). Maps to filter.eventStatus."},
+                    "applicability": {"type": "string", "enum": ["agent-settings-activity", "auth-and-security", "custom-fields", "hierarchy-activity", "user-activity", "other-activity"], "description": "Log category. Most queries use auth-and-security."},
+                    "event_type": {"type": "string", "description": "Optional event type, e.g. USER_LOGIN, CHANGE_PASSWORD, TASK_CREATED. Uses the OpenAPI string schema; its array example conflicts. Maps to filter.eventType."},
+                    "event_status": {"type": "string", "description": "Optional event status: success, failed, warn, skipped, started, completed, error, system_error. Maps to filter.eventStatus."},
                     "user_id": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -2181,11 +2183,11 @@ pub fn tool_list() -> Value {
                         "items": {"type": "string"},
                         "description": "Optional list of user emails to filter on. Maps to filter.userEmail."
                     },
-                    "start_time": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds. Maps to filter.startTime."},
-                    "end_time": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Maps to filter.endTime."},
+                    "start_time": {"type": "integer", "description": "Start time as a Unix timestamp in milliseconds (numeric OpenAPI schema). Maps to filter.startTime."},
+                    "end_time": {"type": "integer", "description": "End time as a Unix timestamp in milliseconds (numeric OpenAPI schema). Maps to filter.endTime."},
                     "page_rows": {"type": "integer", "minimum": 1, "description": "Pagination page size. Maps to pagination.pageRows."},
-                    "page_timestamp": {"type": "integer", "description": "Boundary timestamp (Unix ms) — pass the previous response's `pagination.next_page_timestamp` to continue. Maps to pagination.pageTimestamp. Omit for the first page."},
-                    "page_direction": {"type": "string", "enum": ["NEXT", "PREVIOUS"], "description": "Direction to walk relative to `page_timestamp`: NEXT for newer events, PREVIOUS for older. Maps to pagination.pageDirection."},
+                    "page_timestamp": {"type": "integer", "description": "Boundary timestamp (Unix ms) — pass the previous response's `pagination.next_page_timestamp` to continue. Maps to pagination.pageTimestamp. Use the current timestamp for the first page per the OpenAPI request description."},
+                    "page_direction": {"type": "string", "enum": ["before", "after", "NEXT", "PREVIOUS"], "description": "Direction relative to page_timestamp: before (recommended by ClickUp) or after. Legacy PREVIOUS maps to before; NEXT maps to after. Omitted leaves the server default unchanged."},
                     "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
                     "all": {"type": "boolean", "description": "true = auto-fetch pages in the chosen direction until the server returns an empty page or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
@@ -2386,8 +2388,14 @@ async fn dispatch_tool(
                 .and_then(|f| f.as_array())
                 .cloned()
                 .unwrap_or_default();
+            let parent = args.get("parent_folder_id").and_then(|v| v.as_str());
             let items: Vec<Value> = folders
                 .iter()
+                .filter(|f| {
+                    parent.is_none_or(|id| {
+                        f.get("parent_folder").and_then(|v| v.as_str()) == Some(id)
+                    })
+                })
                 .map(|f| {
                     let list_count = f
                         .get("lists")
@@ -2397,6 +2405,7 @@ async fn dispatch_tool(
                     json!({
                         "id": f.get("id"),
                         "name": f.get("name"),
+                        "parent_folder": f.get("parent_folder"),
                         "task_count": f.get("task_count"),
                         "list_count": list_count,
                     })
@@ -2404,7 +2413,7 @@ async fn dispatch_tool(
                 .collect();
             Ok(compact_items(
                 &items,
-                &["id", "name", "task_count", "list_count"],
+                &["id", "name", "parent_folder", "task_count", "list_count"],
             ))
         }
 
@@ -2698,7 +2707,17 @@ async fn dispatch_tool(
                 .get("markdown")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let mut body = crate::markdown_ops::comment_body(markdown, text);
+            // Resolve `@Display Name` / `<@id>` against the workspace roster
+            // into tag ops (plain or markdown mode), then keep the normal body.
+            let ws = resolve_workspace(args).ok();
+            let mut body = crate::commands::comment::comment_body_enriched(
+                client,
+                ws.as_deref(),
+                markdown,
+                text,
+                comment_link_preview(args)?,
+            )
+            .await;
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {
                 body["assignee"] = json!(assignee);
             }
@@ -3179,7 +3198,10 @@ async fn dispatch_tool(
                 .get(&format!("/v2/folder/{}", folder_id))
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(compact_items(&[resp], &["id", "name", "task_count"]))
+            Ok(compact_items(
+                &[resp],
+                &["id", "name", "parent_folder", "task_count"],
+            ))
         }
 
         "clickup_folder_create" => {
@@ -3191,7 +3213,10 @@ async fn dispatch_tool(
                 .get("name")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing required parameter: name")?;
-            let body = json!({"name": name});
+            let mut body = json!({"name": name});
+            if let Some(parent) = args.get("parent_folder_id").and_then(|v| v.as_str()) {
+                body["parent_folder_id"] = json!(parent);
+            }
             let resp = client
                 .post(&format!("/v2/space/{}/folder", space_id), &body)
                 .await
@@ -3376,7 +3401,17 @@ async fn dispatch_tool(
                 .get("markdown")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let mut body = crate::markdown_ops::comment_body(markdown, text);
+            // Resolve `@Display Name` / `<@id>` against the workspace roster
+            // into tag ops (plain or markdown mode), then keep the normal body.
+            let ws = resolve_workspace(args).ok();
+            let mut body = crate::commands::comment::comment_body_enriched(
+                client,
+                ws.as_deref(),
+                markdown,
+                text,
+                comment_link_preview(args)?,
+            )
+            .await;
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {
                 body["assignee"] = json!(assignee);
             }
@@ -3421,21 +3456,23 @@ async fn dispatch_tool(
 
         "clickup_task_remove_dep" => {
             let (task_id, custom_q) = resolve_task(args, "task_id")?;
-            let mut body = json!({});
-            if let Some(dep) = args.get("depends_on").and_then(|v| v.as_str()) {
-                body["depends_on"] = json!(dep);
-            }
-            if let Some(dep) = args.get("dependency_of").and_then(|v| v.as_str()) {
-                body["dependency_of"] = json!(dep);
-            }
-            let path = match custom_q {
-                Some(q) => format!("/v2/task/{}/dependency?{}", task_id, q),
-                None => format!("/v2/task/{}/dependency", task_id),
+            let (direction, other) = match (args.get("depends_on"), args.get("dependency_of")) {
+                (Some(Value::String(other)), None) => ("depends_on", other),
+                (None, Some(Value::String(other))) => ("dependency_of", other),
+                _ => {
+                    return Err(
+                        "Specify exactly one of depends_on or dependency_of as a string".into(),
+                    );
+                }
             };
-            client
-                .delete_with_body(&path, &body)
-                .await
-                .map_err(|e| e.to_string())?;
+            // Delete Dependency reads the relationship from the query, not JSON.
+            let mut params = Vec::new();
+            if let Some(q) = custom_q {
+                params.push(q);
+            }
+            push_query_param(&mut params, direction, other);
+            let path = format!("/v2/task/{}/dependency?{}", task_id, params.join("&"));
+            client.delete(&path).await.map_err(|e| e.to_string())?;
             Ok(json!({"message": format!("Dependency removed from task {}", task_id)}))
         }
 
@@ -4656,7 +4693,17 @@ async fn dispatch_tool(
                 .get("markdown")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let mut body = crate::markdown_ops::comment_body(markdown, text);
+            // Resolve `@Display Name` / `<@id>` against the workspace roster
+            // into tag ops (plain or markdown mode), then keep the normal body.
+            let ws = resolve_workspace(args).ok();
+            let mut body = crate::commands::comment::comment_body_enriched(
+                client,
+                ws.as_deref(),
+                markdown,
+                text,
+                comment_link_preview(args)?,
+            )
+            .await;
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {
                 body["assignee"] = json!(assignee);
             }
@@ -5431,12 +5478,12 @@ async fn dispatch_tool(
                 &bargs,
                 client,
                 &path,
-                // v3 envelope; fallback to `events` in case ClickUp's response
-                // uses a domain-specific key. Bare-array shape also tolerated
-                // via extract_array's last-resort branch.
+                // Unverified response-key candidates retained for compatibility (#59).
+                // The published 200 response has no schema. Bare arrays are
+                // also tolerated by extract_array.
                 &["data", "events"],
-                // Compact fields chosen for token efficiency; the raw response
-                // has many fields per event but these are the most useful.
+                // Existing compact projection; actual event fields still need
+                // Enterprise evidence (#59).
                 &["id", "eventType", "eventStatus", "userId", "eventTime"],
                 || {
                     // ClickUp's audit-log body per the v3 OpenAPI spec:
@@ -5468,11 +5515,9 @@ async fn dispatch_tool(
                     }
                     body
                 },
-                // Per-item next-timestamp extractor. ClickUp's audit-log
-                // entries carry the event time under `eventTime` per the
-                // pageTimestamp / startTime / endTime naming convention.
-                // Fall back to `timestamp` then `date` for safety against
-                // undocumented variants.
+                // Unverified timestamp candidates, not a documented response schema.
+                // Keep existing numeric/numeric-string behavior pending #59;
+                // ISO timestamps and other response fields require evidence.
                 |item| {
                     for key in ["eventTime", "timestamp", "date"] {
                         if let Some(v) = item.get(key) {
@@ -5555,25 +5600,22 @@ async fn dispatch_tool(
 // ── Main server loop ──────────────────────────────────────────────────────────
 
 pub async fn serve(filter: filter::Filter) -> Result<(), Box<dyn std::error::Error>> {
-    // Resolve token: CLICKUP_TOKEN env > config file
-    let token = std::env::var("CLICKUP_TOKEN")
-        .ok()
-        .filter(|t| !t.is_empty())
-        .or_else(|| {
-            Config::load()
-                .ok()
-                .map(|c| c.auth.token)
-                .filter(|t| !t.is_empty())
-        })
-        .ok_or("No API token. Set CLICKUP_TOKEN env var or run `clickup setup`.")?;
+    let token = crate::commands::auth::resolve_credentials(None, None)?.token;
+    serve_with_credentials(filter, token, 30).await
+}
 
+pub async fn serve_with_credentials(
+    filter: filter::Filter,
+    token: crate::auth_token::AuthToken,
+    timeout: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Resolve workspace: CLICKUP_WORKSPACE env > config file
     let workspace_id = std::env::var("CLICKUP_WORKSPACE")
         .ok()
         .filter(|w| !w.is_empty())
         .or_else(|| Config::load().ok().and_then(|c| c.defaults.workspace_id));
 
-    let client = ClickUpClient::new(&token, 30)
+    let client = ClickUpClient::new(&token, timeout)
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let stdin = tokio::io::stdin();

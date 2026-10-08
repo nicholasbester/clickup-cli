@@ -39,7 +39,8 @@ fn test_auth_error_hint() {
     let err = CliError::AuthError {
         message: "Unauthorized".into(),
     };
-    assert!(err.hint().unwrap().contains("clickup setup"));
+    assert!(err.hint().unwrap().contains("clickup-cli setup"));
+    assert!(err.hint().unwrap().contains("clickup-cli auth login"));
 }
 
 #[test]
@@ -54,7 +55,8 @@ fn test_not_found_hint_includes_id() {
 #[test]
 fn test_config_error_hint() {
     let err = CliError::ConfigError("Not configured".into());
-    assert!(err.hint().unwrap().contains("clickup setup"));
+    assert!(err.hint().unwrap().contains("clickup-cli setup"));
+    assert!(err.hint().unwrap().contains("clickup-cli auth login"));
 }
 
 #[test]
