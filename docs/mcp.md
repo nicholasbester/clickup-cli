@@ -228,6 +228,8 @@ Tools backed by paginated ClickUp endpoints expose pagination controls. Fifteen 
 | `clickup_comment_replies` | start-id-based (v2) | `start`, `start_id`, `limit`, `all` |
 | `clickup_audit_log_query` | body-based (v3) | `page_rows`, `page_timestamp`, `page_direction`, `limit`, `all` |
 
+Audit logs require an Enterprise Workspace owner. Use `applicability: "auth-and-security"` (not `WORKSPACE`) and `page_direction: "before"` or `"after"`; legacy `PREVIOUS`/`NEXT` map to those API values. Response fields and continuation are still unverified; see the [Enterprise verification checklist](audit-log-verification.md).
+
 The contract is **opt-in and non-breaking**:
 
 - **No pagination args passed.** The tool's response is identical to the pre-pagination shape — a bare compact array. Existing clients see no change.

@@ -2153,14 +2153,14 @@ pub fn tool_list() -> Value {
         },
         {
             "name": "clickup_audit_log_query",
-            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires Enterprise plan. Uses body-based pagination — pagination state lives inside the POST body. Returns a compact array of event objects (id, eventType, eventStatus, userId, eventTime). Pass `page_rows`/`page_timestamp`/`page_direction`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. With `all=true` the helper walks pages in the chosen direction (default NEXT) until the server returns an empty page or limit is reached.",
+            "description": "Query the ClickUp audit log (who did what, when) for a workspace. Requires an Enterprise Workspace owner. Uses body-based pagination — pagination state lives inside the POST body. Returns a compact array of event objects (id, eventType, eventStatus, userId, eventTime). Pass `page_rows`/`page_timestamp`/`page_direction`/`limit`/`all` to paginate — when any pagination arg is provided, the response becomes `{items, pagination}` instead of a bare array. With `all=true` the helper walks pages until an empty page, missing timestamp, limit, or 100-page cap. Response fields and continuation remain unverified against Enterprise (#59); pagination metadata is best-effort.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "team_id": {"type": "string", "description": "Workspace (team) ID. Obtain from clickup_workspace_list (field: id). Omit to use the default workspace from config."},
-                    "applicability": {"type": "string", "description": "Required. Scope of the query. ClickUp's documented values: WORKSPACE, TEAMS, USERS."},
-                    "event_type": {"type": "string", "description": "Optional filter on event category. ClickUp's documented categories include AUTH, HIERARCHY, USER, CUSTOM_FIELDS, AGENT, OTHER. Maps to filter.eventType."},
-                    "event_status": {"type": "string", "description": "Optional filter on event status (e.g. SUCCESS, FAILURE). Maps to filter.eventStatus."},
+                    "applicability": {"type": "string", "enum": ["agent-settings-activity", "auth-and-security", "custom-fields", "hierarchy-activity", "user-activity", "other-activity"], "description": "Log category. Most queries use auth-and-security."},
+                    "event_type": {"type": "string", "description": "Optional event type, e.g. USER_LOGIN, CHANGE_PASSWORD, TASK_CREATED. Uses the OpenAPI string schema; its array example conflicts. Maps to filter.eventType."},
+                    "event_status": {"type": "string", "description": "Optional event status: success, failed, warn, skipped, started, completed, error, system_error. Maps to filter.eventStatus."},
                     "user_id": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -2171,11 +2171,11 @@ pub fn tool_list() -> Value {
                         "items": {"type": "string"},
                         "description": "Optional list of user emails to filter on. Maps to filter.userEmail."
                     },
-                    "start_time": {"type": "integer", "description": "Inclusive lower bound as a Unix timestamp in milliseconds. Maps to filter.startTime."},
-                    "end_time": {"type": "integer", "description": "Inclusive upper bound as a Unix timestamp in milliseconds. Maps to filter.endTime."},
+                    "start_time": {"type": "integer", "description": "Start time as a Unix timestamp in milliseconds (numeric OpenAPI schema). Maps to filter.startTime."},
+                    "end_time": {"type": "integer", "description": "End time as a Unix timestamp in milliseconds (numeric OpenAPI schema). Maps to filter.endTime."},
                     "page_rows": {"type": "integer", "minimum": 1, "description": "Pagination page size. Maps to pagination.pageRows."},
-                    "page_timestamp": {"type": "integer", "description": "Boundary timestamp (Unix ms) — pass the previous response's `pagination.next_page_timestamp` to continue. Maps to pagination.pageTimestamp. Omit for the first page."},
-                    "page_direction": {"type": "string", "enum": ["NEXT", "PREVIOUS"], "description": "Direction to walk relative to `page_timestamp`: NEXT for newer events, PREVIOUS for older. Maps to pagination.pageDirection."},
+                    "page_timestamp": {"type": "integer", "description": "Boundary timestamp (Unix ms) — pass the previous response's `pagination.next_page_timestamp` to continue. Maps to pagination.pageTimestamp. Use the current timestamp for the first page per the OpenAPI request description."},
+                    "page_direction": {"type": "string", "enum": ["before", "after", "NEXT", "PREVIOUS"], "description": "Direction relative to page_timestamp: before (recommended by ClickUp) or after. Legacy PREVIOUS maps to before; NEXT maps to after. Omitted leaves the server default unchanged."},
                     "limit": {"type": "integer", "minimum": 1, "description": "Cap total items returned. With all=true this caps across pages; otherwise it caps the single page."},
                     "all": {"type": "boolean", "description": "true = auto-fetch pages in the chosen direction until the server returns an empty page or limit is reached (hard cap 100 pages); false or omitted = fetch one page only."}
                 },
@@ -5436,12 +5436,12 @@ async fn dispatch_tool(
                 &bargs,
                 client,
                 &path,
-                // v3 envelope; fallback to `events` in case ClickUp's response
-                // uses a domain-specific key. Bare-array shape also tolerated
-                // via extract_array's last-resort branch.
+                // Unverified response-key candidates retained for compatibility (#59).
+                // The published 200 response has no schema. Bare arrays are
+                // also tolerated by extract_array.
                 &["data", "events"],
-                // Compact fields chosen for token efficiency; the raw response
-                // has many fields per event but these are the most useful.
+                // Existing compact projection; actual event fields still need
+                // Enterprise evidence (#59).
                 &["id", "eventType", "eventStatus", "userId", "eventTime"],
                 || {
                     // ClickUp's audit-log body per the v3 OpenAPI spec:
@@ -5473,11 +5473,9 @@ async fn dispatch_tool(
                     }
                     body
                 },
-                // Per-item next-timestamp extractor. ClickUp's audit-log
-                // entries carry the event time under `eventTime` per the
-                // pageTimestamp / startTime / endTime naming convention.
-                // Fall back to `timestamp` then `date` for safety against
-                // undocumented variants.
+                // Unverified timestamp candidates, not a documented response schema.
+                // Keep existing numeric/numeric-string behavior pending #59;
+                // ISO timestamps and other response fields require evidence.
                 |item| {
                     for key in ["eventTime", "timestamp", "date"] {
                         if let Some(v) = item.get(key) {
