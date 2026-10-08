@@ -9,7 +9,7 @@
 //! strikethrough → plain, tables/HTML/images → literal text). Only
 //! documented ops are emitted.
 
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, TextMergeStream};
 use serde_json::{json, Map, Value};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -30,7 +30,10 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TASKLISTS);
     options.insert(Options::ENABLE_STRIKETHROUGH);
-    let parser = Parser::new_ext(text, options);
+    // Entities, escapes and angle brackets can split one logical text run.
+    // Merge only consecutive Text events: formatting, code, HTML and semantic
+    // tag boundaries remain intact before conversion to comment ops.
+    let parser = TextMergeStream::new(Parser::new_ext(text, options));
 
     let mut ops: Vec<Value> = Vec::new();
     // Inline state
@@ -347,6 +350,315 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
     ops
 }
 
+/// A workspace member who can be @mentioned in a comment.
+#[derive(Clone, Debug)]
+pub struct MentionUser {
+    pub id: i64,
+    pub username: String,
+    pub email: String,
+}
+
+/// Pull mentionable users out of `GET /v2/team`. Prefer the named workspace
+/// when several teams are returned.
+pub fn users_from_teams(resp: &Value, workspace_id: Option<&str>) -> Vec<MentionUser> {
+    let teams = resp
+        .get("teams")
+        .and_then(|t| t.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let selected: Vec<&Value> = if let Some(id) = workspace_id {
+        let hit: Vec<&Value> = teams
+            .iter()
+            .filter(|t| t.get("id").and_then(|v| v.as_str()) == Some(id))
+            .collect();
+        if hit.is_empty() {
+            teams.iter().collect()
+        } else {
+            hit
+        }
+    } else {
+        teams.iter().collect()
+    };
+    let mut out = Vec::new();
+    for team in selected {
+        let members = match team.get("members").and_then(|m| m.as_array()) {
+            Some(m) => m,
+            None => continue,
+        };
+        for member in members {
+            let user = member.get("user").unwrap_or(member);
+            let id = user
+                .get("id")
+                .and_then(|v| v.as_i64())
+                .or_else(|| user.get("id").and_then(|v| v.as_u64()).map(|u| u as i64));
+            let username = user
+                .get("username")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let email = user
+                .get("email")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if let Some(id) = id {
+                if !username.is_empty() {
+                    out.push(MentionUser {
+                        id,
+                        username,
+                        email,
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+fn tag_op(id: i64, display: &str) -> Value {
+    json!({
+        "type": "tag",
+        "text": display,
+        "user": { "id": id }
+    })
+}
+
+fn is_boundary(c: char) -> bool {
+    !c.is_alphanumeric()
+}
+
+/// ClickUp does not turn `@Name` in `comment_text` into a mention. Mentions
+/// are `type: "tag"` ops with a numeric user id
+/// (https://developer.clickup.com/docs/comment-formatting).
+///
+/// Recognised forms, longest username first:
+/// - `@Display Name` (workspace `username`, case-insensitive)
+/// - `@user@email` (full email)
+/// - `@123456` when `123456` is a known user id
+///
+/// `<@123456>` is handled in `split_text_mentions` so the brackets are
+/// consumed with the token.
+fn match_mention(rest: &str, users: &[MentionUser]) -> Option<(i64, String, usize)> {
+    let digit_len = rest.bytes().take_while(|b| b.is_ascii_digit()).count();
+    if digit_len > 0 {
+        if let Ok(id) = rest[..digit_len].parse::<i64>() {
+            if users.iter().any(|u| u.id == id) {
+                let next_ok = rest[digit_len..]
+                    .chars()
+                    .next()
+                    .map(is_boundary)
+                    .unwrap_or(true);
+                if next_ok {
+                    let display = users
+                        .iter()
+                        .find(|u| u.id == id)
+                        .map(|u| format!("@{}", u.username))
+                        .unwrap_or_else(|| format!("@{}", id));
+                    return Some((id, display, digit_len));
+                }
+            }
+        }
+    }
+
+    let mut ranked: Vec<&MentionUser> = users.iter().collect();
+    ranked.sort_by_key(|u| std::cmp::Reverse(u.username.len()));
+    let matches: Vec<_> = ranked
+        .into_iter()
+        .filter_map(|u| {
+            if u.username.len() < 2 {
+                return None;
+            }
+            [&u.username, &u.email].into_iter().find_map(|token| {
+                let n = token.len();
+                if n > 0
+                    && rest
+                        .get(..n)
+                        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(token))
+                    && rest[n..].chars().next().map(is_boundary).unwrap_or(true)
+                {
+                    Some((u, n))
+                } else {
+                    None
+                }
+            })
+        })
+        .collect();
+    let &(user, consumed) = matches.first()?;
+    // Count distinct identities for the chosen token, not roster appearances:
+    // the same member may occur in several workspaces. Do not fall back to a
+    // shorter name when the longest match is ambiguous.
+    let identities: std::collections::HashSet<_> = matches
+        .iter()
+        .filter(|(_, n)| *n == consumed)
+        .map(|(u, _)| u.id)
+        .collect();
+    (identities.len() == 1).then(|| (user.id, format!("@{}", user.username), consumed))
+}
+
+fn split_text_mentions(text: &str, users: &[MentionUser]) -> Vec<Value> {
+    let mut out: Vec<Value> = Vec::new();
+    let mut last = 0usize;
+    let mut i = 0usize;
+    while i < text.len() {
+        let ch = text[i..].chars().next().unwrap();
+        // `<@123>` is one token — do not match the inner `@123` and leave
+        // the angle brackets as leftover text.
+        if text[i..].starts_with("<@") {
+            let prev_ok = i == 0
+                || text[..i]
+                    .chars()
+                    .next_back()
+                    .map(is_boundary)
+                    .unwrap_or(true);
+            if prev_ok {
+                if let Some(end) = text[i + 2..].find('>') {
+                    let id_str = &text[i + 2..i + 2 + end];
+                    if let Ok(id) = id_str.parse::<i64>() {
+                        if last < i {
+                            out.push(json!({ "text": &text[last..i] }));
+                        }
+                        let display = users
+                            .iter()
+                            .find(|u| u.id == id)
+                            .map(|u| format!("@{}", u.username))
+                            .unwrap_or_else(|| format!("@{}", id_str));
+                        out.push(tag_op(id, &display));
+                        i = i + 2 + end + 1;
+                        last = i;
+                        continue;
+                    }
+                }
+            }
+        }
+        if ch == '@' {
+            let prev_ok = i == 0
+                || text[..i]
+                    .chars()
+                    .next_back()
+                    .map(is_boundary)
+                    .unwrap_or(true);
+            if prev_ok {
+                if let Some((id, display, consumed)) = match_mention(&text[i + 1..], users) {
+                    if last < i {
+                        out.push(json!({ "text": &text[last..i] }));
+                    }
+                    out.push(tag_op(id, &display));
+                    i = i + 1 + consumed;
+                    last = i;
+                    continue;
+                }
+            }
+        }
+        i += ch.len_utf8();
+    }
+    if last < text.len() {
+        out.push(json!({ "text": &text[last..] }));
+    }
+    if out.is_empty() {
+        out.push(json!({ "text": text }));
+    }
+    out
+}
+
+fn op_is_code_context(ops: &[Value], i: usize) -> bool {
+    let op = &ops[i];
+    if op.get("type").and_then(|t| t.as_str()) == Some("tag")
+        || op.get("type").and_then(|t| t.as_str()) == Some("emoticon")
+    {
+        return true;
+    }
+    if op
+        .get("attributes")
+        .and_then(|a| a.get("code"))
+        .and_then(|v| v.as_bool())
+        == Some(true)
+    {
+        return true;
+    }
+    if let Some(next) = ops.get(i + 1) {
+        if next
+            .get("attributes")
+            .and_then(|a| a.get("code-block"))
+            .is_some()
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Rewrite text ops that contain `@mentions` into ClickUp `type: "tag"` ops.
+/// Leaves unmatched `@foo` as plain text. Skips inline code and fenced-code
+/// lines.
+pub fn apply_mentions(ops: Vec<Value>, users: &[MentionUser]) -> Vec<Value> {
+    if users.is_empty() {
+        return ops;
+    }
+    let mut out = Vec::new();
+    for i in 0..ops.len() {
+        // Already a mention (e.g. from a `[@Name](user:id)` markdown link):
+        // its text is display-only, never re-resolved.
+        if ops[i].get("type").and_then(|t| t.as_str()) == Some("tag") {
+            out.push(ops[i].clone());
+            continue;
+        }
+        if op_is_code_context(&ops, i) {
+            out.push(ops[i].clone());
+            continue;
+        }
+        let Some(text) = ops[i].get("text").and_then(|t| t.as_str()) else {
+            out.push(ops[i].clone());
+            continue;
+        };
+        if !text.contains('@') {
+            out.push(ops[i].clone());
+            continue;
+        }
+        let attrs = ops[i].get("attributes").cloned();
+        let pieces = split_text_mentions(text, users);
+        for piece in pieces {
+            if piece.get("type").and_then(|t| t.as_str()) == Some("tag") {
+                out.push(piece);
+            } else if let Some(ref a) = attrs {
+                let mut obj = piece;
+                obj["attributes"] = a.clone();
+                out.push(obj);
+            } else {
+                out.push(piece);
+            }
+        }
+    }
+    out
+}
+
+/// Attach tag ops to a comment POST body. If the body is still
+/// `comment_text` and a mention resolves, it is converted to a `comment`
+/// ops array (required — ClickUp ignores `@Name` in `comment_text`).
+pub fn apply_mentions_to_body(mut body: Value, users: &[MentionUser]) -> Value {
+    if users.is_empty() {
+        return body;
+    }
+    if let Some(ops) = body.get("comment").and_then(|c| c.as_array()).cloned() {
+        body["comment"] = Value::Array(apply_mentions(ops, users));
+        return body;
+    }
+    if let Some(text) = body.get("comment_text").and_then(|t| t.as_str()) {
+        if text.contains('@') {
+            let ops = apply_mentions(vec![json!({ "text": text })], users);
+            if ops
+                .iter()
+                .any(|o| o.get("type").and_then(|t| t.as_str()) == Some("tag"))
+            {
+                if let Some(obj) = body.as_object_mut() {
+                    obj.remove("comment_text");
+                    obj.insert("comment".into(), Value::Array(ops));
+                }
+            }
+        }
+    }
+    body
+}
+
 /// Build the comment POST body: rich ops when markdown is set and the
 /// input is expressible, plain comment_text otherwise.
 pub fn comment_body(markdown: bool, text: &str) -> Value {
@@ -592,6 +904,103 @@ mod tests {
             ]
         );
     }
+
+    fn ada() -> MentionUser {
+        MentionUser {
+            id: 111111,
+            username: "Ada Lovelace".into(),
+            email: "ada@example.com".into(),
+        }
+    }
+
+    fn alan() -> MentionUser {
+        MentionUser {
+            id: 222222,
+            username: "Alan Turing".into(),
+            email: "alan@example.com".into(),
+        }
+    }
+
+    #[test]
+    fn mention_display_name_becomes_tag_op() {
+        let ops = markdown_to_ops("hey @Ada Lovelace");
+        let tagged = apply_mentions(ops, &[ada()]);
+        assert_eq!(
+            tagged,
+            vec![
+                json!({"text": "hey "}),
+                json!({"type": "tag", "text": "@Ada Lovelace", "user": {"id": 111111}}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn two_mentions_in_one_run() {
+        let tagged = apply_mentions(
+            vec![json!({"text": "@Ada Lovelace @Alan Turing"})],
+            &[ada(), alan()],
+        );
+        assert_eq!(
+            tagged,
+            vec![
+                json!({"type": "tag", "text": "@Ada Lovelace", "user": {"id": 111111}}),
+                json!({"text": " "}),
+                json!({"type": "tag", "text": "@Alan Turing", "user": {"id": 222222}}),
+            ]
+        );
+    }
+
+    #[test]
+    fn angle_and_bare_user_id_mentions() {
+        let users = [ada()];
+        let tagged = apply_mentions(vec![json!({"text": "<@111111> and @111111"})], &users);
+        assert_eq!(
+            tagged,
+            vec![
+                json!({"type": "tag", "text": "@Ada Lovelace", "user": {"id": 111111}}),
+                json!({"text": " and "}),
+                json!({"type": "tag", "text": "@Ada Lovelace", "user": {"id": 111111}}),
+            ]
+        );
+    }
+
+    #[test]
+    fn unmatched_at_stays_text() {
+        let tagged = apply_mentions(vec![json!({"text": "see @nobody here"})], &[ada()]);
+        assert_eq!(tagged, vec![json!({"text": "see @nobody here"})]);
+    }
+
+    #[test]
+    fn inline_code_is_not_mentioned() {
+        let ops = markdown_to_ops("use `@Ada Lovelace`");
+        let tagged = apply_mentions(ops, &[ada()]);
+        assert!(
+            tagged
+                .iter()
+                .all(|o| o.get("type").and_then(|t| t.as_str()) != Some("tag")),
+            "got {tagged:?}"
+        );
+    }
+
+    #[test]
+    fn email_local_at_is_not_a_mention() {
+        let tagged = apply_mentions(vec![json!({"text": "write ada@example.com"})], &[ada()]);
+        assert_eq!(tagged, vec![json!({"text": "write ada@example.com"})]);
+    }
+
+    #[test]
+    fn comment_text_body_promotes_to_ops_when_tagged() {
+        let body = json!({"comment_text": "ping @Ada Lovelace"});
+        let out = apply_mentions_to_body(body, &[ada()]);
+        assert!(out.get("comment_text").is_none());
+        let ops = out.get("comment").and_then(|c| c.as_array()).unwrap();
+        let tag = ops
+            .iter()
+            .find(|o| o.get("type").and_then(|t| t.as_str()) == Some("tag"))
+            .expect("expected a tag op");
+        assert_eq!(tag["user"]["id"], 111111);
+    }
 }
 
 #[cfg(test)]
@@ -704,6 +1113,147 @@ mod mention_hardening_tests {
                 json!({"type": "tag", "user": {"id": 5}}),
                 json!({"text": "\n"}),
             ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod review_regressions {
+    use super::*;
+
+    fn user(id: i64, username: &str, email: &str) -> MentionUser {
+        MentionUser {
+            id,
+            username: username.into(),
+            email: email.into(),
+        }
+    }
+
+    #[test]
+    fn unmatched_unicode_username_prefix_is_safe() {
+        for text in ["hey @😀", "hey @éé", "hey @a😀"] {
+            let ops = vec![json!({"text": text})];
+            assert_eq!(apply_mentions(ops.clone(), &[user(111, "Ada", "")]), ops);
+        }
+    }
+
+    #[test]
+    fn unmatched_unicode_email_prefix_is_safe() {
+        // Username is safely checked first; the email length falls inside 😀.
+        let ops = vec![json!({"text": "hey @abcdef😀"})];
+        assert_eq!(
+            apply_mentions(ops.clone(), &[user(111, "Al", "a@b.com")]),
+            ops
+        );
+    }
+
+    #[test]
+    fn markdown_fragments_resolve_complete_tokens() {
+        let users = [user(111, "Ada & Bob", "a@example.com")];
+        for text in ["hi <@111>", "hi @Ada &amp; Bob", "hi @Ada \\& Bob"] {
+            assert_eq!(
+                apply_mentions(markdown_to_ops(text), &users),
+                vec![
+                    json!({"text":"hi "}),
+                    tag_op(111, "@Ada & Bob"),
+                    json!({"text":"\n"})
+                ],
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn merging_does_not_cross_parser_boundaries() {
+        let users = [user(111, "Ada & Bob", "")];
+        for text in [
+            "@Ada **&** Bob",
+            "@Ada ~~&~~ Bob",
+            "@Ada `&` Bob",
+            "@Ada <span>&</span> Bob",
+            "@Ada [x](user:222) & Bob",
+            "`@Ada & Bob`",
+            "```\n@Ada & Bob\n```",
+        ] {
+            let ops = markdown_to_ops(text);
+            assert_eq!(apply_mentions(ops.clone(), &users), ops, "{text}");
+        }
+    }
+
+    #[test]
+    fn semantic_ops_are_preserved() {
+        let ops = vec![
+            json!({"text":"@Ada "}),
+            json!({"type":"tag", "text":"@Ada & Bob", "user":{"id":222}}),
+            json!({"type":"emoticon", "text":"@Ada & Bob"}),
+            json!({"type":"bookmark", "bookmark":{"url":"https://example.com/@Ada"}}),
+            json!({"text":"& Bob"}),
+        ];
+        assert_eq!(
+            apply_mentions(ops.clone(), &[user(111, "Ada & Bob", "")]),
+            ops
+        );
+    }
+
+    #[test]
+    fn ambiguous_names_stay_literal_regardless_of_roster_order() {
+        let mut users = vec![
+            user(111, "Ada", "one@example.com"),
+            user(222, "ada", "two@example.com"),
+        ];
+        for _ in 0..2 {
+            assert_eq!(
+                apply_mentions(vec![json!({"text":"hi @Ada"})], &users),
+                vec![json!({"text":"hi @Ada"})]
+            );
+            assert_eq!(
+                apply_mentions(vec![json!({"text":"hi <@222>"})], &users),
+                vec![json!({"text":"hi "}), tag_op(222, "@ada")]
+            );
+            users.reverse();
+        }
+    }
+
+    #[test]
+    fn repeated_identity_is_unique_but_distinct_cross_workspace_ids_are_not() {
+        for second_id in [111, 222] {
+            let roster = json!({"teams":[
+                {"id":"99", "members":[{"user":{"id":111,"username":"Ada"}}]},
+                {"id":"100", "members":[{"user":{"id":second_id,"username":"Ada"}}]}
+            ]});
+            for workspace in [None, Some("missing")] {
+                let users = users_from_teams(&roster, workspace);
+                let expected = if second_id == 111 {
+                    vec![tag_op(111, "@Ada")]
+                } else {
+                    vec![json!({"text":"@Ada"})]
+                };
+                assert_eq!(
+                    apply_mentions(vec![json!({"text":"@Ada"})], &users),
+                    expected
+                );
+            }
+            assert_eq!(
+                apply_mentions(
+                    vec![json!({"text":"@Ada"})],
+                    &users_from_teams(&roster, Some("99"))
+                ),
+                vec![tag_op(111, "@Ada")]
+            );
+        }
+    }
+
+    #[test]
+    fn longest_name_wins_without_ambiguous_fallback() {
+        let mut users = vec![user(111, "Ada", ""), user(222, "Ada Lovelace", "")];
+        assert_eq!(
+            apply_mentions(vec![json!({"text":"@Ada Lovelace"})], &users),
+            vec![tag_op(222, "@Ada Lovelace")]
+        );
+        users.push(user(333, "ADA LOVELACE", ""));
+        assert_eq!(
+            apply_mentions(vec![json!({"text":"@Ada Lovelace"})], &users),
+            vec![json!({"text":"@Ada Lovelace"})]
         );
     }
 }
