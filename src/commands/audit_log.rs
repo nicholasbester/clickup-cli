@@ -10,13 +10,13 @@ use clap::Subcommand;
 pub enum AuditLogCommands {
     /// Query audit logs (Enterprise only, v3)
     Query {
-        /// Required scope of the query. ClickUp's documented values: WORKSPACE, TEAMS, USERS.
+        /// Log category: auth-and-security, custom-fields, hierarchy-activity, user-activity, agent-settings-activity, other-activity.
         #[arg(long)]
         applicability: String,
-        /// Filter by event type (e.g. AUTH, HIERARCHY, USER, CUSTOM_FIELDS, AGENT, OTHER)
+        /// Filter by event type (e.g. USER_LOGIN, CHANGE_PASSWORD, TASK_CREATED)
         #[arg(long = "event-type")]
         event_type: Option<String>,
-        /// Filter by event status (e.g. SUCCESS, FAILURE)
+        /// Filter by event status (success, failed, warn, skipped, started, completed, error, system_error)
         #[arg(long = "event-status")]
         event_status: Option<String>,
         /// Filter by user ID (repeat for multiple)
@@ -34,15 +34,26 @@ pub enum AuditLogCommands {
         /// Max rows per page (pagination.pageRows)
         #[arg(long)]
         page_rows: Option<i64>,
-        /// Cursor timestamp (pagination.pageTimestamp)
+        /// Cursor timestamp in Unix milliseconds; use current time for the first page
         #[arg(long)]
         page_timestamp: Option<i64>,
-        /// Page direction (pagination.pageDirection): NEXT or PREVIOUS
+        /// Page direction: before (recommended) or after; PREVIOUS/NEXT are aliases
         #[arg(long)]
         page_direction: Option<String>,
     },
 }
 
+// The published request contract uses before/after. Preserve legacy callers
+// without forwarding the old CLI/MCP names as unsupported API values.
+pub(crate) fn wire_page_direction(direction: &str) -> &str {
+    match direction {
+        "PREVIOUS" => "before",
+        "NEXT" => "after",
+        other => other,
+    }
+}
+
+// Response fields remain unverified against an Enterprise workspace (#59).
 const AUDIT_LOG_FIELDS: &[&str] = &["id", "eventType", "userId", "createdAt"];
 
 pub async fn execute(command: AuditLogCommands, cli: &Cli) -> Result<(), CliError> {
@@ -76,7 +87,10 @@ pub async fn execute(command: AuditLogCommands, cli: &Cli) -> Result<(), CliErro
                 extra_pagination.insert("pageRows".into(), serde_json::Value::Number(n.into()));
             }
             if let Some(d) = page_direction_owned {
-                extra_pagination.insert("pageDirection".into(), serde_json::Value::String(d));
+                extra_pagination.insert(
+                    "pageDirection".into(),
+                    serde_json::Value::String(wire_page_direction(&d).into()),
+                );
             }
 
             let logs = crate::commands::pagination::walk_body(

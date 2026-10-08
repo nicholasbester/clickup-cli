@@ -530,10 +530,18 @@ clickup-cli shared list    # Tasks, lists, and folders shared with you
 ## audit-log (Enterprise, v3)
 
 ```bash
-clickup-cli audit-log query --type TYPE [--user-id ID] [--start-date DATE] [--end-date DATE]
+clickup-cli audit-log query --applicability auth-and-security
+clickup-cli audit-log query --applicability auth-and-security \
+  --event-type USER_LOGIN --event-status failed --user-id 123 \
+  --start-time 1718754539000 --end-time 1727221739000 \
+  --page-rows 10 --page-timestamp 1727221739000 --page-direction before
 ```
 
-Types: `AUTH`, `CUSTOM_FIELDS`, `HIERARCHY`, `USER`, `AGENT`, `OTHER`
+Use an Enterprise Workspace owner account. Applicability values: `auth-and-security`, `custom-fields`, `hierarchy-activity`, `user-activity`, `agent-settings-activity`, `other-activity`.
+
+`--user-id` and `--user-email` are repeatable. Time flags accept Unix milliseconds; replace the illustrative dates above with a recent window. For the first page, ClickUp documents the current timestamp. Directions are `before` (recommended) and `after`; legacy `PREVIOUS` and `NEXT` map to those wire values respectively. Omission leaves the API default unchanged.
+
+`--all` walks pages (maximum 100); `--limit N` caps returned items. Response shape and timestamp continuation still need real Enterprise verification. See the [contract findings and owner checklist](audit-log-verification.md) before relying on a complete export.
 
 ---
 
