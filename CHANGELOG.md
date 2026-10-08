@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `task remove-dep` and MCP `clickup_task_remove_dep` now send the dependency direction and task ID as encoded query parameters, as required by ClickUp's Delete Dependency endpoint, instead of an ignored JSON body that could report success without removing the relationship (#135). Custom task ID/workspace handling is preserved. The MCP tool now enforces its documented requirement for exactly one string-valued `depends_on` or `dependency_of`; invalid inputs fail before sending a request.
+
 ## [0.18.0] - 2026-09-15
 
 ### Dependencies
