@@ -9,8 +9,49 @@
 //! strikethrough → plain, tables/HTML/images → literal text). Only
 //! documented ops are emitted.
 
+use linkify::{LinkFinder, LinkKind};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, TextMergeStream};
 use serde_json::{json, Map, Value};
+
+#[derive(Clone, Copy, Debug, clap::ValueEnum, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LinkPreview {
+    Inline,
+    Card,
+}
+
+impl LinkPreview {
+    fn block(self, url: &str) -> Value {
+        match self {
+            Self::Inline => json!({"type": "link_mention", "link_mention": {"url": url}}),
+            Self::Card => json!({
+                "type": "bookmark",
+                "bookmark": {"service": "custom", "id": url, "url": url},
+                "attributes": {"body-type": "table", "unfurled": "true"}
+            }),
+        }
+    }
+}
+
+/// Split a text op into previews and text, preserving the text's attributes.
+fn preview_text_op(op: Value, mode: LinkPreview) -> Vec<Value> {
+    let mut finder = LinkFinder::new();
+    finder.kinds(&[LinkKind::Url]);
+    finder
+        .spans(op["text"].as_str().unwrap_or_default())
+        .map(|span| {
+            let text = span.as_str();
+            let scheme = text.split_once("://").map(|(s, _)| s.to_ascii_lowercase());
+            if span.kind().is_some() && matches!(scheme.as_deref(), Some("http" | "https")) {
+                mode.block(text)
+            } else {
+                let mut text_op = op.clone();
+                text_op["text"] = json!(text);
+                text_op
+            }
+        })
+        .collect()
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum ListKind {
@@ -27,6 +68,10 @@ const MAX_INDENT: usize = 8;
 /// no expressible content yields an empty vec (callers fall back to
 /// comment_text).
 pub fn markdown_to_ops(text: &str) -> Vec<Value> {
+    markdown_to_ops_with_preview(text, None)
+}
+
+fn markdown_to_ops_with_preview(text: &str, link_preview: Option<LinkPreview>) -> Vec<Value> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TASKLISTS);
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -308,6 +353,7 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                         Some(l) if l.starts_with("__IMG__") => saved_link.clone().flatten(),
                         other => other.clone(),
                     };
+                    let start = ops.len();
                     push_text(
                         &mut ops,
                         &t,
@@ -317,6 +363,15 @@ pub fn markdown_to_ops(text: &str) -> Vec<Value> {
                         false,
                         heading_depth,
                     );
+                    // Only bare URLs preview; link text and image alt stay as-is.
+                    if let (Some(mode), None, None) = (link_preview, &link, &saved_link) {
+                        let text_ops = ops.split_off(start);
+                        ops.extend(
+                            text_ops
+                                .into_iter()
+                                .flat_map(|op| preview_text_op(op, mode)),
+                        );
+                    }
                     terminator_pending = true;
                 }
             }
@@ -660,12 +715,18 @@ pub fn apply_mentions_to_body(mut body: Value, users: &[MentionUser]) -> Value {
 }
 
 /// Build the comment POST body: rich ops when markdown is set and the
-/// input is expressible, plain comment_text otherwise.
-pub fn comment_body(markdown: bool, text: &str) -> Value {
+/// input is expressible, or when a link preview applies; plain
+/// comment_text otherwise.
+pub fn comment_body(markdown: bool, text: &str, link_preview: Option<LinkPreview>) -> Value {
     if markdown {
-        let ops = markdown_to_ops(text);
+        let ops = markdown_to_ops_with_preview(text, link_preview);
         if !ops.is_empty() {
             return json!({ "comment": ops });
+        }
+    } else if let Some(mode) = link_preview {
+        let ops = preview_text_op(json!({"text": text}), mode);
+        if ops.iter().any(|op| op.get("type").is_some()) {
+            return json!({"comment": ops});
         }
     }
     json!({ "comment_text": text })
@@ -675,6 +736,110 @@ pub fn comment_body(markdown: bool, text: &str) -> Value {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn previews_preserve_url_boundaries_and_surrounding_unicode_text() {
+        let first = "https://en.wikipedia.org/wiki/Link_(The_Legend_of_Zelda)";
+        let second = "http://example.com/a_b?x=1&y=2#section";
+        let text = format!("Review [({first})], then {second}.\nMerci café!");
+        assert_eq!(
+            comment_body(false, &text, Some(LinkPreview::Inline)),
+            json!({"comment": [
+                {"text": "Review [("},
+                {"type": "link_mention", "link_mention": {"url": first}},
+                {"text": ")], then "},
+                {"type": "link_mention", "link_mention": {"url": second}},
+                {"text": ".\nMerci café!"}
+            ]})
+        );
+    }
+
+    #[test]
+    fn markdown_previews_keep_styles_lists_and_mentions() {
+        let url = "https://github.com/org/repo/pull/1";
+        assert_eq!(
+            comment_body(
+                true,
+                &format!("- **Review {url} today** [@Nick](user:7)"),
+                Some(LinkPreview::Card),
+            ),
+            json!({"comment": [
+                {"text": "Review ", "attributes": {"bold": true}},
+                {"type": "bookmark", "bookmark": {"service": "custom", "id": url, "url": url},
+                    "attributes": {"body-type": "table", "unfurled": "true"}},
+                {"text": " today", "attributes": {"bold": true}},
+                {"text": " "},
+                {"type": "tag", "user": {"id": 7}},
+                {"text": "\n", "attributes": {"list": {"list": "bullet"}}}
+            ]})
+        );
+    }
+
+    #[test]
+    fn markdown_previews_skip_code_links_images_and_html() {
+        let url = "https://example.com/pr/1";
+        for text in [
+            format!("`{url}`"),
+            format!("```\n{url}\n```"),
+            format!("    {url}\n"),
+            format!("[PR]({url})"),
+            format!("[{url}]({url})"),
+            format!("<{url}>"),
+            format!("![{url}]({url})"),
+            format!("[![{url}]({url})]({url})"),
+            format!("<img src=\"{url}\">"),
+        ] {
+            assert_eq!(
+                comment_body(true, &text, Some(LinkPreview::Inline)),
+                comment_body(true, &text, None),
+                "input: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn preview_mode_preserves_plain_text_without_web_urls_and_empty_input() {
+        for text in [
+            "",
+            "  \n",
+            "**hello**",
+            "user@example.com ftp://example.com user:7",
+            "http://",
+        ] {
+            assert_eq!(
+                comment_body(false, text, Some(LinkPreview::Card)),
+                json!({"comment_text": text})
+            );
+        }
+        for text in ["", "  \n"] {
+            assert_eq!(
+                comment_body(true, text, Some(LinkPreview::Card)),
+                comment_body(true, text, None)
+            );
+        }
+    }
+
+    #[test]
+    fn no_preview_flag_keeps_urls_as_text() {
+        let url = "https://github.com/org/repo/pull/1";
+        assert_eq!(comment_body(false, url, None), json!({"comment_text": url}));
+        assert_eq!(
+            comment_body(true, url, None),
+            json!({"comment": [{"text": url}, {"text": "\n"}]})
+        );
+    }
+
+    #[test]
+    fn markdown_url_text_events_are_merged_before_finding_previews() {
+        let url = "https://example.com/a_b?x=1&y=2#anchor";
+        assert_eq!(
+            comment_body(true, url, Some(LinkPreview::Inline)),
+            json!({"comment": [
+                {"type": "link_mention", "link_mention": {"url": url}},
+                {"text": "\n"}
+            ]})
+        );
+    }
 
     #[test]
     fn plain_paragraph() {

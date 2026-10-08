@@ -9,6 +9,15 @@ pub mod classify;
 pub mod filter;
 pub mod pagination;
 
+fn comment_link_preview(args: &Value) -> Result<Option<crate::markdown_ops::LinkPreview>, String> {
+    args.get("link_preview")
+        .map(|value| {
+            serde_json::from_value(value.clone())
+                .map_err(|_| "link_preview must be inline or card".to_string())
+        })
+        .transpose()
+}
+
 // ── JSON-RPC helpers ──────────────────────────────────────────────────────────
 
 fn ok_response(id: &Value, result: Value) -> Value {
@@ -418,6 +427,7 @@ pub fn tool_list() -> Value {
                     "task_id": {"type": "string", "description": "ID of the task to comment on. Obtain from clickup_task_list (field: id) or clickup_task_search."},
                     "text": {"type": "string", "description": "Comment body. To ping someone, write `@Display Name` (exact ClickUp username, spaces OK) or `<@user_id>`; these resolve to real tag ops that notify the member. Unresolved @tokens stay plain text and notify nobody. Markdown is NOT rendered by ClickUp's v2 comment API. Markdown syntax is stored as literal text, unless markdown is true."},
                     "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
+                    "link_preview": {"type": "string", "enum": ["inline", "card"], "description": "Turn bare HTTP(S) URLs in text into inline link mentions or preview cards. Works with or without markdown; Markdown links, images, code and mentions stay unchanged."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the comment to — they will receive a notification. Obtain from clickup_member_list."},
                     "notify_all": {"type": "boolean", "description": "true = send a notification to every assignee of the task; false or omitted = only notify people mentioned or the explicit assignee."}
                 },
@@ -886,6 +896,7 @@ pub fn tool_list() -> Value {
                     "comment_id": {"type": "string", "description": "ID of the comment to edit. Obtain from clickup_comment_list (field: id)."},
                     "text": {"type": "string", "description": "Replacement body for the comment. The previous body is overwritten entirely, so restate every @mention that should stay. To ping someone, write `@Display Name` (exact ClickUp username) or `<@user_id>`; these resolve to real tag ops. Markdown is NOT rendered by ClickUp's v2 comment API unless markdown is true; without it, markdown syntax is stored as literal text."},
                     "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
+                    "link_preview": {"type": "string", "enum": ["inline", "card"], "description": "Turn bare HTTP(S) URLs in text into inline link mentions or preview cards. Works with or without markdown; Markdown links, images, code and mentions stay unchanged."},
                     "assignee": {"type": "integer", "description": "Reassign the comment to this user ID, who will receive a notification. Obtain from clickup_member_list."},
                     "resolved": {"type": "boolean", "description": "true = mark the comment thread resolved/closed; false = reopen it."}
                 },
@@ -1681,6 +1692,7 @@ pub fn tool_list() -> Value {
                     "comment_id": {"type": "string", "description": "ID of the parent comment to reply to. Obtain from clickup_comment_list (field: id)."},
                     "text": {"type": "string", "description": "Reply body. To ping someone, write `@Display Name` (exact ClickUp username) or `<@user_id>`; these resolve to real tag ops. Unresolved @tokens stay plain text and notify nobody. Markdown is NOT rendered by ClickUp's v2 comment API unless markdown is true; without it, markdown syntax is stored as literal text."},
                     "markdown": {"type": "boolean", "description": "true = parse `text` as markdown and submit ClickUp rich formatting (bold/italic/code/links, lists, code blocks; headings render bold, blockquotes indent, unsupported constructs degrade to plain text). false or omitted = literal text."},
+                    "link_preview": {"type": "string", "enum": ["inline", "card"], "description": "Turn bare HTTP(S) URLs in text into inline link mentions or preview cards. Works with or without markdown; Markdown links, images, code and mentions stay unchanged."},
                     "assignee": {"type": "integer", "description": "Optional user ID to assign the reply to — they receive a notification. Obtain from clickup_member_list."}
                 },
                 "required": ["comment_id", "text"]
@@ -2703,6 +2715,7 @@ async fn dispatch_tool(
                 ws.as_deref(),
                 markdown,
                 text,
+                comment_link_preview(args)?,
             )
             .await;
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {
@@ -3396,6 +3409,7 @@ async fn dispatch_tool(
                 ws.as_deref(),
                 markdown,
                 text,
+                comment_link_preview(args)?,
             )
             .await;
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {
@@ -4687,6 +4701,7 @@ async fn dispatch_tool(
                 ws.as_deref(),
                 markdown,
                 text,
+                comment_link_preview(args)?,
             )
             .await;
             if let Some(assignee) = args.get("assignee").and_then(|v| v.as_i64()) {

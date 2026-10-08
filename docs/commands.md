@@ -256,18 +256,20 @@ clickup-cli checklist delete-item <ID> <ITEM_ID>
 
 ```bash
 clickup-cli comment list --task <ID> [--start MS --start-id ID]   # also --list, --view
-clickup-cli comment create --task <ID> --text TEXT [--assignee ID] [--notify-all] [--markdown]
-clickup-cli comment create --list <ID> --text TEXT [--markdown]
-clickup-cli comment create --view <ID> --text TEXT [--markdown]
-clickup-cli comment update <ID> [--markdown] --text TEXT [--resolved] [--assignee ID]
+clickup-cli comment create --task <ID> --text TEXT [--assignee ID] [--notify-all] [--markdown] [--link-preview inline|card]
+clickup-cli comment create --list <ID> --text TEXT [--markdown] [--link-preview inline|card]
+clickup-cli comment create --view <ID> --text TEXT [--markdown] [--link-preview inline|card]
+clickup-cli comment update <ID> [--markdown] [--link-preview inline|card] --text TEXT [--resolved] [--assignee ID]
 clickup-cli comment delete <ID>
 clickup-cli comment replies <ID> [--start MS --start-id ID]        # list threaded replies
-clickup-cli comment reply <ID> --text TEXT [--assignee ID] [--markdown]
+clickup-cli comment reply <ID> --text TEXT [--assignee ID] [--markdown] [--link-preview inline|card]
 
 Mentions: ClickUp does not treat `@Name` in `comment_text` as a ping. Write `@Display Name` (the person's ClickUp username — spaces are fine), `<@user_id>`, or `@user_id`. The CLI looks up workspace members and submits `type: "tag"` ops. `--assignee` assigns the comment thread; it is not an @mention. Unresolved `@foo` stays literal. If a display name matches multiple distinct user IDs, it also stays literal; use `<@user_id>` (or a known `@user_id`) to disambiguate. Repeated appearances of the same user ID count as one identity. Do not put mentions inside backticks.
 ```
 
 `--markdown` parses the text as CommonMark and submits ClickUp's native rich formatting (bold/italic/code/links, bullet/ordered/checked lists, code blocks; headings render bold, blockquotes indent, tables/strikethrough degrade to plain text). A link with a `user:` scheme — `[@Name](user:123)` — becomes a native @mention that notifies that user (find IDs with `member list`); the link text is informational, ClickUp renders the member's real name.
+
+`--link-preview inline|card` turns bare HTTP(S) URLs into inline link mentions or bookmark cards, with or without `--markdown` (Markdown links and code are left alone). MCP tools take `link_preview`.
 
 ---
 

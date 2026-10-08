@@ -42,6 +42,7 @@ comfy-table = "8"
 clap_complete = "4"
 pulldown-cmark = { version = "0.13", default-features = false }
 regex = "1"
+linkify = "0.11"
 url = "2"
 httparse = "1"
 rand = "0.8"
