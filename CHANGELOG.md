@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--due-date` on `task update`, so an existing (or previously mis-stored) due date can be corrected from the CLI. The MCP `clickup_task_update` tool gains the matching `due_date` argument (it previously had none, unlike `clickup_task_create`), restoring CLI/MCP parity.
 - `--due-date` (task create/update, list create) accepts more than `YYYY-MM-DD`: `YYYY-MM-DDTHH:MM[:SS]` (local wall-clock), the same with a `Z` or `±HH:MM` suffix (exact instant), or a bare Unix-millisecond integer of at least 12 digits (passed through). A shorter all-digit value is rejected rather than read as milliseconds, so a compact date like `20261231` cannot silently become a 1970 instant. Any form carrying a time-of-day also sets `due_date_time: true` so ClickUp keeps the exact instant. Invalid input fails locally (exit 1) with the accepted forms listed.
 
+### Fixed
+- Markdown comments (`--markdown` / MCP `markdown: true`) keep their line layout in ClickUp. A blank line between top-level blocks (paragraph, list, heading, code block, blockquote, rule) now emits one extra plain `"\n"` op, so ClickUp shows a visible blank line instead of running the blocks together; consecutive list items stay tight, blocks written back to back stay adjacent, and no leading or trailing blank line is added. A single newline (CommonMark soft break) outside a list now ends the line instead of becoming a space, matching how comment authors write (`**Heading:**\nbody` no longer collapses onto one line); inside a list item it is still a space so the bullet stays on the item's line.
+
 ## [0.17.0] - 2026-08-28
 
 ### Added

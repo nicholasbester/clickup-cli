@@ -89,7 +89,8 @@ fn find_powershell() -> Option<&'static str> {
 ///
 /// The trailing newline is stripped once by the `@file` read helper; the
 /// `"\n"` ops the mock expects are unrelated — `markdown_to_ops` appends a
-/// terminator op per paragraph regardless of source newlines.
+/// terminator op per paragraph, plus one plain `"\n"` between paragraphs the
+/// source separated with a blank line.
 const MARKDOWN_FILE_CONTENT: &str = "**bold** with `code`\n\nping [@Nick](user:81618)\n";
 
 /// Start a mock that only returns 200 when `comment create --markdown`
@@ -104,6 +105,8 @@ async fn mount_markdown_comment_mock(server: &MockServer) {
                 {"text": "bold", "attributes": {"bold": true}},
                 {"text": " with "},
                 {"text": "code", "attributes": {"code": true}},
+                {"text": "\n"},
+                // Blank line between the two source paragraphs.
                 {"text": "\n"},
                 {"text": "ping "},
                 {"type": "tag", "user": {"id": 81618}},

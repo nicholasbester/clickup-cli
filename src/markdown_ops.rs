@@ -10,7 +10,7 @@
 //! documented ops are emitted.
 
 use linkify::{LinkFinder, LinkKind};
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, TextMergeStream};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, TextMergeWithOffset};
 use serde_json::{json, Map, Value};
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum, serde::Deserialize)]
@@ -75,10 +75,10 @@ fn markdown_to_ops_with_preview(text: &str, link_preview: Option<LinkPreview>) -
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TASKLISTS);
     options.insert(Options::ENABLE_STRIKETHROUGH);
-    // Entities, escapes and angle brackets can split one logical text run.
-    // Merge only consecutive Text events: formatting, code, HTML and semantic
-    // tag boundaries remain intact before conversion to comment ops.
-    let parser = TextMergeStream::new(Parser::new_ext(text, options));
+    // Preserve source offsets for block spacing while merging adjacent text
+    // fragments for URLs, numeric mentions, entities and escaped display names.
+    // Formatting, code and other semantic event boundaries remain intact.
+    let parser = TextMergeWithOffset::new(Parser::new_ext(text, options).into_offset_iter());
 
     let mut ops: Vec<Value> = Vec::new();
     // Inline state
@@ -108,6 +108,11 @@ fn markdown_to_ops_with_preview(text: &str, link_preview: Option<LinkPreview>) -
     // item's own text — so a nested `Tag::List` start must flush the
     // parent's line eagerly, and `TagEnd::Item` must not double-flush it.
     let mut terminator_pending = false;
+    // Source byte offset where the most recently closed top-level block's
+    // content ended (trailing whitespace trimmed). "Top-level" means outside
+    // any list; blockquote contents count, so quoted paragraphs separate
+    // too. Consumed (reset to None) by the next top-level block start.
+    let mut last_block_end: Option<usize> = None;
 
     fn push_text(
         ops: &mut Vec<Value>,
@@ -176,7 +181,62 @@ fn markdown_to_ops_with_preview(text: &str, link_preview: Option<LinkPreview>) -
         }
     }
 
-    for event in parser {
+    // ClickUp renders one "\n" op as a plain line break, so consecutive
+    // blocks each terminated by their own "\n" run together with no visible
+    // gap. When the source separated two top-level blocks with a blank line,
+    // emit one extra plain "\n" so the saved comment shows that blank line.
+    // Blocks the author wrote back to back (e.g. a bold heading line directly
+    // followed by a list) stay adjacent. Only emitted *before* a block, so
+    // the comment never gains a leading or trailing blank line.
+    fn block_start(
+        ops: &mut Vec<Value>,
+        text: &str,
+        last_block_end: &mut Option<usize>,
+        start: usize,
+    ) {
+        if let Some(end) = last_block_end.take() {
+            let gap = text.get(end..start).unwrap_or("");
+            if !ops.is_empty() && gap.matches('\n').count() >= 2 {
+                ops.push(json!({"text": "\n"}));
+            }
+        }
+    }
+
+    // Record where a top-level block's content ended in the source.
+    fn block_end(text: &str, last_block_end: &mut Option<usize>, end: usize) {
+        let end = end.min(text.len());
+        *last_block_end = Some(text[..end].trim_end().len());
+    }
+
+    for (event, range) in parser {
+        // Block-level spacing bookkeeping, outside lists only: items inside
+        // a list stay tight, and a loose item's paragraphs have their own
+        // separator handling below.
+        if list_stack.is_empty() {
+            match &event {
+                Event::Start(
+                    Tag::Paragraph
+                    | Tag::Heading { .. }
+                    | Tag::BlockQuote(_)
+                    | Tag::CodeBlock(_)
+                    | Tag::List(_)
+                    | Tag::HtmlBlock,
+                )
+                | Event::Rule => block_start(&mut ops, text, &mut last_block_end, range.start),
+                _ => {}
+            }
+        }
+        let is_block_end = matches!(
+            event,
+            Event::End(
+                TagEnd::Paragraph
+                    | TagEnd::Heading(_)
+                    | TagEnd::BlockQuote(_)
+                    | TagEnd::CodeBlock
+                    | TagEnd::List(_)
+                    | TagEnd::HtmlBlock
+            ) | Event::Rule
+        );
         match event {
             Event::Start(tag) => match tag {
                 Tag::Strong => bold += 1,
@@ -385,9 +445,22 @@ fn markdown_to_ops_with_preview(text: &str, link_preview: Option<LinkPreview>) -
                 push_text(&mut ops, &t, bold, italic, &None, false, heading_depth);
                 terminator_pending = true;
             }
+            // Comment bodies are chat-style: authors mean a single newline
+            // as a line break (GitHub comments and Slack read it the same
+            // way), not CommonMark's "reflow into one line". So outside
+            // lists a soft break terminates the line, carrying the
+            // blockquote indent so every quoted line stays indented.
+            // Inside a list item it stays a space: ClickUp has one `list`
+            // slot per line, so breaking the item would strip the bullet
+            // from its first line (see the Tag::Paragraph note above).
             Event::SoftBreak if !in_mention => {
-                push_text(&mut ops, " ", bold, italic, &None, false, heading_depth);
-                terminator_pending = true;
+                if list_stack.is_empty() {
+                    line_end(&mut ops, &list_stack, None, blockquote_depth);
+                    terminator_pending = false;
+                } else {
+                    push_text(&mut ops, " ", bold, italic, &None, false, heading_depth);
+                    terminator_pending = true;
+                }
             }
             // Deliberately leaves `terminator_pending` untouched: a hard
             // break is a mid-line/mid-item visual break, not a block
@@ -400,6 +473,11 @@ fn markdown_to_ops_with_preview(text: &str, link_preview: Option<LinkPreview>) -
             }
             Event::TaskListMarker(checked) => item_task_state = Some(checked),
             _ => {}
+        }
+        // Checked after the match so a closing top-level List has already
+        // popped its stack entry.
+        if is_block_end && list_stack.is_empty() {
+            block_end(text, &mut last_block_end, range.end);
         }
     }
     ops
@@ -990,7 +1068,9 @@ mod tests {
             vec![
                 json!({"text": "a"}),
                 json!({"text": "\n"}),
+                json!({"text": "\n"}),
                 json!({"text": "---"}),
+                json!({"text": "\n"}),
                 json!({"text": "\n"}),
                 json!({"text": "b"}),
                 json!({"text": "\n"}),
@@ -1001,7 +1081,7 @@ mod tests {
     #[test]
     fn table_syntax_passes_through_as_text() {
         // Tables extension is NOT enabled, so pipe rows are plain paragraph
-        // text (single paragraph with soft breaks rendered as spaces).
+        // text (single paragraph; soft breaks keep each row on its own line).
         let ops = markdown_to_ops("| a | b |\n|---|---|\n| 1 | 2 |");
         let joined: String = ops
             .iter()
@@ -1011,17 +1091,221 @@ mod tests {
         assert!(joined.contains("| 1 | 2 |"), "got: {joined}");
     }
 
+    // Comment bodies are chat-style: a single newline in the draft is a
+    // line break the author wants to see, not CommonMark reflow. Before
+    // this, `**Heading:**\nbody` saved as one line ("Heading: body").
+    // So outside lists both hard and soft breaks end the line.
     #[test]
-    fn hard_break_is_newline_soft_break_is_space() {
+    fn hard_break_and_soft_break_are_newlines() {
         assert_eq!(
             markdown_to_ops("a  \nb\nc"),
             vec![
                 json!({"text": "a"}),
                 json!({"text": "\n"}),
                 json!({"text": "b"}),
-                json!({"text": " "}),
+                json!({"text": "\n"}),
                 json!({"text": "c"}),
                 json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    // Inside a list item a soft break (lazy continuation) stays a space:
+    // ClickUp carries the bullet on the line's terminator, so splitting the
+    // item would leave its first line without a bullet.
+    #[test]
+    fn soft_break_inside_list_item_stays_space() {
+        assert_eq!(
+            markdown_to_ops("- a\n  b"),
+            vec![
+                json!({"text": "a"}),
+                json!({"text": " "}),
+                json!({"text": "b"}),
+                json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
+            ]
+        );
+    }
+
+    #[test]
+    fn soft_break_in_blockquote_keeps_indent_on_each_line() {
+        assert_eq!(
+            markdown_to_ops("> a\n> b"),
+            vec![
+                json!({"text": "a"}),
+                json!({"text": "\n", "attributes": {"indent": 1}}),
+                json!({"text": "b"}),
+                json!({"text": "\n", "attributes": {"indent": 1}}),
+            ]
+        );
+    }
+
+    #[test]
+    fn two_paragraphs_get_blank_line() {
+        assert_eq!(
+            markdown_to_ops("first\n\nsecond"),
+            vec![
+                json!({"text": "first"}),
+                json!({"text": "\n"}),
+                json!({"text": "\n"}),
+                json!({"text": "second"}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn several_blank_lines_collapse_to_one() {
+        assert_eq!(
+            markdown_to_ops("first\n\n\n\nsecond"),
+            markdown_to_ops("first\n\nsecond")
+        );
+    }
+
+    #[test]
+    fn paragraph_list_paragraph_blank_lines_outside_list_only() {
+        assert_eq!(
+            markdown_to_ops("intro\n\n- one\n- two\n\noutro"),
+            vec![
+                json!({"text": "intro"}),
+                json!({"text": "\n"}),
+                json!({"text": "\n"}),
+                json!({"text": "one"}),
+                json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
+                json!({"text": "two"}),
+                json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
+                json!({"text": "\n"}),
+                json!({"text": "outro"}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn loose_list_items_get_no_blank_line_between_them() {
+        assert_eq!(
+            markdown_to_ops("- one\n\n- two"),
+            vec![
+                json!({"text": "one"}),
+                json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
+                json!({"text": "two"}),
+                json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
+            ]
+        );
+    }
+
+    // Real-world shape: a bold heading line directly followed by a list
+    // (no blank line in the source) stays adjacent; the blank line after
+    // the list is preserved before the next heading.
+    #[test]
+    fn bold_heading_tight_list_then_blank_line() {
+        assert_eq!(
+            markdown_to_ops("**Plan:**\n*   25 minutes accepted.\n\n**Next:**\nbody"),
+            vec![
+                json!({"text": "Plan:", "attributes": {"bold": true}}),
+                json!({"text": "\n"}),
+                json!({"text": "25 minutes accepted."}),
+                json!({"text": "\n", "attributes": {"list": {"list": "bullet"}}}),
+                json!({"text": "\n"}),
+                json!({"text": "Next:", "attributes": {"bold": true}}),
+                json!({"text": "\n"}),
+                json!({"text": "body"}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn bold_label_lines_stay_on_separate_lines() {
+        assert_eq!(
+            markdown_to_ops("**_Due:_** X\n**_Estimate:_** Y"),
+            vec![
+                json!({"text": "Due:", "attributes": {"bold": true, "italic": true}}),
+                json!({"text": " X"}),
+                json!({"text": "\n"}),
+                json!({"text": "Estimate:", "attributes": {"bold": true, "italic": true}}),
+                json!({"text": " Y"}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn mention_line_then_paragraph() {
+        assert_eq!(
+            markdown_to_ops("[@Ada](user:111111) [@Alan](user:222222)\n\nPlease review."),
+            vec![
+                json!({"type": "tag", "user": {"id": 111111}}),
+                json!({"text": " "}),
+                json!({"type": "tag", "user": {"id": 222222}}),
+                json!({"text": "\n"}),
+                json!({"text": "\n"}),
+                json!({"text": "Please review."}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn mention_line_soft_break_then_body() {
+        assert_eq!(
+            markdown_to_ops("[@Ada](user:111111)\nPlease review."),
+            vec![
+                json!({"type": "tag", "user": {"id": 111111}}),
+                json!({"text": "\n"}),
+                json!({"text": "Please review."}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn no_leading_or_trailing_blank_lines() {
+        let ops = markdown_to_ops("\n\n\nfirst\n\nlast\n\n\n");
+        assert_eq!(
+            ops,
+            vec![
+                json!({"text": "first"}),
+                json!({"text": "\n"}),
+                json!({"text": "\n"}),
+                json!({"text": "last"}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn code_block_separated_but_lines_untouched() {
+        assert_eq!(
+            markdown_to_ops("run:\n\n```\na\n\nb\n```\n\ndone"),
+            vec![
+                json!({"text": "run:"}),
+                json!({"text": "\n"}),
+                json!({"text": "\n"}),
+                json!({"text": "a"}),
+                json!({"text": "\n", "attributes": {"code-block": {"code-block": "plain"}}}),
+                json!({"text": "\n", "attributes": {"code-block": {"code-block": "plain"}}}),
+                json!({"text": "b"}),
+                json!({"text": "\n", "attributes": {"code-block": {"code-block": "plain"}}}),
+                json!({"text": "\n"}),
+                json!({"text": "done"}),
+                json!({"text": "\n"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn blockquote_paragraphs_separated_once() {
+        assert_eq!(
+            markdown_to_ops("before\n\n> a\n>\n> b"),
+            vec![
+                json!({"text": "before"}),
+                json!({"text": "\n"}),
+                json!({"text": "\n"}),
+                json!({"text": "a"}),
+                json!({"text": "\n", "attributes": {"indent": 1}}),
+                json!({"text": "\n"}),
+                json!({"text": "b"}),
+                json!({"text": "\n", "attributes": {"indent": 1}}),
             ]
         );
     }
