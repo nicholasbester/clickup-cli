@@ -26,8 +26,11 @@ npm install -g @nick.bester/clickup-cli
 
 ```bash
 brew tap nicholasbester/clickup-cli
+brew trust --formula nicholasbester/clickup-cli/clickup-cli
 brew install clickup-cli
 ```
+
+Homebrew 6.0 and later require explicit trust for non-official taps by default. The formula-specific step above trusts only the ClickUp CLI formula, rather than every current and future formula, cask, and external command in the tap. See [Homebrew's Tap Trust documentation](https://docs.brew.sh/Tap-Trust).
 
 Upgrade: `brew upgrade clickup-cli`
 
