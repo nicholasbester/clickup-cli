@@ -7,7 +7,7 @@ use crate::credentials::{save_token, CredentialStore, SystemKeychain};
 use crate::error::CliError;
 use crate::Cli;
 use clap::Args;
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::SysRng, TryRng};
 use serde::Deserialize;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -138,10 +138,15 @@ async fn finish_login(
 }
 
 fn generate_state() -> Result<String, CliError> {
+    generate_state_with(|bytes| SysRng.try_fill_bytes(bytes))
+}
+
+// Keep entropy failure testable without replacing the production OS source.
+fn generate_state_with<E>(
+    fill: impl FnOnce(&mut [u8; 32]) -> Result<(), E>,
+) -> Result<String, CliError> {
     let mut bytes = [0u8; 32];
-    OsRng
-        .try_fill_bytes(&mut bytes)
-        .map_err(|_| error("Operating system random source unavailable"))?;
+    fill(&mut bytes).map_err(|_| error("Operating system random source unavailable"))?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
@@ -338,15 +343,47 @@ mod tests {
 
     #[test]
     fn state_has_256_bits_and_authorization_parameters_are_encoded() {
+        fn assert_crypto<R: rand::TryCryptoRng>() {}
+        assert_crypto::<SysRng>();
         let first = generate_state().unwrap();
         assert_eq!(first.len(), 64);
-        assert!(first.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert!(first
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
         assert_ne!(first, generate_state().unwrap());
         let url = authorization_url("id&evil=x", "http://127.0.0.1:1234/callback", &first).unwrap();
         let params: std::collections::HashMap<_, _> = url.query_pairs().collect();
         assert_eq!(params.len(), 3);
         assert_eq!(params["client_id"], "id&evil=x");
         assert_eq!(params["state"], first);
+    }
+
+    #[test]
+    fn state_encodes_all_32_entropy_bytes_in_lowercase_with_leading_zeroes() {
+        let state = generate_state_with(|bytes| {
+            for (i, byte) in bytes.iter_mut().enumerate() {
+                *byte = i as u8;
+            }
+            Ok::<(), ()>(())
+        })
+        .unwrap();
+        assert_eq!(
+            state,
+            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+        );
+    }
+
+    #[test]
+    fn entropy_failure_propagates_without_using_partial_bytes_or_fallback() {
+        let mut calls = 0;
+        let result = generate_state_with(|bytes| {
+            calls += 1;
+            bytes[..16].fill(0xab);
+            Err("injected entropy failure")
+        });
+        assert_eq!(calls, 1);
+        assert!(matches!(result, Err(CliError::ConfigError(message))
+            if message == "Operating system random source unavailable"));
     }
 
     #[test]

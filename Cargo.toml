@@ -35,7 +35,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 toml = "1"
-dirs = "6"
+dirs = "7"
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 comfy-table = "8"
@@ -45,7 +45,7 @@ regex = "1"
 linkify = "0.11"
 url = "2"
 httparse = "1"
-rand = "0.8"
+rand = "0.10"
 open = "5"
 tempfile = "3"
 
