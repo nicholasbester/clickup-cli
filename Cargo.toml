@@ -45,7 +45,7 @@ regex = "1"
 linkify = "0.11"
 url = "2"
 httparse = "1"
-rand = "0.8"
+rand = "0.10"
 open = "5"
 tempfile = "3"
 
