@@ -126,9 +126,11 @@ clickup completions fish > ~/.config/fish/completions/clickup.fish
 
 | Method | Command |
 |--------|---------|
-| **Homebrew** | `brew tap nicholasbester/clickup-cli && brew install clickup-cli` |
+| **Homebrew** | `brew tap nicholasbester/clickup-cli && brew trust --formula nicholasbester/clickup-cli/clickup-cli && brew install clickup-cli` |
 | **Cargo** | `cargo install clickup-cli` |
 | **Binary** | Download from [GitHub Releases](https://github.com/nicholasbester/clickup-cli/releases) |
+
+Homebrew 6.0 and later require explicit trust for non-official taps by default. The formula-specific step above trusts only the ClickUp CLI formula, rather than every current and future formula, cask, and external command in the tap. See [Homebrew's Tap Trust documentation](https://docs.brew.sh/Tap-Trust).
 
 ## Links
 

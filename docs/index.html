@@ -92,6 +92,7 @@ permalink: /
   <div class="install-card">
     <div class="install-card-title">Homebrew</div>
     <code>brew tap nicholasbester/clickup-cli</code>
+    <code>brew trust --formula nicholasbester/clickup-cli/clickup-cli</code>
     <code>brew install clickup-cli</code>
   </div>
   <div class="install-card">
@@ -103,6 +104,8 @@ permalink: /
     <code>docker build -t clickup-cli .</code>
   </div>
 </div>
+
+<p>The Homebrew trust step authorizes only the ClickUp CLI formula, not the whole tap. See <a href="https://docs.brew.sh/Tap-Trust">Homebrew's Tap Trust documentation</a>.</p>
 
 <pre><code># Configure
 clickup-cli setup --token pk_your_token_here
