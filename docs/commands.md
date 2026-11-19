@@ -532,10 +532,12 @@ clickup-cli shared list    # Tasks, lists, and folders shared with you
 ## audit-log (Enterprise, v3)
 
 ```bash
-clickup-cli audit-log query --type TYPE [--user-id ID] [--start-date DATE] [--end-date DATE]
+clickup-cli audit-log query --applicability APPLICABILITY [--event-type TYPE] [--event-status STATUS] \
+  [--user-id ID...] [--user-email EMAIL...] [--start-time MS] [--end-time MS] \
+  [--page-rows N] [--page-timestamp MS] [--page-direction NEXT|PREVIOUS]
 ```
 
-Types: `AUTH`, `CUSTOM_FIELDS`, `HIERARCHY`, `USER`, `AGENT`, `OTHER`
+`--applicability` is required (ClickUp's documented values: `WORKSPACE`, `TEAMS`, `USERS`). Event types: `AUTH`, `CUSTOM_FIELDS`, `HIERARCHY`, `USER`, `AGENT`, `OTHER`; event status e.g. `SUCCESS`, `FAILURE`. `--user-id` and `--user-email` are repeatable. Times are Unix milliseconds. `--page-direction` is sent as given. `--all` walks pages (maximum 100); `--limit N` caps returned items.
 
 ---
 

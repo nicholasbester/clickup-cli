@@ -1,5 +1,5 @@
 title: clickup-cli
-description: A token-efficient CLI and MCP server for the ClickUp API. Covers ~130 endpoints across 28 resource groups and exposes 143 MCP tools, with output ~98% smaller than raw JSON. Works with any AI agent — Claude, ChatGPT, Cursor, Copilot.
+description: A token-efficient CLI and MCP server for the ClickUp API. Covers ~130 endpoints across 28 resource groups and exposes 144 MCP tools, with output ~98% smaller than raw JSON. Works with any AI agent — Claude, ChatGPT, Cursor, Copilot.
 baseurl: ""
 url: https://clickup-cli.com
 
