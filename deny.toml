@@ -19,7 +19,9 @@ feature-depth = 1
 # unless explicitly allowlisted below.
 [advisories]
 version = 2
-ignore = []
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, no safe upgrade; drives src/dates.rs and src/output.rs date handling — replacement tracked in a follow-up issue" },
+]
 # Stay current — crates flagged 'unmaintained' are treated as warnings, not
 # errors, because the ecosystem has many stable-but-quiet crates.
 unmaintained = "workspace"
