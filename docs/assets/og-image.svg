@@ -36,7 +36,7 @@
   <g transform="translate(80, 440)">
     <rect x="0" y="0" width="280" height="90" rx="12" fill="#FFFCF7" stroke="rgba(42,157,143,0.15)" stroke-width="1"/>
     <text x="20" y="32" font-family="Outfit, sans-serif" font-size="11" font-weight="600" letter-spacing="2" fill="#1A6B60" text-transform="uppercase">MCP Tools</text>
-    <text x="20" y="74" font-family="Cormorant Garamond, Georgia, serif" font-size="44" font-weight="400" fill="#E8A838">143</text>
+    <text x="20" y="74" font-family="Cormorant Garamond, Georgia, serif" font-size="44" font-weight="400" fill="#E8A838">144</text>
   </g>
 
   <g transform="translate(380, 440)">

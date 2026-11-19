@@ -232,8 +232,6 @@ Tools backed by paginated ClickUp endpoints expose pagination controls. Fifteen 
 | `clickup_comment_replies` | start-id-based (v2) | `start`, `start_id`, `limit`, `all` |
 | `clickup_audit_log_query` | body-based (v3) | `page_rows`, `page_timestamp`, `page_direction`, `limit`, `all` |
 
-Audit logs require an Enterprise Workspace owner. Use `applicability: "auth-and-security"` (not `WORKSPACE`) and `page_direction: "before"` or `"after"`; legacy `PREVIOUS`/`NEXT` map to those API values. Response fields and continuation are still unverified; see the [Enterprise verification checklist](audit-log-verification.md).
-
 The contract is **opt-in and non-breaking**:
 
 - **No pagination args passed.** The tool's response is identical to the pre-pagination shape — a bare compact array. Existing clients see no change.
@@ -299,7 +297,3 @@ Use MCP when your tool requires native tool integration (e.g., Claude Desktop do
 Both modes deliver ~98% token reduction compared to raw API JSON. Both use the same authentication and config file.
 
 [← Command Reference](commands)  ·  [Home →](.)
-
-### OAuth credentials
-
-MCP shares the CLI resolver: `--token` / `--token-kind`, then `CLICKUP_TOKEN`, then `CLICKUP_OAUTH_TOKEN`, then configured file/keychain storage. Use [BYO app login](../authentication/) to persist an OAuth credential first. OAuth uses a Bearer header on every request, including uploads. Tokens are process-wide; per-request multi-tenant OAuth is not implemented.

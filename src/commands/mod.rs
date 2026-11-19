@@ -3,7 +3,6 @@ pub mod agent_config;
 pub mod attachment;
 pub mod audit_log;
 pub mod auth;
-pub mod auth_oauth;
 pub mod chat;
 pub mod checklist;
 pub mod comment;

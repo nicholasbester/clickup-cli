@@ -6,7 +6,7 @@
 
 <p align="center">
   CLI for the <a href="https://clickup.com/api/">ClickUp API</a>, optimized for AI agents and human users.<br/>
-  ~130 endpoints · 143 MCP tools · ~98% token reduction
+  ~130 endpoints · 144 MCP tools · ~98% token reduction
 </p>
 
 <p align="center">
@@ -85,7 +85,7 @@ Inject a compressed command reference (~1,000 tokens) into your project's agent 
 clickup agent-config inject   # Auto-detects: CLAUDE.md, agent.md, .cursorrules, etc.
 ```
 
-### MCP Mode (143 tools with compact responses)
+### MCP Mode (144 tools with compact responses)
 
 For Claude Desktop, Cursor, and other MCP-capable tools:
 

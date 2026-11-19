@@ -52,16 +52,9 @@ Config saved to ~/.config/clickup-cli/config.toml
 
 ## auth
 
-See [OAuth registration, storage and outstanding live acceptance](../authentication/).
-
 ```bash
 clickup-cli auth whoami    # Show current user
 clickup-cli auth check     # Validate token (exit code only)
-clickup-cli auth login     # BYO app; set CLICKUP_OAUTH_CLIENT_ID and CLICKUP_OAUTH_CLIENT_SECRET
-clickup-cli auth login --no-browser  # Print URL; still waits for loopback callback
-clickup-cli auth login --keyring     # Opt-in OS credential storage
-clickup-cli auth status    # Validate identity and report kind/source/workspace
-clickup-cli auth logout    # Clear stored credentials (not server-side revocation)
 ```
 
 ```
@@ -195,7 +188,7 @@ clickup-cli task delete <ID>
 
 # Relationships and tags
 clickup-cli task add-dep <ID> --depends-on <OTHER_ID>
-clickup-cli task remove-dep <ID> --depends-on <OTHER_ID>
+clickup-cli task remove-dep <ID> (--depends-on <OTHER_ID> | --dependency-of <OTHER_ID>)   # exactly one
 clickup-cli task link <ID> <TARGET_ID>
 clickup-cli task unlink <ID> <TARGET_ID>
 clickup-cli task add-tag <ID> <TAG_NAME>
@@ -269,7 +262,7 @@ Mentions: ClickUp does not treat `@Name` in `comment_text` as a ping. Write `@Di
 
 `--markdown` parses the text as CommonMark and submits ClickUp's native rich formatting (bold/italic/code/links, bullet/ordered/checked lists, code blocks; headings render bold, blockquotes indent, tables/strikethrough degrade to plain text). A link with a `user:` scheme — `[@Name](user:123)` — becomes a native @mention that notifies that user (find IDs with `member list`); the link text is informational, ClickUp renders the member's real name.
 
-`--link-preview inline|card` turns bare HTTP(S) URLs into inline link mentions or bookmark cards, with or without `--markdown` (Markdown links and code are left alone). MCP tools take `link_preview`.
+`--link-preview inline|card` turns bare HTTP(S) URLs into inline link mentions or bookmark cards, with or without `--markdown`. With `--markdown`, URLs inside Markdown links, autolinks (`<url>`), images, inline code, code blocks and HTML are left untouched; only bare URLs in text convert. Without `--markdown` the text is not parsed, so every HTTP(S) URL found in it is converted, including one inside backticks or `[text](url)` syntax. MCP tools take `link_preview`.
 
 ---
 
@@ -539,18 +532,12 @@ clickup-cli shared list    # Tasks, lists, and folders shared with you
 ## audit-log (Enterprise, v3)
 
 ```bash
-clickup-cli audit-log query --applicability auth-and-security
-clickup-cli audit-log query --applicability auth-and-security \
-  --event-type USER_LOGIN --event-status failed --user-id 123 \
-  --start-time 1718754539000 --end-time 1727221739000 \
-  --page-rows 10 --page-timestamp 1727221739000 --page-direction before
+clickup-cli audit-log query --applicability APPLICABILITY [--event-type TYPE] [--event-status STATUS] \
+  [--user-id ID]... [--user-email EMAIL]... [--start-time MS] [--end-time MS] \
+  [--page-rows N] [--page-timestamp MS] [--page-direction NEXT|PREVIOUS]
 ```
 
-Use an Enterprise Workspace owner account. Applicability values: `auth-and-security`, `custom-fields`, `hierarchy-activity`, `user-activity`, `agent-settings-activity`, `other-activity`.
-
-`--user-id` and `--user-email` are repeatable. Time flags accept Unix milliseconds; replace the illustrative dates above with a recent window. For the first page, ClickUp documents the current timestamp. Directions are `before` (recommended) and `after`; legacy `PREVIOUS` and `NEXT` map to those wire values respectively. Omission leaves the API default unchanged.
-
-`--all` walks pages (maximum 100); `--limit N` caps returned items. Response shape and timestamp continuation still need real Enterprise verification. See the [contract findings and owner checklist](audit-log-verification.md) before relying on a complete export.
+`--applicability` is required (ClickUp's documented values: `WORKSPACE`, `TEAMS`, `USERS`). Event types: `AUTH`, `CUSTOM_FIELDS`, `HIERARCHY`, `USER`, `AGENT`, `OTHER`; event status e.g. `SUCCESS`, `FAILURE`. `--user-id` and `--user-email` are repeatable. Times are Unix milliseconds. `--page-direction` is sent as given. `--all` walks pages (maximum 100); `--limit N` caps returned items.
 
 ---
 
