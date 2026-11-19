@@ -188,7 +188,7 @@ clickup-cli task delete <ID>
 
 # Relationships and tags
 clickup-cli task add-dep <ID> --depends-on <OTHER_ID>
-clickup-cli task remove-dep <ID> --depends-on <OTHER_ID>
+clickup-cli task remove-dep <ID> (--depends-on <OTHER_ID> | --dependency-of <OTHER_ID>)   # exactly one
 clickup-cli task link <ID> <TARGET_ID>
 clickup-cli task unlink <ID> <TARGET_ID>
 clickup-cli task add-tag <ID> <TAG_NAME>
@@ -262,7 +262,7 @@ Mentions: ClickUp does not treat `@Name` in `comment_text` as a ping. Write `@Di
 
 `--markdown` parses the text as CommonMark and submits ClickUp's native rich formatting (bold/italic/code/links, bullet/ordered/checked lists, code blocks; headings render bold, blockquotes indent, tables/strikethrough degrade to plain text). A link with a `user:` scheme — `[@Name](user:123)` — becomes a native @mention that notifies that user (find IDs with `member list`); the link text is informational, ClickUp renders the member's real name.
 
-`--link-preview inline|card` turns bare HTTP(S) URLs into inline link mentions or bookmark cards, with or without `--markdown` (Markdown links and code are left alone). MCP tools take `link_preview`.
+`--link-preview inline|card` turns bare HTTP(S) URLs into inline link mentions or bookmark cards, with or without `--markdown`. With `--markdown`, URLs inside Markdown links, autolinks (`<url>`), images, inline code, code blocks and HTML are left untouched; only bare URLs in text convert. Without `--markdown` the text is not parsed, so every HTTP(S) URL found in it is converted, including one inside backticks or `[text](url)` syntax. MCP tools take `link_preview`.
 
 ---
 
@@ -533,7 +533,7 @@ clickup-cli shared list    # Tasks, lists, and folders shared with you
 
 ```bash
 clickup-cli audit-log query --applicability APPLICABILITY [--event-type TYPE] [--event-status STATUS] \
-  [--user-id ID...] [--user-email EMAIL...] [--start-time MS] [--end-time MS] \
+  [--user-id ID]... [--user-email EMAIL]... [--start-time MS] [--end-time MS] \
   [--page-rows N] [--page-timestamp MS] [--page-direction NEXT|PREVIOUS]
 ```
 
