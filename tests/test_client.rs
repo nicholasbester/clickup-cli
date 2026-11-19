@@ -1,5 +1,5 @@
 use clickup_cli::client::ClickUpClient;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{header, header_regex, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 async fn test_client(server: &MockServer) -> ClickUpClient {
@@ -110,4 +110,51 @@ async fn test_500_returns_server_error() {
     let result = client.get("/v2/user").await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().exit_code(), 5);
+}
+
+#[tokio::test]
+async fn exact_token_headers_for_requests_and_uploads() {
+    // Personal tokens are sent verbatim: no "Bearer " prefix on either path.
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v2/user"))
+        .and(header("Authorization", "fixture_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"user":{}})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v2/task/1/attachment"))
+        .and(header("Authorization", "fixture_token"))
+        .and(header_regex(
+            "Content-Type",
+            "^multipart/form-data; boundary=",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = ClickUpClient::new("fixture_token", 2)
+        .unwrap()
+        .with_base_url(&server.uri());
+    client.get("/v2/user").await.unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("test.txt");
+    std::fs::write(&file, "fixture").unwrap();
+    client
+        .upload_file("/v2/task/1/attachment", &file)
+        .await
+        .unwrap();
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 2);
+    for request in &requests {
+        let values: Vec<_> = request.headers.get_all("authorization").iter().collect();
+        assert_eq!(
+            values,
+            ["fixture_token"],
+            "{} {}",
+            request.method,
+            request.url
+        );
+    }
 }
