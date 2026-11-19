@@ -10,7 +10,7 @@ Thanks for taking the time to contribute. This is a mostly-solo project, so the 
 
 ## Development setup
 
-You need Rust 1.70+ (`rustup` makes this easy).
+You need Rust 1.88+ (`rustup` makes this easy).
 
 ```bash
 git clone https://github.com/nicholasbester/clickup-cli.git
