@@ -7,13 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-19
+
 ### Fixed
 - `task remove-dep` and MCP `clickup_task_remove_dep` now send the dependency direction and task ID as encoded query parameters, as required by ClickUp's Delete Dependency endpoint, instead of an ignored JSON body that could report success without removing the relationship (#135). Custom task ID/workspace handling is preserved. The MCP tool now enforces its documented requirement for exactly one string-valued `depends_on` or `dependency_of`; invalid inputs fail before sending a request.
 - Comment mentions (#125 review R1–R3): unmatched Unicode text no longer panics; markdown angle-ID and escaped/entity-containing names resolve as complete tokens; ambiguous display names stay literal instead of selecting a roster member arbitrarily. Use an explicit numeric user ID to disambiguate.
+- Markdown comments (`--markdown` / MCP `markdown: true`) keep their line layout in ClickUp. A blank line between top-level blocks (paragraph, list, heading, code block, blockquote, rule) now emits one extra plain `"\n"` op, so ClickUp shows a visible blank line instead of running the blocks together; consecutive list items stay tight, blocks written back to back stay adjacent, and no leading or trailing blank line is added. A single newline (CommonMark soft break) outside a list now ends the line instead of becoming a space, matching how comment authors write (`**Heading:**\nbody` no longer collapses onto one line); inside a list item it is still a space so the bullet stays on the item's line.
 
 ### Added
+- Subfolders (#130): `folder create --parent <FOLDER_ID>` sends `parent_folder_id` to create a folder inside another folder of the same space (the workspace must have subfolder support enabled), and `folder list --parent <FOLDER_ID>` filters the flat API list locally to direct children. List/get tables and `json-compact` gain a `parent_folder` column (`-` when absent). The MCP `clickup_folder_create` and `clickup_folder_list` tools accept the matching optional `parent_folder_id`, and MCP folder list/get results include `parent_folder`. `folder update` still only renames: ClickUp's Update Folder endpoint ignores `parent_folder_id`, so folders cannot be moved, and folder colour is not exposed because the public API documents no colour field.
 - Display-name @mentions on `comment create`, `comment reply`, and `comment update` (CLI and the `clickup_comment_*` MCP tools), in plain and `--markdown` mode: `@Display Name` (exact ClickUp username, spaces OK), `<@user_id>`, and `@user_id` are resolved against `GET /v2/team` into ClickUp's `type: "tag"` op with a numeric user id, which notifies the member. This complements the v0.17.0 `[@Name](user:id)` markdown link, which still requires the caller to know the id and to opt into markdown; existing tag ops are never re-resolved. Names match longest username first; unmatched `@tokens` stay plain text; inline and fenced code are not rewritten; a plain `comment_text` body is promoted to a `comment` ops array only when a mention resolves, so requests without a resolving mention are byte-identical to before. On update the whole body is replaced, so every mention that should stay must be restated. `--assignee` still only assigns the comment thread.
 - `comment create`, `update`, and `reply` accept `--link-preview inline|card` to turn bare HTTP(S) URLs into ClickUp link mentions or bookmark cards, with or without `--markdown` (#132). The matching MCP tools accept `link_preview`.
+
+### Changed
+- `folder list --output json` now returns the full API folder objects (including nested `lists` and `parent_folder`) plus the derived `list_count`, instead of only `id`, `name`, `task_count` and `list_count`. Table and `json-compact` output keep their selected columns.
+- Homebrew install docs add a formula-scoped `brew trust --formula nicholasbester/clickup-cli/clickup-cli` step before `brew install` (#148).
+
+### Dependencies
+- `dirs` 6 → 7.
+- Grouped minor/patch bumps: `clap` 4.6.7, `clap_complete` 4.6.11, `reqwest` 0.13.5, `toml` 1.1.6, `thiserror` 2.0.21, `comfy-table` 8.0.1, `serde_json` 1.0.154, `tokio` 1.54.1.
+- `pulldown-cmark` 0.13.4 → 0.13.6, which resolves RUSTSEC-2026-0433 (not exploitable here: wikilinks are not enabled).
+- TLS dependency patch updates (`rustls` 0.23.46, `rustls-webpki` 0.103.16, `webpki-root-certs` 1.0.10).
 
 ## [0.18.0] - 2026-09-15
 
@@ -26,9 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `--due-date` on `task update`, so an existing (or previously mis-stored) due date can be corrected from the CLI. The MCP `clickup_task_update` tool gains the matching `due_date` argument (it previously had none, unlike `clickup_task_create`), restoring CLI/MCP parity.
 - `--due-date` (task create/update, list create) accepts more than `YYYY-MM-DD`: `YYYY-MM-DDTHH:MM[:SS]` (local wall-clock), the same with a `Z` or `±HH:MM` suffix (exact instant), or a bare Unix-millisecond integer of at least 12 digits (passed through). A shorter all-digit value is rejected rather than read as milliseconds, so a compact date like `20261231` cannot silently become a 1970 instant. Any form carrying a time-of-day also sets `due_date_time: true` so ClickUp keeps the exact instant. Invalid input fails locally (exit 1) with the accepted forms listed.
-
-### Fixed
-- Markdown comments (`--markdown` / MCP `markdown: true`) keep their line layout in ClickUp. A blank line between top-level blocks (paragraph, list, heading, code block, blockquote, rule) now emits one extra plain `"\n"` op, so ClickUp shows a visible blank line instead of running the blocks together; consecutive list items stay tight, blocks written back to back stay adjacent, and no leading or trailing blank line is added. A single newline (CommonMark soft break) outside a list now ends the line instead of becoming a space, matching how comment authors write (`**Heading:**\nbody` no longer collapses onto one line); inside a list item it is still a space so the bullet stays on the item's line.
 
 ## [0.17.0] - 2026-08-28
 
@@ -253,7 +264,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Release notes for 0.6.7 and earlier are auto-generated from commit history on the
 [GitHub Releases page](https://github.com/nicholasbester/clickup-cli/releases).
 
-[Unreleased]: https://github.com/nicholasbester/clickup-cli/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/nicholasbester/clickup-cli/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/nicholasbester/clickup-cli/compare/v0.15.5...v0.16.0
