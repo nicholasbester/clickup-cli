@@ -97,19 +97,17 @@ jobs:
       - name: Extract binary
         run: tar xzf clickup-linux-x86_64-musl.tar.gz
 
-      - name: Set up Alpine chroot
-        uses: jirutka/setup-alpine@v1
-        with:
-          branch: v3.20
-
+      # Runs in a plain Alpine container rather than jirutka/setup-alpine:
+      # ubuntu-latest's sudo no longer honours -E, which breaks that action
+      # (jirutka/setup-alpine#39).
       - name: Smoke-test musl binary inside Alpine
-        shell: alpine.sh {0}
         run: |
-          ./clickup-cli --version
-          ./clickup-cli mcp serve --help | grep -- '--profile'
-          # Confirm the clkup short-alias binary is also packaged and works.
-          ./clkup --version
-          echo "Alpine musl smoke test passed"
+          docker run --rm -v "$PWD:/w" -w /w alpine:3.20 sh -euo pipefail -c '
+            ./clickup-cli --version
+            ./clickup-cli mcp serve --help | grep -- "--profile"
+            # Confirm the clkup short-alias binary is also packaged and works.
+            ./clkup --version
+            echo "Alpine musl smoke test passed"'
 
   release:
     needs: [build, verify-alpine]
