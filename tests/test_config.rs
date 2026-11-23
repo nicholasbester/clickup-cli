@@ -94,3 +94,169 @@ fn test_config_save_creates_parent_dirs() {
     config.save_to(&path).unwrap();
     assert!(path.exists());
 }
+
+// ── Hardening (GH #155) ───────────────────────────────────────────────────────
+
+fn sample_config(token: &str) -> Config {
+    let mut config = Config::default();
+    config.auth.token = token.into();
+    config
+}
+
+#[cfg(unix)]
+#[test]
+fn test_config_save_is_private_even_over_a_world_readable_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "[auth]\ntoken = \"old\"\n").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    sample_config("pk_new").save_to(&path).unwrap();
+
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600, "config must be owner-only, got {mode:o}");
+    assert_eq!(Config::load_from(&path).unwrap().auth.token, "pk_new");
+    // No temp files left behind next to the config.
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_config_save_through_symlink_updates_target_and_keeps_link() {
+    // Dotfile managers (stow, home-manager) symlink config.toml into a repo.
+    let dir = TempDir::new().unwrap();
+    let dotfiles = dir.path().join("dotfiles");
+    std::fs::create_dir(&dotfiles).unwrap();
+    let target = dotfiles.join("config.toml");
+    std::fs::write(&target, "[auth]\ntoken = \"old\"\n").unwrap();
+    let link = dir.path().join("config.toml");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    sample_config("pk_new").save_to(&link).unwrap();
+
+    assert!(std::fs::symlink_metadata(&link)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert_eq!(Config::load_from(&target).unwrap().auth.token, "pk_new");
+    assert_eq!(Config::load_from(&link).unwrap().auth.token, "pk_new");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_config_save_through_dangling_symlink_errors() {
+    let dir = TempDir::new().unwrap();
+    let link = dir.path().join("config.toml");
+    std::os::unix::fs::symlink(dir.path().join("missing").join("x.toml"), &link).unwrap();
+    let err = sample_config("pk_x").save_to(&link).unwrap_err();
+    assert!(err.to_string().contains("symlink"), "{err}");
+}
+
+#[test]
+fn test_config_parse_error_with_multibyte_text_does_not_panic() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "[auth]\ntoken = “pk_curly”\n").unwrap();
+    let msg = Config::load_from(&path).unwrap_err().to_string();
+    assert!(!msg.contains("pk_curly"), "token leaked: {msg}");
+    assert!(msg.contains("line 2"), "{msg}");
+}
+
+#[test]
+fn test_config_parse_error_does_not_echo_the_token() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("config.toml");
+    // Unterminated string on the token line: toml's own error would quote it.
+    std::fs::write(&path, "[auth]\ntoken = \"pk_SECRET_123\n").unwrap();
+    let msg = Config::load_from(&path).unwrap_err().to_string();
+    assert!(!msg.contains("pk_SECRET_123"), "token leaked: {msg}");
+    assert!(msg.contains("line 2"), "location missing: {msg}");
+}
+
+#[test]
+fn test_config_debug_redacts_token() {
+    let rendered = format!("{:?}", sample_config("pk_SECRET_456"));
+    assert!(!rendered.contains("pk_SECRET_456"), "{rendered}");
+    assert!(rendered.contains("REDACTED"));
+}
+
+#[test]
+fn test_config_without_auth_table_loads() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "[defaults]\nworkspace_id = \"42\"\n").unwrap();
+    let config = Config::load_from(&path).unwrap();
+    assert!(config.auth.token.is_empty());
+    assert_eq!(config.defaults.workspace_id.as_deref(), Some("42"));
+}
+
+fn clickup_in(dir: &std::path::Path) -> assert_cmd::Command {
+    let mut cmd = assert_cmd::Command::cargo_bin("clickup-cli").unwrap();
+    cmd.current_dir(dir)
+        .env_remove("CLICKUP_TOKEN")
+        .env_remove("CLICKUP_WORKSPACE");
+    cmd
+}
+
+#[test]
+fn test_agent_config_init_serializes_token_safely() {
+    // A quote in the token used to be spliced straight into the TOML, breaking
+    // the file (or letting a crafted value inject extra keys).
+    let dir = TempDir::new().unwrap();
+    clickup_in(dir.path())
+        .args([
+            "agent-config",
+            "init",
+            "--token",
+            "pk_a\"b\\c",
+            "--workspace",
+            "99",
+        ])
+        .assert()
+        .success();
+    let config = Config::load_from(&dir.path().join(".clickup.toml")).unwrap();
+    assert_eq!(config.auth.token, "pk_a\"b\\c");
+    assert_eq!(config.defaults.workspace_id.as_deref(), Some("99"));
+}
+
+#[test]
+fn test_agent_config_init_rejects_token_with_whitespace() {
+    let dir = TempDir::new().unwrap();
+    clickup_in(dir.path())
+        .args(["agent-config", "init", "--token", "pk_a\nworkspace_id = 1"])
+        .assert()
+        .failure();
+    assert!(!dir.path().join(".clickup.toml").exists());
+}
+
+#[test]
+fn test_agent_config_init_accepts_token_before_subcommand() {
+    // Init's --token shares clap's id with the global --token, so either
+    // position works (and always has).
+    let dir = TempDir::new().unwrap();
+    clickup_in(dir.path())
+        .args(["--token", "pk_global", "agent-config", "init"])
+        .assert()
+        .success();
+    let config = Config::load_from(&dir.path().join(".clickup.toml")).unwrap();
+    assert_eq!(config.auth.token, "pk_global");
+}
+
+#[test]
+fn test_agent_config_init_without_token_writes_loadable_file() {
+    let dir = TempDir::new().unwrap();
+    clickup_in(dir.path())
+        .args(["agent-config", "init"])
+        .assert()
+        .success();
+    let path = dir.path().join(".clickup.toml");
+    let config = Config::load_from(&path).unwrap();
+    assert!(config.auth.token.is_empty());
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("[auth]\n# token = \"pk_...\""), "{text}");
+    assert!(
+        text.contains("[defaults]\n# workspace_id = \"...\""),
+        "{text}"
+    );
+}

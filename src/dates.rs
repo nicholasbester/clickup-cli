@@ -23,7 +23,9 @@
 //! A space may replace the `T` separator.
 
 use crate::error::CliError;
-use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
+use jiff::civil::{Date, DateTime};
+use jiff::fmt::strtime;
+use jiff::tz::TimeZone;
 
 /// A parsed due date ready to be placed in a request body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,14 +51,29 @@ impl DueDate {
 
 /// Parse a due date using the machine's local timezone for naive inputs.
 pub fn parse_due_date(input: &str) -> Result<DueDate, CliError> {
-    parse_due_date_in(input, &Local)
+    parse_due_date_in(input, &TimeZone::system())
+}
+
+/// Wall-clock layouts accepted after the date, with and without seconds and
+/// with either `T` or a space as the separator.
+const NAIVE_FORMATS: [&str; 4] = [
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+];
+
+fn parse_naive(s: &str) -> Option<DateTime> {
+    NAIVE_FORMATS
+        .iter()
+        .find_map(|fmt| DateTime::strptime(fmt, s).ok())
 }
 
 /// Parse a due date, resolving naive (offset-less) inputs in `tz`.
 ///
 /// Exposed separately so tests can pin a fixed offset without depending on the
 /// host timezone.
-pub fn parse_due_date_in<Tz: TimeZone>(input: &str, tz: &Tz) -> Result<DueDate, CliError> {
+pub fn parse_due_date_in(input: &str, tz: &TimeZone) -> Result<DueDate, CliError> {
     let s = input.trim();
 
     // Only a full-width millisecond timestamp is taken as a raw instant. A
@@ -74,9 +91,8 @@ pub fn parse_due_date_in<Tz: TimeZone>(input: &str, tz: &Tz) -> Result<DueDate, 
         }
     }
 
-    if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        let noon = date.and_time(NaiveTime::from_hms_opt(12, 0, 0).unwrap());
-        let ms = resolve_local(tz, noon, input)?;
+    if let Ok(date) = Date::strptime("%Y-%m-%d", s) {
+        let ms = resolve_local(tz, date.at(12, 0, 0, 0), input)?;
         return Ok(DueDate {
             ms,
             has_time: false,
@@ -89,64 +105,48 @@ pub fn parse_due_date_in<Tz: TimeZone>(input: &str, tz: &Tz) -> Result<DueDate, 
         "%Y-%m-%d %H:%M:%S%:z",
         "%Y-%m-%d %H:%M%:z",
     ] {
-        if let Ok(dt) = DateTime::<FixedOffset>::parse_from_str(s, fmt) {
+        if let Ok(ts) = strtime::parse(fmt, s).and_then(|tm| tm.to_timestamp()) {
             return Ok(DueDate {
-                ms: dt.timestamp_millis(),
+                ms: ts.as_millisecond(),
                 has_time: true,
             });
         }
     }
     // `%:z` does not accept a literal `Z`; handle the UTC designator by hand.
-    if let Some(stripped) = s.strip_suffix('Z') {
-        for fmt in [
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%dT%H:%M",
-            "%Y-%m-%d %H:%M:%S",
-            "%Y-%m-%d %H:%M",
-        ] {
-            if let Ok(naive) = NaiveDateTime::parse_from_str(stripped, fmt) {
-                return Ok(DueDate {
-                    ms: naive.and_utc().timestamp_millis(),
-                    has_time: true,
-                });
-            }
-        }
+    if let Some(naive) = s.strip_suffix('Z').and_then(parse_naive) {
+        let ms = resolve_local(&TimeZone::UTC, naive, input)?;
+        return Ok(DueDate { ms, has_time: true });
     }
 
-    for fmt in [
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%dT%H:%M",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d %H:%M",
-    ] {
-        if let Ok(naive) = NaiveDateTime::parse_from_str(s, fmt) {
-            let ms = resolve_local(tz, naive, input)?;
-            return Ok(DueDate { ms, has_time: true });
-        }
+    if let Some(naive) = parse_naive(s) {
+        let ms = resolve_local(tz, naive, input)?;
+        return Ok(DueDate { ms, has_time: true });
     }
 
     Err(invalid(input))
 }
 
-fn resolve_local<Tz: TimeZone>(
-    tz: &Tz,
-    naive: NaiveDateTime,
-    input: &str,
-) -> Result<i64, CliError> {
-    // `earliest()` picks the first of two candidates in a DST fold and returns
-    // None only when the wall-clock time does not exist (a DST gap).
-    tz.from_local_datetime(&naive)
-        .earliest()
-        .map(|dt| dt.timestamp_millis())
-        .ok_or_else(|| CliError::ClientError {
-            message: format!(
-                "Invalid date '{}': that local time does not exist (daylight-saving gap). \
-                 Pick another time or add an explicit offset, e.g. {}Z.",
-                input,
-                naive.format("%Y-%m-%dT%H:%M")
-            ),
-            status: 0,
-        })
+fn resolve_local(tz: &TimeZone, naive: DateTime, input: &str) -> Result<i64, CliError> {
+    let gap_error = || CliError::ClientError {
+        message: format!(
+            "Invalid date '{}': that local time does not exist (daylight-saving gap). \
+             Pick another time or add an explicit offset, e.g. {}Z.",
+            input,
+            naive.strftime("%Y-%m-%dT%H:%M")
+        ),
+        status: 0,
+    };
+    // A wall-clock time inside a DST gap does not exist: reject it rather than
+    // silently shifting it. In a DST fold, take the earlier of the two
+    // candidates.
+    let ambiguous = tz.to_ambiguous_zoned_datetime(naive);
+    if matches!(ambiguous.offset(), jiff::tz::AmbiguousOffset::Gap { .. }) {
+        return Err(gap_error());
+    }
+    ambiguous
+        .earlier()
+        .map(|zdt| zdt.timestamp().as_millisecond())
+        .map_err(|_| gap_error())
 }
 
 fn invalid(input: &str) -> CliError {
@@ -164,12 +164,31 @@ fn invalid(input: &str) -> CliError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{FixedOffset, Utc};
+    use jiff::tz::{Offset, TimeZone};
+
+    #[allow(non_upper_case_globals)]
+    const Utc: TimeZone = TimeZone::UTC;
+
+    fn fixed_hours(h: i8) -> TimeZone {
+        TimeZone::fixed(Offset::constant(h))
+    }
 
     /// UTC-5, New York standard time. `2026-12-31T00:00:00-05:00` is
     /// 1_798_693_200_000 ms (the value quoted in GH #126).
-    fn new_york_std() -> FixedOffset {
-        FixedOffset::west_opt(5 * 3600).unwrap()
+    fn new_york_std() -> TimeZone {
+        fixed_hours(-5)
+    }
+
+    #[test]
+    fn dst_gap_is_rejected_and_fold_takes_earlier() {
+        let tz = TimeZone::get("America/New_York").unwrap();
+        // 2026-03-08 02:30 does not exist in New York (spring forward).
+        let err = parse_due_date_in("2026-03-08T02:30", &tz).unwrap_err();
+        assert!(err.to_string().contains("daylight-saving gap"), "{err}");
+        // 2026-11-01 01:30 happens twice; the first is EDT (UTC-4).
+        let d = parse_due_date_in("2026-11-01T01:30", &tz).unwrap();
+        let expected = parse_due_date_in("2026-11-01T01:30-04:00", &Utc).unwrap();
+        assert_eq!(d.ms, expected.ms);
     }
     const NY_MIDNIGHT_2026_12_31: i64 = 1_798_693_200_000;
 
@@ -184,11 +203,13 @@ mod tests {
     fn date_only_east_of_utc_stays_on_the_requested_day() {
         // UTC+13 (Tonga / NZ summer): noon local is 23:00 the previous day UTC,
         // but the day in the *local* zone is still 2026-12-31.
-        let tz = FixedOffset::east_opt(13 * 3600).unwrap();
+        let tz = fixed_hours(13);
         let d = parse_due_date_in("2026-12-31", &tz).unwrap();
-        let local = tz.timestamp_millis_opt(d.ms).unwrap();
+        let local = jiff::Timestamp::from_millisecond(d.ms)
+            .unwrap()
+            .to_zoned_datetime(tz.clone());
         assert_eq!(
-            local.format("%Y-%m-%d %H:%M").to_string(),
+            local.strftime("%Y-%m-%d %H:%M").to_string(),
             "2026-12-31 12:00"
         );
     }

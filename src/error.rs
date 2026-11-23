@@ -78,7 +78,7 @@ impl CliError {
     pub fn hint(&self) -> Option<String> {
         match self {
             CliError::AuthError { .. } => {
-                Some("Check your API token, or run 'clickup setup' to reconfigure".into())
+                Some("Check your API token, or run 'clickup-cli setup' to reconfigure".into())
             }
             CliError::Forbidden { .. } => Some(
                 "This feature may require a higher ClickUp plan (Business+, Enterprise)".into(),
@@ -94,7 +94,7 @@ impl CliError {
                 Some("ClickUp server error. Try again in a few seconds.".into())
             }
             CliError::ConfigError(_) => {
-                Some("Run 'clickup setup' to configure your API token".into())
+                Some("Run 'clickup-cli setup' to configure your API token".into())
             }
             CliError::BranchDetect { hint, .. } => Some(hint.clone()),
             _ => None,

@@ -1,9 +1,11 @@
 use crate::error::CliError;
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Config {
+    #[serde(default)]
     pub auth: AuthConfig,
     #[serde(default)]
     pub defaults: DefaultsConfig,
@@ -11,9 +13,19 @@ pub struct Config {
     pub git: GitConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct AuthConfig {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub token: String,
+}
+
+// Hand-written so a stray `{:?}` never prints the token.
+impl std::fmt::Debug for AuthConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthConfig")
+            .field("token", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -66,8 +78,29 @@ impl Config {
             return Err(CliError::ConfigError("Not configured".into()));
         }
         let contents = std::fs::read_to_string(path)?;
-        toml::from_str(&contents)
-            .map_err(|e| CliError::ConfigError(format!("Invalid config file: {}", e)))
+        // toml's error Display quotes the offending source line, which may be the
+        // token itself. Report only the location.
+        toml::from_str(&contents).map_err(|e| {
+            let location = e
+                .span()
+                .map(|span| {
+                    // Count on bytes: a span that is not on a char boundary
+                    // must not turn a config error into a panic.
+                    let end = span.start.min(contents.len());
+                    let line = contents.as_bytes()[..end]
+                        .iter()
+                        .filter(|&&b| b == b'\n')
+                        .count()
+                        + 1;
+                    format!(" at line {}", line)
+                })
+                .unwrap_or_default();
+            CliError::ConfigError(format!(
+                "Invalid config file {}{}: check the TOML syntax",
+                path.display(),
+                location
+            ))
+        })
     }
 
     pub fn save(&self) -> Result<(), CliError> {
@@ -76,12 +109,46 @@ impl Config {
     }
 
     pub fn save_to(&self, path: &std::path::Path) -> Result<(), CliError> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let contents = toml::to_string_pretty(self)
-            .map_err(|e| CliError::ConfigError(format!("Failed to serialize config: {}", e)))?;
-        std::fs::write(path, contents)?;
-        Ok(())
+        let contents = self.to_toml()?;
+        write_private(path, &contents)
     }
+
+    /// Serialize to the TOML text `save_to` would write.
+    pub fn to_toml(&self) -> Result<String, CliError> {
+        toml::to_string_pretty(self)
+            .map_err(|e| CliError::ConfigError(format!("Failed to serialize config: {}", e)))
+    }
+}
+
+/// Atomically replace `path` with `contents`, owner-only.
+///
+/// Writes to a temp file in the same directory and renames it over the target:
+/// a crash never leaves a half-written token behind, and the new file is
+/// created private (0600 on Unix) regardless of the umask or of the old file's
+/// mode. A symlinked config (dotfile managers such as stow or home-manager) is
+/// followed: the link is kept and its target is replaced.
+pub fn write_private(path: &std::path::Path, contents: &str) -> Result<(), CliError> {
+    let resolved;
+    let path = if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        resolved = std::fs::canonicalize(path).map_err(|e| {
+            CliError::ConfigError(format!(
+                "Config {} is a symlink whose target cannot be resolved: {}",
+                path.display(),
+                e
+            ))
+        })?;
+        resolved.as_path()
+    } else {
+        path
+    };
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let mut file = tempfile::NamedTempFile::new_in(parent)?;
+    file.write_all(contents.as_bytes())?;
+    file.as_file().sync_all()?;
+    file.persist(path).map_err(|e| CliError::IoError(e.error))?;
+    Ok(())
 }

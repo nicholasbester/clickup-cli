@@ -53,7 +53,7 @@ fn env_string(var: &str) -> Option<String> {
     std::env::var(var).ok().filter(|s| !s.is_empty())
 }
 
-pub async fn execute(command: McpCommands) -> Result<(), CliError> {
+pub async fn execute(command: McpCommands, cli: &crate::Cli) -> Result<(), CliError> {
     match command {
         McpCommands::Serve {
             profile,
@@ -72,7 +72,8 @@ pub async fn execute(command: McpCommands) -> Result<(), CliError> {
                 exclude_tools: exclude_tools.or_else(|| env_list("CLICKUP_MCP_EXCLUDE_TOOLS")),
             };
             let filter = Filter::resolve(raw).map_err(|e| CliError::ConfigError(e.to_string()))?;
-            crate::mcp::serve(filter)
+            let token = crate::commands::auth::resolve_token(cli)?;
+            crate::mcp::serve_with_credentials(filter, token, cli.timeout)
                 .await
                 .map_err(|e| CliError::ConfigError(e.to_string()))
         }
