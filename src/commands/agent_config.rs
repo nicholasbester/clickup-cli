@@ -51,7 +51,7 @@ fn detect_agent_file() -> PathBuf {
     PathBuf::from("CLAUDE.md")
 }
 
-pub async fn execute(command: AgentConfigCommands, _cli: &Cli) -> Result<(), CliError> {
+pub async fn execute(command: AgentConfigCommands, cli: &Cli) -> Result<(), CliError> {
     match command {
         AgentConfigCommands::Show => {
             println!("{}", AGENT_REFERENCE);
@@ -97,19 +97,23 @@ pub async fn execute(command: AgentConfigCommands, _cli: &Cli) -> Result<(), Cli
             if config_path.exists() {
                 eprintln!("Project config already exists: {}", config_path.display());
             } else {
-                let mut content = String::from("[auth]\n");
-                if let Some(t) = &token {
-                    content.push_str(&format!("token = \"{}\"\n", t));
-                } else {
-                    content.push_str("# token = \"pk_...\"\n");
+                // Go through the serializer rather than string formatting so a
+                // token containing quotes or backslashes cannot break (or inject
+                // into) the TOML, and through save_to for an atomic 0600 write.
+                let mut config = crate::config::Config::default();
+                if let Some(t) = token.as_ref().or(cli.token.as_ref()) {
+                    if t.is_empty() || !t.bytes().all(|b| b.is_ascii_graphic()) {
+                        return Err(CliError::ClientError {
+                            message: "Token must be non-empty and contain no whitespace or \
+                                      control characters"
+                                .into(),
+                            status: 0,
+                        });
+                    }
+                    config.auth.token = t.clone();
                 }
-                content.push_str("\n[defaults]\n");
-                if let Some(ws) = &workspace {
-                    content.push_str(&format!("workspace_id = \"{}\"\n", ws));
-                } else {
-                    content.push_str("# workspace_id = \"...\"\n");
-                }
-                std::fs::write(&config_path, &content)?;
+                config.defaults.workspace_id = workspace.clone();
+                config.save_to(&config_path)?;
                 eprintln!("Project config created: .clickup.toml");
                 eprintln!("Add .clickup.toml to .gitignore if it contains a token.");
             }

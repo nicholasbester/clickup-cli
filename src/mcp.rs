@@ -2304,7 +2304,7 @@ async fn dispatch_tool(
         }
         workspace_id
             .clone()
-            .ok_or_else(|| "No workspace_id found in config. Please run `clickup setup` or provide team_id in the tool arguments.".to_string())
+            .ok_or_else(|| "No workspace_id found in config. Please run `clickup-cli setup` or provide team_id in the tool arguments.".to_string())
     };
 
     // Normalise a caller-supplied task_id and, if it's a custom-format ID
@@ -5612,15 +5612,24 @@ pub async fn serve(filter: filter::Filter) -> Result<(), Box<dyn std::error::Err
                 .map(|c| c.auth.token)
                 .filter(|t| !t.is_empty())
         })
-        .ok_or("No API token. Set CLICKUP_TOKEN env var or run `clickup setup`.")?;
+        .ok_or("No API token. Set CLICKUP_TOKEN env var or run `clickup-cli setup`.")?;
+    serve_with_credentials(filter, token, 30).await
+}
 
+/// Run the MCP server with an already-resolved token and HTTP timeout, so the
+/// global `--token` / `--timeout` flags apply to `mcp serve` like any command.
+pub async fn serve_with_credentials(
+    filter: filter::Filter,
+    token: String,
+    timeout: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Resolve workspace: CLICKUP_WORKSPACE env > config file
     let workspace_id = std::env::var("CLICKUP_WORKSPACE")
         .ok()
         .filter(|w| !w.is_empty())
         .or_else(|| Config::load().ok().and_then(|c| c.defaults.workspace_id));
 
-    let client = ClickUpClient::new(&token, 30)
+    let client = ClickUpClient::new(&token, timeout)
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let stdin = tokio::io::stdin();

@@ -35,7 +35,7 @@ pub async fn execute(cli: &Cli) -> Result<(), CliError> {
             println!("Token:     (not configured)");
             println!("Workspace: (not configured)");
             println!();
-            println!("Run 'clickup setup' to configure.");
+            println!("Run 'clickup-cli setup' to configure.");
             return Ok(());
         }
     }

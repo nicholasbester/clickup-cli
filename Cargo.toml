@@ -39,9 +39,9 @@ clap_complete = "4"
 pulldown-cmark = { version = "0.13", default-features = false }
 regex = "1"
 linkify = "0.11"
+tempfile = "3"
 
 [dev-dependencies]
 wiremock = "0.6"
-tempfile = "3"
 assert_cmd = "2"
 predicates = "3"

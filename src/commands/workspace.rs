@@ -31,7 +31,7 @@ pub fn resolve_workspace(cli: &Cli) -> Result<String, CliError> {
     let config = Config::load()?;
     config.defaults.workspace_id.ok_or_else(|| {
         CliError::ConfigError(
-            "No default workspace. Use --workspace, CLICKUP_WORKSPACE, or run 'clickup setup'"
+            "No default workspace. Use --workspace, CLICKUP_WORKSPACE, or run 'clickup-cli setup'"
                 .into(),
         )
     })
