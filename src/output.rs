@@ -1,4 +1,3 @@
-use chrono::DateTime;
 use comfy_table::{ContentArrangement, Table};
 
 #[derive(Clone)]
@@ -144,8 +143,8 @@ pub fn flatten_value(value: Option<&serde_json::Value>) -> String {
             // Try to parse as Unix millisecond timestamp
             if let Ok(ms) = s.parse::<i64>() {
                 if ms > 1_000_000_000_000 && ms < 10_000_000_000_000 {
-                    if let Some(dt) = DateTime::from_timestamp_millis(ms) {
-                        return dt.format("%Y-%m-%d").to_string();
+                    if let Ok(ts) = jiff::Timestamp::from_millisecond(ms) {
+                        return ts.strftime("%Y-%m-%d").to_string();
                     }
                 }
             }
