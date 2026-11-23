@@ -123,16 +123,44 @@ fn test_config_save_is_private_even_over_a_world_readable_file() {
 
 #[cfg(unix)]
 #[test]
-fn test_config_save_refuses_to_replace_a_symlink() {
+fn test_config_save_through_symlink_updates_target_and_keeps_link() {
+    // Dotfile managers (stow, home-manager) symlink config.toml into a repo.
     let dir = TempDir::new().unwrap();
-    let target = dir.path().join("elsewhere.toml");
-    std::fs::write(&target, "untouched").unwrap();
+    let dotfiles = dir.path().join("dotfiles");
+    std::fs::create_dir(&dotfiles).unwrap();
+    let target = dotfiles.join("config.toml");
+    std::fs::write(&target, "[auth]\ntoken = \"old\"\n").unwrap();
     let link = dir.path().join("config.toml");
     std::os::unix::fs::symlink(&target, &link).unwrap();
 
+    sample_config("pk_new").save_to(&link).unwrap();
+
+    assert!(std::fs::symlink_metadata(&link)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert_eq!(Config::load_from(&target).unwrap().auth.token, "pk_new");
+    assert_eq!(Config::load_from(&link).unwrap().auth.token, "pk_new");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_config_save_through_dangling_symlink_errors() {
+    let dir = TempDir::new().unwrap();
+    let link = dir.path().join("config.toml");
+    std::os::unix::fs::symlink(dir.path().join("missing").join("x.toml"), &link).unwrap();
     let err = sample_config("pk_x").save_to(&link).unwrap_err();
     assert!(err.to_string().contains("symlink"), "{err}");
-    assert_eq!(std::fs::read_to_string(&target).unwrap(), "untouched");
+}
+
+#[test]
+fn test_config_parse_error_with_multibyte_text_does_not_panic() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, "[auth]\ntoken = “pk_curly”\n").unwrap();
+    let msg = Config::load_from(&path).unwrap_err().to_string();
+    assert!(!msg.contains("pk_curly"), "token leaked: {msg}");
+    assert!(msg.contains("line 2"), "{msg}");
 }
 
 #[test]
@@ -203,7 +231,9 @@ fn test_agent_config_init_rejects_token_with_whitespace() {
 }
 
 #[test]
-fn test_agent_config_init_falls_back_to_global_token_flag() {
+fn test_agent_config_init_accepts_token_before_subcommand() {
+    // Init's --token shares clap's id with the global --token, so either
+    // position works (and always has).
     let dir = TempDir::new().unwrap();
     clickup_in(dir.path())
         .args(["--token", "pk_global", "agent-config", "init"])
@@ -220,6 +250,13 @@ fn test_agent_config_init_without_token_writes_loadable_file() {
         .args(["agent-config", "init"])
         .assert()
         .success();
-    let config = Config::load_from(&dir.path().join(".clickup.toml")).unwrap();
+    let path = dir.path().join(".clickup.toml");
+    let config = Config::load_from(&path).unwrap();
     assert!(config.auth.token.is_empty());
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("[auth]\n# token = \"pk_...\""), "{text}");
+    assert!(
+        text.contains("[defaults]\n# workspace_id = \"...\""),
+        "{text}"
+    );
 }

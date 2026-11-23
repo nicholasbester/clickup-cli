@@ -5601,22 +5601,8 @@ async fn dispatch_tool(
 
 // ── Main server loop ──────────────────────────────────────────────────────────
 
-pub async fn serve(filter: filter::Filter) -> Result<(), Box<dyn std::error::Error>> {
-    // Resolve token: CLICKUP_TOKEN env > config file
-    let token = std::env::var("CLICKUP_TOKEN")
-        .ok()
-        .filter(|t| !t.is_empty())
-        .or_else(|| {
-            Config::load()
-                .ok()
-                .map(|c| c.auth.token)
-                .filter(|t| !t.is_empty())
-        })
-        .ok_or("No API token. Set CLICKUP_TOKEN env var or run `clickup-cli setup`.")?;
-    serve_with_credentials(filter, token, 30).await
-}
-
-/// Run the MCP server with an already-resolved token and HTTP timeout, so the
+/// Run the MCP server with an already-resolved token and HTTP timeout. The
+/// caller resolves the token with `commands::auth::resolve_token`, so the
 /// global `--token` / `--timeout` flags apply to `mcp serve` like any command.
 pub async fn serve_with_credentials(
     filter: filter::Filter,

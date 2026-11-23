@@ -84,8 +84,12 @@ impl Config {
             let location = e
                 .span()
                 .map(|span| {
-                    let line = contents[..span.start.min(contents.len())]
-                        .matches('\n')
+                    // Count on bytes: a span that is not on a char boundary
+                    // must not turn a config error into a panic.
+                    let end = span.start.min(contents.len());
+                    let line = contents.as_bytes()[..end]
+                        .iter()
+                        .filter(|&&b| b == b'\n')
                         .count()
                         + 1;
                     format!(" at line {}", line)
@@ -105,27 +109,46 @@ impl Config {
     }
 
     pub fn save_to(&self, path: &std::path::Path) -> Result<(), CliError> {
-        let parent = path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(std::path::Path::new("."));
-        std::fs::create_dir_all(parent)?;
-        let contents = toml::to_string_pretty(self)
-            .map_err(|e| CliError::ConfigError(format!("Failed to serialize config: {}", e)))?;
-        // Write to a temp file in the same directory and rename it over the
-        // target: a crash never leaves a half-written token behind, and the new
-        // file is created private (0600 on Unix) regardless of the umask or of
-        // the old file's mode.
-        if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
-            return Err(CliError::ConfigError(format!(
-                "Refusing to replace symlinked config {}",
-                path.display()
-            )));
-        }
-        let mut file = tempfile::NamedTempFile::new_in(parent)?;
-        file.write_all(contents.as_bytes())?;
-        file.as_file().sync_all()?;
-        file.persist(path).map_err(|e| CliError::IoError(e.error))?;
-        Ok(())
+        let contents = self.to_toml()?;
+        write_private(path, &contents)
     }
+
+    /// Serialize to the TOML text `save_to` would write.
+    pub fn to_toml(&self) -> Result<String, CliError> {
+        toml::to_string_pretty(self)
+            .map_err(|e| CliError::ConfigError(format!("Failed to serialize config: {}", e)))
+    }
+}
+
+/// Atomically replace `path` with `contents`, owner-only.
+///
+/// Writes to a temp file in the same directory and renames it over the target:
+/// a crash never leaves a half-written token behind, and the new file is
+/// created private (0600 on Unix) regardless of the umask or of the old file's
+/// mode. A symlinked config (dotfile managers such as stow or home-manager) is
+/// followed: the link is kept and its target is replaced.
+pub fn write_private(path: &std::path::Path, contents: &str) -> Result<(), CliError> {
+    let resolved;
+    let path = if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        resolved = std::fs::canonicalize(path).map_err(|e| {
+            CliError::ConfigError(format!(
+                "Config {} is a symlink whose target cannot be resolved: {}",
+                path.display(),
+                e
+            ))
+        })?;
+        resolved.as_path()
+    } else {
+        path
+    };
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let mut file = tempfile::NamedTempFile::new_in(parent)?;
+    file.write_all(contents.as_bytes())?;
+    file.as_file().sync_all()?;
+    file.persist(path).map_err(|e| CliError::IoError(e.error))?;
+    Ok(())
 }

@@ -51,7 +51,7 @@ fn detect_agent_file() -> PathBuf {
     PathBuf::from("CLAUDE.md")
 }
 
-pub async fn execute(command: AgentConfigCommands, cli: &Cli) -> Result<(), CliError> {
+pub async fn execute(command: AgentConfigCommands, _cli: &Cli) -> Result<(), CliError> {
     match command {
         AgentConfigCommands::Show => {
             println!("{}", AGENT_REFERENCE);
@@ -99,9 +99,12 @@ pub async fn execute(command: AgentConfigCommands, cli: &Cli) -> Result<(), CliE
             } else {
                 // Go through the serializer rather than string formatting so a
                 // token containing quotes or backslashes cannot break (or inject
-                // into) the TOML, and through save_to for an atomic 0600 write.
+                // into) the TOML, and through write_private for an atomic 0600
+                // write.
                 let mut config = crate::config::Config::default();
-                if let Some(t) = token.as_ref().or(cli.token.as_ref()) {
+                // Init's --token shares clap's id with the global --token, so
+                // either spelling arrives here.
+                if let Some(t) = &token {
                     if t.is_empty() || !t.bytes().all(|b| b.is_ascii_graphic()) {
                         return Err(CliError::ClientError {
                             message: "Token must be non-empty and contain no whitespace or \
@@ -113,7 +116,20 @@ pub async fn execute(command: AgentConfigCommands, cli: &Cli) -> Result<(), CliE
                     config.auth.token = t.clone();
                 }
                 config.defaults.workspace_id = workspace.clone();
-                config.save_to(&config_path)?;
+                let mut contents = config.to_toml()?;
+                // Leave fixed-text placeholders for keys that were not given, so
+                // the file shows which settings belong where.
+                if config.auth.token.is_empty() {
+                    contents = contents.replacen("[auth]\n", "[auth]\n# token = \"pk_...\"\n", 1);
+                }
+                if config.defaults.workspace_id.is_none() {
+                    contents = contents.replacen(
+                        "[defaults]\n",
+                        "[defaults]\n# workspace_id = \"...\"\n",
+                        1,
+                    );
+                }
+                crate::config::write_private(&config_path, &contents)?;
                 eprintln!("Project config created: .clickup.toml");
                 eprintln!("Add .clickup.toml to .gitignore if it contains a token.");
             }
